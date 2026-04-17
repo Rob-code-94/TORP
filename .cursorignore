@@ -1,0 +1,15 @@
+# Keep Agent/indexing focused on source files (not installed deps)
+
+node_modules/
+dist/
+.vite/
+.cache/
+coverage/
+
+# Local scratch clones / temp artifacts
+_deploy_upstream/
+
+# OS / editor noise
+.DS_Store
+.idea/
+.vscode/

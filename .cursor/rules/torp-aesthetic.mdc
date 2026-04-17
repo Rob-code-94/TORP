@@ -1,0 +1,36 @@
+---
+description: TORP cinematic UI guardrails (Tailwind + React)
+globs: "**/*.{tsx,ts,html}"
+alwaysApply: false
+---
+
+# TORP UI Rules
+
+## Visual system
+
+- Default to **dark zinc** surfaces: `bg-zinc-950` page, `bg-zinc-900` elevated, `border-zinc-800/900` separators, `text-zinc-100` primary text, `text-zinc-400` secondary.
+- Primary CTA: **`bg-white text-black`** (hover `bg-zinc-200`). Avoid neon gradients unless explicitly requested.
+- Secondary CTA: `bg-zinc-800 hover:bg-zinc-700 text-white`.
+
+## Typography
+
+- Treat `index.html` as the source of truth for font behavior.
+- Headings/buttons: display stack + uppercase feel.
+- Paragraphs/forms/small text: **Inter**, normal casing — do not force uppercase on long copy.
+
+## Layout + spacing
+
+- Prefer large section padding (`py-24`–`py-32`) on marketing pages.
+- Keep layouts airy: use `max-w-*` content columns instead of filling the full width with text.
+
+## Motion
+
+- Prefer subtle transitions (`duration-300`–`700`). Avoid aggressive springs.
+
+## Dashboard specifics
+
+- Keep HQ UI **high-contrast and restrained**; use accent colors only for semantic states (paid/pending/error).
+
+## Modals
+
+- Use `fixed inset-0` + `bg-black/80+` + `backdrop-blur-*` + `rounded-2xl` panels with `border-zinc-800`.

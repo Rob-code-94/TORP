@@ -1,24 +1,28 @@
+# Dependencies
+node_modules/
+
+# Builds / caches
+dist/
+.vite/
+.cache/
+coverage/
+
 # Logs
-logs
-*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
+# Env files
+.env
+.env.*
+!.env.example
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
+# OS / editor
 .DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+Thumbs.db
+.idea/
+.vscode/
+
+# Local scratch clones / temp artifacts
+_deploy_upstream/
