@@ -22,7 +22,7 @@ gcloud artifacts repositories create torp \
 
 ## Cloud Build trigger (GitHub)
 
-Create a trigger on `main` that runs **`cloudbuild.yaml`**.
+Create a trigger on `main` that runs `**cloudbuild.yaml**`.
 
 Important:
 
@@ -35,7 +35,7 @@ Important:
 `cloudbuild.yaml`:
 
 1. `docker build` using the repo root `Dockerfile`
-2. pushes to: `us-west1-docker.pkg.dev/torp-hub/torp/torp-web:$SHORT_SHA`
+2. pushes to: `us-west1-docker.pkg.dev/torp-hub/torp/torp-web:$BUILD_ID`
 3. deploys Cloud Run service `torp-cinematic-production-management` on port **8080**
 
 ## Manual deploy (optional)
@@ -49,4 +49,5 @@ gcloud builds submit --project torp-hub --config cloudbuild.yaml .
 ## Troubleshooting
 
 - If deploy fails with permission errors pushing images, grant Cloud Build’s service account **Artifact Registry Writer** on the repo’s project.
-- If Cloud Run fails health checks, verify the service container port is **8080** and the image listens on **`$PORT`**.
+- If Cloud Run fails health checks, verify the service container port is **8080** and the image listens on `**$PORT`**.
+
