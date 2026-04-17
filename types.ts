@@ -5,14 +5,45 @@ export enum UserRole {
   CLIENT = 'CLIENT',
 }
 
+export type ProjectCategory =
+  | 'Commercial'
+  | 'Documentary'
+  | 'Sports'
+  | 'Fashion'
+  | 'Retail'
+  | 'Civic'
+  | 'Spec';
+
+export type GalleryAspect = 'video' | 'portrait' | 'square' | 'wide';
+
+export interface VideoProjectGalleryItem {
+  src: string;
+  caption?: string;
+  aspect: GalleryAspect;
+}
+
+export interface VideoProjectCredit {
+  label: string;
+  value: string;
+}
+
 export interface VideoProject {
   id: string;
+  slug: string;
   title: string;
   client: string;
   year: string;
-  thumbnail: string;
-  aspectRatio: 'video' | 'portrait' | 'square';
+  category: ProjectCategory;
   tags: string[];
+  aspectRatio: 'video' | 'portrait' | 'square';
+  thumbnail: string;
+  heroImage: string;
+  logline: string;
+  role: string;
+  location?: string;
+  deliverables: string[];
+  gallery: VideoProjectGalleryItem[];
+  credits: VideoProjectCredit[];
 }
 
 export interface Invoice {
