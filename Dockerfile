@@ -15,7 +15,9 @@ ENV NODE_ENV=production
 
 # Tiny init + static file server
 RUN apk add --no-cache tini \
-  && npm install -g serve@14.2.4
+  && npm install -g serve@14.2.4 \
+  && ln -sf "$(npm root -g)/serve/build/main.js" /usr/local/bin/serve \
+  && chmod +x /usr/local/bin/serve
 
 # Vite outputs to /dist
 COPY --from=build /app/dist ./dist
@@ -26,4 +28,4 @@ EXPOSE 8080
 
 USER node
 ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["sh", "-c", "serve -s dist -l \"tcp://0.0.0.0:${PORT}\""]
+CMD ["sh", "-c", "exec serve -s dist -l \"tcp://0.0.0.0:${PORT}\""]
