@@ -12,17 +12,19 @@ gcloud config set project torp-hub
 # APIs commonly required for Artifact Registry + Cloud Run + Cloud Build
 gcloud services enable artifactregistry.googleapis.com run.googleapis.com cloudbuild.googleapis.com --project torp-hub
 
-# Create an Artifact Registry Docker repo (name must match cloudbuild.yaml default `_AR_REPO`)
-gcloud artifacts repositories create torp \
-  --repository-format=docker \
-  --location=us-west1 \
-  --description="TORP container images" \
-  --project torp-hub
+# If needed: Artifact Registry repo `cloud-run-source-deploy` (often created by Cloud Run / first deploy).
+# Only create if it does not already exist:
+# gcloud artifacts repositories describe cloud-run-source-deploy --location=us-west1 --project=torp-hub
 ```
 
-## Cloud Build trigger (GitHub)
+## Cloud Build trigger (GitHub) — you set this in the console
 
-Create a trigger on `main` that runs `**cloudbuild.yaml**`.
+1. **Cloud Build → Triggers →** your GitHub trigger (or create one).
+2. **Event:** Push to branch `main` (or your branch).
+3. **Configuration:** **Cloud Build configuration file (yaml or json)** → path `cloudbuild.yaml` (repository root).
+4. **Service account:** default Cloud Build SA is fine if it has permission to push to Artifact Registry and deploy Cloud Run (see Troubleshooting).
+
+After a push, **Cloud Build → History** should show a new build within ~1–2 minutes; **Cloud Run → Revisions** should show a new revision when the build finishes.
 
 Important:
 
@@ -35,7 +37,7 @@ Important:
 `cloudbuild.yaml`:
 
 1. `docker build` using the repo root `Dockerfile`
-2. pushes to: `us-west1-docker.pkg.dev/torp-hub/torp/torp-web:$BUILD_ID`
+2. pushes to: `us-west1-docker.pkg.dev/torp-hub/cloud-run-source-deploy/torp/torp-cinematic-production-management:$BUILD_ID`
 3. deploys Cloud Run service `torp-cinematic-production-management` on port **8080**
 
 ## Manual deploy (optional)

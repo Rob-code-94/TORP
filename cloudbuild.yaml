@@ -1,9 +1,10 @@
 substitutions:
   _REGION: us-west1
   _SERVICE: torp-cinematic-production-management
-  # Artifact Registry repo + image name (create the repo once in GCP)
-  _AR_REPO: torp
-  _IMAGE_NAME: torp-web
+  # Must match where Cloud Build / Cloud Run push images (see a successful build log).
+  # Typical for “Connect repo → Cloud Run” flows: repo `cloud-run-source-deploy`, image path below.
+  _AR_REPO: cloud-run-source-deploy
+  _IMAGE_NAME: torp/torp-cinematic-production-management
 
 steps:
   - name: gcr.io/cloud-builders/docker
@@ -32,6 +33,8 @@ steps:
       - "--port=8080"
       - "--ingress=all"
       - "--allow-unauthenticated"
+      - "--clear-volumes"
+      - "--clear-volume-mounts"
 
 images:
   - "$_REGION-docker.pkg.dev/$PROJECT_ID/$_AR_REPO/$_IMAGE_NAME:$BUILD_ID"
