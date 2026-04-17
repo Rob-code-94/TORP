@@ -2,19 +2,30 @@
 <img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
 
-# Run and deploy your AI Studio app
+# TORP
 
-This contains everything you need to run your app locally.
+TORP is a Vite + React + TypeScript app (Tailwind via CDN in `index.html`).
 
-View your app in AI Studio: https://ai.studio/apps/drive/1GjBKqfa-5WMiS0EiV72QGvH6Ggg_blxW
+## Run locally
 
-## Run Locally
+Prerequisites: Node.js 20+
 
-**Prerequisites:**  Node.js
+```bash
+npm install
+npm run dev
+```
 
+## Deploy (GitHub → Cloud Build → Cloud Run)
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+This repo includes:
+
+- `Dockerfile`: builds `dist/` and serves it on `0.0.0.0:$PORT` (Cloud Run compatible)
+- `cloudbuild.yaml`: builds/pushes an image to Artifact Registry and deploys Cloud Run
+
+See: `docs/cloud-run.md`
+
+## GCP project pinning (local dev convenience)
+
+```bash
+./scripts/gcp-use-torp-hub.sh
+```

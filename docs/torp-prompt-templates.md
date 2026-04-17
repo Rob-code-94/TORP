@@ -1,4 +1,4 @@
-# TORP Prompt Templates (For AI Studio / Cursor)
+# TORP Prompt Templates (For Cursor)
 
 These templates are aligned to the **current implementation** (Tailwind utilities + the global font rules in `index.html`).
 
