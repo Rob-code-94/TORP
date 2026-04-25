@@ -52,9 +52,17 @@ import {
 } from '../../../data/adminMock';
 import { saveProjectNarrative } from '../../../data/adminProjectsApi';
 import { useAuth } from '../../../lib/auth';
-import { useAdminTheme } from '../../../lib/adminTheme';
+import { adminDateTimeInputProps, useAdminTheme } from '../../../lib/adminTheme';
 import { hasProjectCapability } from '../../../lib/projectPermissions';
-import type { AdminInvoiceStatus, DeliverableStatus, PlannerTaskStatus, ProjectAssetStatus, ProjectStage } from '../../../types';
+import type {
+  AdminInvoiceStatus,
+  DeliverableStatus,
+  PlannerItemPriority,
+  PlannerItemType,
+  PlannerTaskStatus,
+  ProjectAssetStatus,
+  ProjectStage,
+} from '../../../types';
 import {
   assetStatusClassForTheme,
   formatAdminDate,
@@ -63,13 +71,24 @@ import {
   invoiceStatusClassForTheme,
   proposalStatusClassForTheme,
   stageClassForTheme,
-  typeLabel,
 } from './adminFormat';
+import AdminFormDrawer from './AdminFormDrawer';
 
 type Tab = 'overview' | 'brief' | 'planner' | 'schedule' | 'assets' | 'deliverables' | 'controls' | 'financials' | 'activity';
 type LoadState = 'loading' | 'empty' | 'error' | 'success';
 type ActivityFilter = 'all' | 'alerts' | 'mentions' | 'unread';
 type ScheduleFormType = 'shoot' | 'meeting';
+type DrawerForm =
+  | 'planner'
+  | 'schedule'
+  | 'asset'
+  | 'deliverable'
+  | 'risk'
+  | 'blocker'
+  | 'dependency'
+  | 'expense'
+  | 'invoice'
+  | 'changeOrder';
 
 const AdminProjectDetail: React.FC = () => {
   const { user } = useAuth();
@@ -93,16 +112,7 @@ const AdminProjectDetail: React.FC = () => {
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>('all');
   const [watching, setWatching] = useState(false);
   const [readIds, setReadIds] = useState<string[]>([]);
-  const [newPlannerTitle, setNewPlannerTitle] = useState('');
-  const [newShootTitle, setNewShootTitle] = useState('');
-  const [newShootDate, setNewShootDate] = useState('');
-  const [newShootLocation, setNewShootLocation] = useState('');
-  const [newShootDescription, setNewShootDescription] = useState('');
-  const [newMeetingTitle, setNewMeetingTitle] = useState('');
-  const [newMeetingDate, setNewMeetingDate] = useState('');
-  const [newMeetingTime, setNewMeetingTime] = useState('10:00');
-  const [newMeetingLocation, setNewMeetingLocation] = useState('');
-  const [newMeetingDescription, setNewMeetingDescription] = useState('');
+  const [activeDrawer, setActiveDrawer] = useState<DrawerForm | null>(null);
   const [newAssetLabel, setNewAssetLabel] = useState('');
   const [newDeliverableLabel, setNewDeliverableLabel] = useState('');
   const [newRiskLabel, setNewRiskLabel] = useState('');
@@ -110,6 +120,10 @@ const AdminProjectDetail: React.FC = () => {
   const [newDependencyLabel, setNewDependencyLabel] = useState('');
   const [newExpenseLabel, setNewExpenseLabel] = useState('');
   const [newExpenseAmount, setNewExpenseAmount] = useState('0');
+  const [newInvoiceAmount, setNewInvoiceAmount] = useState('1200');
+  const [newInvoiceDueDate, setNewInvoiceDueDate] = useState(new Date(Date.now() + 1000 * 60 * 60 * 24 * 14).toISOString().slice(0, 10));
+  const [newChangeOrderTitle, setNewChangeOrderTitle] = useState('');
+  const [newChangeOrderAmount, setNewChangeOrderAmount] = useState('0');
   const [feedback, setFeedback] = useState<string | null>(null);
   const [feedbackTone, setFeedbackTone] = useState<'ok' | 'error'>('ok');
   const [isEditingNarrative, setIsEditingNarrative] = useState(false);
@@ -123,8 +137,11 @@ const AdminProjectDetail: React.FC = () => {
     description: '',
     referenceLink: '',
     dueDate: '',
-    assigneeCrewId: '',
+    assigneeCrewIds: [] as string[],
+    type: 'admin' as 'pre_production' | 'shoot' | 'edit' | 'review' | 'delivery' | 'admin' | 'invoice' | 'client_followup',
+    priority: 'medium' as 'low' | 'medium' | 'high' | 'urgent',
   });
+  const [scheduleQuickType, setScheduleQuickType] = useState<ScheduleFormType>('shoot');
   const [openSchedule, setOpenSchedule] = useState<{ kind: ScheduleFormType; id: string } | null>(null);
   const [scheduleDraft, setScheduleDraft] = useState({
     title: '',
@@ -174,6 +191,7 @@ const AdminProjectDetail: React.FC = () => {
   const canApproveFinance = hasProjectCapability(user?.role, 'project.financial.approve');
   const canRequestChangeOrder = hasProjectCapability(user?.role, 'project.changeOrder.request');
   const actorName = user?.displayName || 'System';
+  const dateTimeInput = adminDateTimeInputProps(theme);
 
   const setMessage = (message: string, tone: 'ok' | 'error' = 'ok') => {
     setFeedback(message);
@@ -201,6 +219,20 @@ const AdminProjectDetail: React.FC = () => {
   };
 
   const openTaskEditor = (taskId: string) => {
+    if (taskId === '__new__') {
+      setOpenTaskId('__new__');
+      setTaskDraft({
+        title: '',
+        description: '',
+        referenceLink: '',
+        dueDate: new Date().toISOString().slice(0, 10),
+        assigneeCrewIds: [project.ownerCrewId],
+        type: 'admin',
+        priority: 'medium',
+      });
+      setActiveDrawer('planner');
+      return;
+    }
     const task = planner.find((item) => item.id === taskId);
     if (!task) return;
     setOpenTaskId(taskId);
@@ -209,11 +241,28 @@ const AdminProjectDetail: React.FC = () => {
       description: task.description || task.notes || '',
       referenceLink: task.referenceLink || '',
       dueDate: task.dueDate,
-      assigneeCrewId: task.assigneeCrewId,
+      assigneeCrewIds: task.assigneeCrewIds?.length ? task.assigneeCrewIds : [task.assigneeCrewId],
+      type: task.type,
+      priority: task.priority,
     });
+    setActiveDrawer('planner');
   };
 
   const openScheduleEditor = (kind: ScheduleFormType, id: string) => {
+    if (id === '__new__') {
+      setScheduleQuickType(kind);
+      setScheduleDraft({
+        title: '',
+        date: '',
+        time: kind === 'shoot' ? '08:00' : '10:00',
+        location: '',
+        description: '',
+        participants: [project.ownerName],
+      });
+      setOpenSchedule({ kind, id: '__new__' });
+      setActiveDrawer('schedule');
+      return;
+    }
     if (kind === 'shoot') {
       const shoot = shoots.find((item) => item.id === id);
       if (!shoot) return;
@@ -238,6 +287,8 @@ const AdminProjectDetail: React.FC = () => {
       });
     }
     setOpenSchedule({ kind, id });
+    setScheduleQuickType(kind);
+    setActiveDrawer('schedule');
   };
 
   const toggleParticipant = (name: string) => {
@@ -246,6 +297,15 @@ const AdminProjectDetail: React.FC = () => {
       participants: current.participants.includes(name)
         ? current.participants.filter((item) => item !== name)
         : [...current.participants, name],
+    }));
+  };
+
+  const toggleTaskAssignee = (crewId: string) => {
+    setTaskDraft((current) => ({
+      ...current,
+      assigneeCrewIds: current.assigneeCrewIds.includes(crewId)
+        ? current.assigneeCrewIds.filter((id) => id !== crewId)
+        : [...current.assigneeCrewIds, crewId],
     }));
   };
 
@@ -525,47 +585,18 @@ const AdminProjectDetail: React.FC = () => {
 
       {tab === 'planner' && withState('planner', true, (
         <div className="space-y-3">
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-3 flex flex-col sm:flex-row gap-2">
-            <input
-              value={newPlannerTitle}
-              onChange={(e) => setNewPlannerTitle(e.target.value)}
-              placeholder="Add workstream task"
-              className="flex-1 rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
-            />
-            <button
-              type="button"
-              onClick={() => {
-                try {
-                  if (!newPlannerTitle.trim()) {
-                    setMessage('Task title is required.', 'error');
-                    return;
-                  }
-                  createPlannerTask({
-                    projectId: project.id,
-                    projectTitle: project.title,
-                    clientName: project.clientName,
-                    title: newPlannerTitle.trim(),
-                    type: 'admin',
-                    column: 'queue',
-                    priority: 'medium',
-                    assigneeCrewId: project.ownerCrewId,
-                    assigneeName: project.ownerName,
-                    dueDate: new Date().toISOString().slice(0, 10),
-                    done: false,
-                    status: 'todo',
-                    notes: '',
-                  }, actorName);
-                  setNewPlannerTitle('');
-                  setRefreshTick((value) => value + 1);
-                  setMessage('Task added to planner.');
-                } catch (error) {
-                  setMessage(error instanceof Error ? error.message : 'Could not add task.', 'error');
-                }
-              }}
-              className="rounded-md border border-zinc-700 px-3 py-2 text-xs text-zinc-100"
-            >
-              Add Task
-            </button>
+          <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/20 px-3 py-2">
+            <p className="text-xs uppercase tracking-widest text-zinc-500">Task Workstream</p>
+            <div className="flex items-center gap-3">
+              <p className="text-xs text-zinc-400">{planner.length} task(s)</p>
+              <button
+                type="button"
+                onClick={() => openTaskEditor('__new__')}
+                className="rounded-md border border-zinc-700 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-zinc-200"
+              >
+                Quick Add Task
+              </button>
+            </div>
           </div>
           <div className="bg-zinc-900/30 border border-zinc-800 rounded-xl overflow-x-auto min-w-0">
             {planner.length === 0 ? (
@@ -577,6 +608,7 @@ const AdminProjectDetail: React.FC = () => {
                   <th className="text-left px-3 py-2">Task</th>
                   <th className="text-left px-3 py-2">Type</th>
                   <th className="text-left px-3 py-2">Status</th>
+                  <th className="text-left px-3 py-2">Priority</th>
                   <th className="text-left px-3 py-2">Assignee</th>
                   <th className="text-left px-3 py-2">Due</th>
                   <th className="text-left px-3 py-2">Actions</th>
@@ -589,7 +621,26 @@ const AdminProjectDetail: React.FC = () => {
                       {t.title}
                       {t.done && <span className="ml-2 text-xs text-zinc-500">(done)</span>}
                     </td>
-                    <td className="px-3 py-2.5 text-zinc-400">{typeLabel(t.type)}</td>
+                    <td className="px-3 py-2.5 text-zinc-400">
+                      <select
+                        value={t.type}
+                        onChange={(e) => {
+                          const next = e.target.value as PlannerItemType;
+                          updatePlannerTask(t.id, { type: next }, actorName);
+                          setRefreshTick((value) => value + 1);
+                        }}
+                        className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-100"
+                      >
+                        <option value="admin">Admin</option>
+                        <option value="pre_production">Pre-production</option>
+                        <option value="shoot">Shoot</option>
+                        <option value="edit">Edit</option>
+                        <option value="review">Review</option>
+                        <option value="delivery">Delivery</option>
+                        <option value="invoice">Invoice</option>
+                        <option value="client_followup">Client follow-up</option>
+                      </select>
+                    </td>
                     <td className="px-3 py-2.5 text-zinc-500">
                       <select
                         value={plannerStatusFromItem(t)}
@@ -608,7 +659,31 @@ const AdminProjectDetail: React.FC = () => {
                         <option value="done">Done</option>
                       </select>
                     </td>
-                    <td className="px-3 py-2.5 text-zinc-300">{t.assigneeName}</td>
+                    <td className="px-3 py-2.5 text-zinc-400">
+                      <select
+                        value={t.priority}
+                        onChange={(e) => {
+                          const next = e.target.value as PlannerItemPriority;
+                          updatePlannerTask(t.id, { priority: next }, actorName);
+                          setRefreshTick((value) => value + 1);
+                        }}
+                        className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-100"
+                      >
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                        <option value="urgent">Urgent</option>
+                      </select>
+                    </td>
+                    <td className="px-3 py-2.5 text-zinc-300">
+                      <div className="flex flex-wrap gap-1">
+                        {(t.assigneeNames?.length ? t.assigneeNames : [t.assigneeName]).map((name) => (
+                          <span key={name} className="rounded-full border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-300">
+                            {name}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
                     <td className="px-3 py-2.5 text-zinc-500 font-mono text-xs">{formatAdminDate(t.dueDate)}</td>
                     <td className="px-3 py-2.5">
                       <div className="flex flex-wrap gap-2">
@@ -640,13 +715,92 @@ const AdminProjectDetail: React.FC = () => {
             )}
           </div>
           {openTaskId && (
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-semibold text-zinc-100">Task details</h4>
-                <button type="button" onClick={() => setOpenTaskId(null)} className="text-[11px] underline text-zinc-400">
-                  Close
-                </button>
-              </div>
+            <AdminFormDrawer
+              open={activeDrawer === 'planner'}
+              onClose={() => {
+                setActiveDrawer(null);
+                setOpenTaskId(null);
+              }}
+              title={openTaskId === '__new__' ? 'Quick Add Task' : 'Edit Task'}
+              subtitle="Task details, assignees, and due date"
+              footer={
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveDrawer(null);
+                      setOpenTaskId(null);
+                    }}
+                    className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const selectedNames = taskDraft.assigneeCrewIds
+                        .map((crewId) => assignableCrew.find((crew) => crew.id === crewId)?.displayName)
+                        .filter((name): name is string => Boolean(name));
+                      try {
+                        if (!taskDraft.title.trim()) {
+                          setMessage('Task title is required.', 'error');
+                          return;
+                        }
+                        if (openTaskId === '__new__') {
+                          createPlannerTask({
+                            projectId: project.id,
+                            projectTitle: project.title,
+                            clientName: project.clientName,
+                            title: taskDraft.title.trim(),
+                            type: taskDraft.type,
+                            column: 'queue',
+                            priority: taskDraft.priority,
+                            assigneeCrewId: taskDraft.assigneeCrewIds[0] || project.ownerCrewId,
+                            assigneeName: selectedNames[0] || project.ownerName,
+                            assigneeCrewIds: taskDraft.assigneeCrewIds.length ? taskDraft.assigneeCrewIds : [project.ownerCrewId],
+                            assigneeNames: selectedNames,
+                            dueDate: taskDraft.dueDate || new Date().toISOString().slice(0, 10),
+                            done: false,
+                            status: 'todo',
+                            notes: taskDraft.description,
+                            description: taskDraft.description,
+                            referenceLink: taskDraft.referenceLink,
+                          }, actorName);
+                          setMessage('Task added to planner.');
+                        } else {
+                          updatePlannerTask(
+                            openTaskId,
+                            {
+                              title: taskDraft.title,
+                              dueDate: taskDraft.dueDate,
+                              type: taskDraft.type,
+                              priority: taskDraft.priority,
+                              assigneeCrewId: taskDraft.assigneeCrewIds[0],
+                              assigneeName: selectedNames[0] || '',
+                              assigneeCrewIds: taskDraft.assigneeCrewIds,
+                              assigneeNames: selectedNames,
+                              description: taskDraft.description,
+                              notes: taskDraft.description,
+                              referenceLink: taskDraft.referenceLink,
+                            },
+                            actorName
+                          );
+                          setMessage('Task updated.');
+                        }
+                        setActiveDrawer(null);
+                        setOpenTaskId(null);
+                        setRefreshTick((value) => value + 1);
+                      } catch (error) {
+                        setMessage(error instanceof Error ? error.message : 'Could not save task.', 'error');
+                      }
+                    }}
+                    className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-100"
+                  >
+                    {openTaskId === '__new__' ? 'Create Task' : 'Save Task'}
+                  </button>
+                </div>
+              }
+            >
               <input
                 value={taskDraft.title}
                 onChange={(e) => setTaskDraft((current) => ({ ...current, title: e.target.value }))}
@@ -671,156 +825,60 @@ const AdminProjectDetail: React.FC = () => {
                   type="date"
                   value={taskDraft.dueDate}
                   onChange={(e) => setTaskDraft((current) => ({ ...current, dueDate: e.target.value }))}
-                  className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+                  style={dateTimeInput.style}
+                  className={`rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 ${dateTimeInput.className}`}
                 />
               </div>
-              <select
-                value={taskDraft.assigneeCrewId}
-                onChange={(e) => setTaskDraft((current) => ({ ...current, assigneeCrewId: e.target.value }))}
-                className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
-              >
-                {assignableCrew.map((crew) => (
-                  <option key={crew.id} value={crew.id}>
-                    {crew.displayName}
-                  </option>
-                ))}
-              </select>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const selected = assignableCrew.find((crew) => crew.id === taskDraft.assigneeCrewId);
-                    try {
-                      updatePlannerTask(
-                        openTaskId,
-                        {
-                          title: taskDraft.title,
-                          dueDate: taskDraft.dueDate,
-                          assigneeCrewId: taskDraft.assigneeCrewId,
-                          assigneeName: selected?.displayName || taskDraft.assigneeCrewId,
-                          description: taskDraft.description,
-                          notes: taskDraft.description,
-                          referenceLink: taskDraft.referenceLink,
-                        },
-                        actorName
-                      );
-                      setOpenTaskId(null);
-                      setRefreshTick((value) => value + 1);
-                      setMessage('Task updated.');
-                    } catch (error) {
-                      setMessage(error instanceof Error ? error.message : 'Could not update task.', 'error');
-                    }
-                  }}
-                  className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-100"
-                >
-                  Save task
-                </button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <select value={taskDraft.type} onChange={(e) => setTaskDraft((current) => ({ ...current, type: e.target.value as typeof current.type }))} className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100">
+                  <option value="admin">Admin</option>
+                  <option value="pre_production">Pre-production</option>
+                  <option value="shoot">Shoot</option>
+                  <option value="edit">Edit</option>
+                  <option value="review">Review</option>
+                  <option value="delivery">Delivery</option>
+                  <option value="invoice">Invoice</option>
+                  <option value="client_followup">Client follow-up</option>
+                </select>
+                <select value={taskDraft.priority} onChange={(e) => setTaskDraft((current) => ({ ...current, priority: e.target.value as typeof current.priority }))} className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100">
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
+                </select>
               </div>
-            </div>
+              <div className="flex flex-wrap gap-2">
+                {assignableCrew.map((crew) => (
+                  <button
+                    key={crew.id}
+                    type="button"
+                    onClick={() => toggleTaskAssignee(crew.id)}
+                    className={`rounded-full border px-2.5 py-1 text-xs ${taskDraft.assigneeCrewIds.includes(crew.id) ? 'border-white bg-white text-black' : 'border-zinc-700 text-zinc-300'}`}
+                  >
+                    {crew.displayName}
+                  </button>
+                ))}
+              </div>
+            </AdminFormDrawer>
           )}
         </div>
       ))}
 
       {tab === 'schedule' && withState('schedule', true, (
         <div className="space-y-3">
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-3 grid grid-cols-1 sm:grid-cols-4 gap-2">
-            <input
-              value={newShootTitle}
-              onChange={(e) => setNewShootTitle(e.target.value)}
-              placeholder="Shoot title"
-              className="rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-2 text-sm text-zinc-100"
-            />
-            <input
-              type="date"
-              value={newShootDate}
-              onChange={(e) => setNewShootDate(e.target.value)}
-              className="rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-2 text-sm text-zinc-100"
-            />
-            <input
-              value={newShootLocation}
-              onChange={(e) => setNewShootLocation(e.target.value)}
-              placeholder="Location"
-              className="rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-2 text-sm text-zinc-100"
-            />
-            <button
-              type="button"
-              onClick={() => {
-                try {
-                  if (!newShootTitle.trim() || !newShootDate) {
-                    setMessage('Shoot title and date are required.', 'error');
-                    return;
-                  }
-                  createShoot({
-                    projectId: project.id,
-                    projectTitle: project.title,
-                    title: newShootTitle.trim(),
-                    date: newShootDate,
-                    callTime: '08:00',
-                    location: newShootLocation.trim() || 'TBD',
-                    crew: [project.ownerName],
-                    gearSummary: newShootDescription.trim() || 'Camera + lighting package',
-                    description: newShootDescription.trim(),
-                  }, actorName);
-                  setNewShootTitle('');
-                  setNewShootDate('');
-                  setNewShootLocation('');
-                  setNewShootDescription('');
-                  setRefreshTick((value) => value + 1);
-                  setMessage('Shoot day added.');
-                } catch (error) {
-                  setMessage(error instanceof Error ? error.message : 'Could not add shoot day.', 'error');
-                }
-              }}
-              className="rounded-md border border-zinc-700 px-3 py-2 text-xs text-zinc-100"
-            >
-              Add Shoot Day
-            </button>
-            <input
-              value={newShootDescription}
-              onChange={(e) => setNewShootDescription(e.target.value)}
-              placeholder="Shoot description/context"
-              className="rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-2 text-sm text-zinc-100 sm:col-span-4"
-            />
+          <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/20 px-3 py-2">
+            <p className="text-xs uppercase tracking-widest text-zinc-500">Timeline + Logistics</p>
+            <p className="text-xs text-zinc-400">{shoots.length + meetings.length} event(s)</p>
           </div>
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-3 grid grid-cols-1 sm:grid-cols-5 gap-2">
-            <input value={newMeetingTitle} onChange={(e) => setNewMeetingTitle(e.target.value)} placeholder="Meeting title" className="rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-2 text-sm text-zinc-100" />
-            <input type="date" value={newMeetingDate} onChange={(e) => setNewMeetingDate(e.target.value)} className="rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-2 text-sm text-zinc-100" />
-            <input type="time" value={newMeetingTime} onChange={(e) => setNewMeetingTime(e.target.value)} className="rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-2 text-sm text-zinc-100" />
-            <input value={newMeetingLocation} onChange={(e) => setNewMeetingLocation(e.target.value)} placeholder="Meeting location/link" className="rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-2 text-sm text-zinc-100" />
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-3 space-y-3">
             <button
               type="button"
-              onClick={() => {
-                try {
-                  if (!newMeetingTitle.trim() || !newMeetingDate) {
-                    setMessage('Meeting title and date are required.', 'error');
-                    return;
-                  }
-                  createMeeting({
-                    projectId: project.id,
-                    projectTitle: project.title,
-                    title: newMeetingTitle.trim(),
-                    date: newMeetingDate,
-                    startTime: newMeetingTime,
-                    location: newMeetingLocation.trim() || 'TBD',
-                    participants: [project.ownerName],
-                    description: newMeetingDescription.trim(),
-                  }, actorName);
-                  setNewMeetingTitle('');
-                  setNewMeetingDate('');
-                  setNewMeetingTime('10:00');
-                  setNewMeetingLocation('');
-                  setNewMeetingDescription('');
-                  setRefreshTick((value) => value + 1);
-                  setMessage('Meeting added.');
-                } catch (error) {
-                  setMessage(error instanceof Error ? error.message : 'Could not add meeting.', 'error');
-                }
-              }}
-              className="rounded-md border border-zinc-700 px-3 py-2 text-xs text-zinc-100"
+              onClick={() => openScheduleEditor('shoot', '__new__')}
+              className="rounded-md border border-zinc-700 px-3 py-2 text-xs font-bold uppercase tracking-wide text-zinc-100"
             >
-              Add Meeting
+              Schedule Event
             </button>
-            <input value={newMeetingDescription} onChange={(e) => setNewMeetingDescription(e.target.value)} placeholder="Meeting agenda/context" className="rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-2 text-sm text-zinc-100 sm:col-span-5" />
+            <p className="text-xs text-zinc-500">Choose event type, then schedule it with full details and participants.</p>
           </div>
           {shoots.length === 0 && meetings.length === 0 ? (
             <p className="text-sm text-zinc-500">No schedule items on this project yet.</p>
@@ -889,15 +947,124 @@ const AdminProjectDetail: React.FC = () => {
             </>
           )}
           {openSchedule && (
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-semibold text-zinc-100">{openSchedule.kind === 'shoot' ? 'Edit shoot' : 'Edit meeting'}</h4>
-                <button type="button" onClick={() => setOpenSchedule(null)} className="text-[11px] underline text-zinc-400">Close</button>
-              </div>
+            <AdminFormDrawer
+              open={activeDrawer === 'schedule'}
+              onClose={() => {
+                setActiveDrawer(null);
+                setOpenSchedule(null);
+              }}
+              title={openSchedule.id === '__new__' ? 'Schedule Event' : openSchedule.kind === 'shoot' ? 'Edit Shoot' : 'Edit Meeting'}
+              subtitle="Set timing, location, and participants"
+              footer={
+                <div className="flex justify-between gap-2">
+                  <div className="inline-flex items-center gap-2">
+                    <span className="text-xs text-zinc-500">Event Type</span>
+                    <select
+                      value={scheduleQuickType}
+                      onChange={(e) => {
+                        const next = e.target.value as ScheduleFormType;
+                        setScheduleQuickType(next);
+                        setOpenSchedule((current) => (current ? { ...current, kind: next } : current));
+                        setScheduleDraft((current) => ({
+                          ...current,
+                          time: current.time || (next === 'shoot' ? '08:00' : '10:00'),
+                        }));
+                      }}
+                      disabled={openSchedule.id !== '__new__'}
+                      className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-100 disabled:opacity-50"
+                    >
+                      <option value="shoot">Shoot</option>
+                      <option value="meeting">Meeting</option>
+                    </select>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveDrawer(null);
+                        setOpenSchedule(null);
+                      }}
+                      className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        try {
+                          if (openSchedule.kind === 'shoot') {
+                            if (openSchedule.id === '__new__') {
+                              createShoot({
+                                projectId: project.id,
+                                projectTitle: project.title,
+                                title: scheduleDraft.title,
+                                date: scheduleDraft.date,
+                                callTime: scheduleDraft.time,
+                                location: scheduleDraft.location,
+                                gearSummary: scheduleDraft.description,
+                                description: scheduleDraft.description,
+                                crew: scheduleDraft.participants,
+                              }, actorName);
+                            } else {
+                              updateShoot(
+                                openSchedule.id,
+                                {
+                                  title: scheduleDraft.title,
+                                  date: scheduleDraft.date,
+                                  callTime: scheduleDraft.time,
+                                  location: scheduleDraft.location,
+                                  gearSummary: scheduleDraft.description,
+                                  description: scheduleDraft.description,
+                                  crew: scheduleDraft.participants,
+                                },
+                                actorName
+                              );
+                            }
+                          } else if (openSchedule.id === '__new__') {
+                            createMeeting({
+                              projectId: project.id,
+                              projectTitle: project.title,
+                              title: scheduleDraft.title,
+                              date: scheduleDraft.date,
+                              startTime: scheduleDraft.time,
+                              location: scheduleDraft.location,
+                              description: scheduleDraft.description,
+                              participants: scheduleDraft.participants,
+                            }, actorName);
+                          } else {
+                            updateMeeting(
+                              openSchedule.id,
+                              {
+                                title: scheduleDraft.title,
+                                date: scheduleDraft.date,
+                                startTime: scheduleDraft.time,
+                                location: scheduleDraft.location,
+                                description: scheduleDraft.description,
+                                participants: scheduleDraft.participants,
+                              },
+                              actorName
+                            );
+                          }
+                          setActiveDrawer(null);
+                          setOpenSchedule(null);
+                          setRefreshTick((value) => value + 1);
+                          setMessage(`${openSchedule.kind === 'shoot' ? 'Shoot' : 'Meeting'} ${openSchedule.id === '__new__' ? 'created' : 'updated'}.`);
+                        } catch (error) {
+                          setMessage(error instanceof Error ? error.message : 'Could not update schedule item.', 'error');
+                        }
+                      }}
+                      className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-100"
+                    >
+                      {openSchedule.id === '__new__' ? `Create ${openSchedule.kind}` : `Save ${openSchedule.kind}`}
+                    </button>
+                  </div>
+                </div>
+              }
+            >
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <input value={scheduleDraft.title} onChange={(e) => setScheduleDraft((current) => ({ ...current, title: e.target.value }))} className="rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-2 text-sm text-zinc-100" placeholder="Title" />
-                <input type="date" value={scheduleDraft.date} onChange={(e) => setScheduleDraft((current) => ({ ...current, date: e.target.value }))} className="rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-2 text-sm text-zinc-100" />
-                <input type="time" value={scheduleDraft.time} onChange={(e) => setScheduleDraft((current) => ({ ...current, time: e.target.value }))} className="rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-2 text-sm text-zinc-100" />
+                <input type="date" value={scheduleDraft.date} onChange={(e) => setScheduleDraft((current) => ({ ...current, date: e.target.value }))} style={dateTimeInput.style} className={`rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-2 text-sm text-zinc-100 ${dateTimeInput.className}`} />
+                <input type="time" value={scheduleDraft.time} onChange={(e) => setScheduleDraft((current) => ({ ...current, time: e.target.value }))} style={dateTimeInput.style} className={`rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-2 text-sm text-zinc-100 ${dateTimeInput.className}`} />
                 <input value={scheduleDraft.location} onChange={(e) => setScheduleDraft((current) => ({ ...current, location: e.target.value }))} className="rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-2 text-sm text-zinc-100" placeholder="Location/Link" />
               </div>
               <textarea value={scheduleDraft.description} onChange={(e) => setScheduleDraft((current) => ({ ...current, description: e.target.value }))} rows={3} className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-2 text-sm text-zinc-100" placeholder="Description/context" />
@@ -913,90 +1080,17 @@ const AdminProjectDetail: React.FC = () => {
                   </button>
                 ))}
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  try {
-                    if (openSchedule.kind === 'shoot') {
-                      updateShoot(
-                        openSchedule.id,
-                        {
-                          title: scheduleDraft.title,
-                          date: scheduleDraft.date,
-                          callTime: scheduleDraft.time,
-                          location: scheduleDraft.location,
-                          gearSummary: scheduleDraft.description,
-                          description: scheduleDraft.description,
-                          crew: scheduleDraft.participants,
-                        },
-                        actorName
-                      );
-                    } else {
-                      updateMeeting(
-                        openSchedule.id,
-                        {
-                          title: scheduleDraft.title,
-                          date: scheduleDraft.date,
-                          startTime: scheduleDraft.time,
-                          location: scheduleDraft.location,
-                          description: scheduleDraft.description,
-                          participants: scheduleDraft.participants,
-                        },
-                        actorName
-                      );
-                    }
-                    setOpenSchedule(null);
-                    setRefreshTick((value) => value + 1);
-                    setMessage(`${openSchedule.kind === 'shoot' ? 'Shoot' : 'Meeting'} updated.`);
-                  } catch (error) {
-                    setMessage(error instanceof Error ? error.message : 'Could not update schedule item.', 'error');
-                  }
-                }}
-                className="rounded-md border border-zinc-700 px-3 py-2 text-xs text-zinc-100"
-              >
-                Save {openSchedule.kind}
-              </button>
-            </div>
+            </AdminFormDrawer>
           )}
         </div>
       ))}
 
       {tab === 'assets' && withState('assets', true, (
         <div className="space-y-3">
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-3 flex flex-col sm:flex-row gap-2">
-            <input
-              value={newAssetLabel}
-              onChange={(e) => setNewAssetLabel(e.target.value)}
-              placeholder="New asset label"
-              className="flex-1 rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
-            />
-            <button
-              type="button"
-              onClick={() => {
-                try {
-                  if (!newAssetLabel.trim()) {
-                    setMessage('Asset label is required.', 'error');
-                    return;
-                  }
-                  const status: ProjectAssetStatus = 'internal';
-                  createProjectAsset({
-                    projectId: project.id,
-                    label: newAssetLabel.trim(),
-                    type: 'video',
-                    status,
-                    clientVisible: false,
-                    version: 'v0.1',
-                  }, actorName);
-                  setNewAssetLabel('');
-                  setRefreshTick((value) => value + 1);
-                  setMessage('Asset added.');
-                } catch (error) {
-                  setMessage(error instanceof Error ? error.message : 'Could not add asset.', 'error');
-                }
-              }}
-              className="rounded-md border border-zinc-700 px-3 py-2 text-xs text-zinc-100"
-            >
-              Add Asset
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-3 flex items-center justify-between gap-2">
+            <p className="text-xs uppercase tracking-widest text-zinc-500">Assets</p>
+            <button type="button" onClick={() => setActiveDrawer('asset')} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-zinc-100">
+              Quick Add Asset
             </button>
           </div>
           <div className="bg-zinc-900/30 border border-zinc-800 rounded-xl divide-y divide-zinc-800/80">
@@ -1052,47 +1146,62 @@ const AdminProjectDetail: React.FC = () => {
           <p className="text-xs text-zinc-500">
             Deferred in this mock pass: binary upload/storage pipeline. Asset records are metadata-only for now.
           </p>
+          <AdminFormDrawer
+            open={activeDrawer === 'asset'}
+            onClose={() => setActiveDrawer(null)}
+            title="Quick Add Asset"
+            subtitle="Create a new project asset record"
+            footer={
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setActiveDrawer(null)} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300">Cancel</button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    try {
+                      if (!newAssetLabel.trim()) {
+                        setMessage('Asset label is required.', 'error');
+                        return;
+                      }
+                      const status: ProjectAssetStatus = 'internal';
+                      createProjectAsset({
+                        projectId: project.id,
+                        label: newAssetLabel.trim(),
+                        type: 'video',
+                        status,
+                        clientVisible: false,
+                        version: 'v0.1',
+                      }, actorName);
+                      setNewAssetLabel('');
+                      setActiveDrawer(null);
+                      setRefreshTick((value) => value + 1);
+                      setMessage('Asset added.');
+                    } catch (error) {
+                      setMessage(error instanceof Error ? error.message : 'Could not add asset.', 'error');
+                    }
+                  }}
+                  className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-100"
+                >
+                  Add Asset
+                </button>
+              </div>
+            }
+          >
+            <input
+              value={newAssetLabel}
+              onChange={(e) => setNewAssetLabel(e.target.value)}
+              placeholder="New asset label"
+              className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+            />
+          </AdminFormDrawer>
         </div>
       ))}
 
       {tab === 'deliverables' && withState('deliverables', true, (
         <div className="space-y-3">
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-3 flex flex-col sm:flex-row gap-2">
-            <input
-              value={newDeliverableLabel}
-              onChange={(e) => setNewDeliverableLabel(e.target.value)}
-              placeholder="New deliverable"
-              className="flex-1 rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
-            />
-            <button
-              type="button"
-              onClick={() => {
-                try {
-                  if (!newDeliverableLabel.trim()) {
-                    setMessage('Deliverable label is required.', 'error');
-                    return;
-                  }
-                  const status: DeliverableStatus = 'not_started';
-                  createDeliverable({
-                    projectId: project.id,
-                    label: newDeliverableLabel.trim(),
-                    ownerCrewId: project.ownerCrewId,
-                    ownerName: project.ownerName,
-                    dueDate: project.dueDate,
-                    required: true,
-                    status,
-                    linkedAssetIds: [],
-                  }, actorName);
-                  setNewDeliverableLabel('');
-                  setRefreshTick((value) => value + 1);
-                  setMessage('Deliverable added.');
-                } catch (error) {
-                  setMessage(error instanceof Error ? error.message : 'Could not add deliverable.', 'error');
-                }
-              }}
-              className="rounded-md border border-zinc-700 px-3 py-2 text-xs text-zinc-100"
-            >
-              Add Deliverable
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-3 flex items-center justify-between gap-2">
+            <p className="text-xs uppercase tracking-widest text-zinc-500">Deliverables</p>
+            <button type="button" onClick={() => setActiveDrawer('deliverable')} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-zinc-100">
+              Quick Add Deliverable
             </button>
           </div>
           <div className="bg-zinc-900/30 border border-zinc-800 rounded-xl divide-y divide-zinc-800/80">
@@ -1135,32 +1244,64 @@ const AdminProjectDetail: React.FC = () => {
             ))
           )}
           </div>
+          <AdminFormDrawer
+            open={activeDrawer === 'deliverable'}
+            onClose={() => setActiveDrawer(null)}
+            title="Quick Add Deliverable"
+            subtitle="Create a deliverable for this project"
+            footer={
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setActiveDrawer(null)} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300">Cancel</button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    try {
+                      if (!newDeliverableLabel.trim()) {
+                        setMessage('Deliverable label is required.', 'error');
+                        return;
+                      }
+                      const status: DeliverableStatus = 'not_started';
+                      createDeliverable({
+                        projectId: project.id,
+                        label: newDeliverableLabel.trim(),
+                        ownerCrewId: project.ownerCrewId,
+                        ownerName: project.ownerName,
+                        dueDate: project.dueDate,
+                        required: true,
+                        status,
+                        linkedAssetIds: [],
+                      }, actorName);
+                      setNewDeliverableLabel('');
+                      setActiveDrawer(null);
+                      setRefreshTick((value) => value + 1);
+                      setMessage('Deliverable added.');
+                    } catch (error) {
+                      setMessage(error instanceof Error ? error.message : 'Could not add deliverable.', 'error');
+                    }
+                  }}
+                  className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-100"
+                >
+                  Add Deliverable
+                </button>
+              </div>
+            }
+          >
+            <input
+              value={newDeliverableLabel}
+              onChange={(e) => setNewDeliverableLabel(e.target.value)}
+              placeholder="New deliverable"
+              className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+            />
+          </AdminFormDrawer>
         </div>
       ))}
 
       {tab === 'controls' && withState('controls', true, (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-4">
-            <h3 className="text-xs uppercase tracking-widest text-zinc-500 font-bold mb-3">Risks</h3>
-            <div className="mb-3 flex gap-2">
-              <input
-                value={newRiskLabel}
-                onChange={(e) => setNewRiskLabel(e.target.value)}
-                placeholder="Add risk"
-                className="flex-1 rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-xs text-zinc-100"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  if (!newRiskLabel.trim()) return;
-                  createRisk({ projectId: project.id, label: newRiskLabel.trim(), ownerName: project.ownerName, severity: 'medium', status: 'open' }, actorName);
-                  setNewRiskLabel('');
-                  setRefreshTick((value) => value + 1);
-                }}
-                className="rounded-md border border-zinc-700 px-2 py-1 text-[11px] text-zinc-100"
-              >
-                Add
-              </button>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h3 className="text-xs uppercase tracking-widest text-zinc-500 font-bold">Risks</h3>
+              <button type="button" onClick={() => setActiveDrawer('risk')} className="rounded-md border border-zinc-700 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-zinc-100">Quick Add</button>
             </div>
             {risks.length === 0 ? (
               <p className="text-sm text-zinc-500">No risks logged.</p>
@@ -1188,26 +1329,9 @@ const AdminProjectDetail: React.FC = () => {
             )}
           </div>
           <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-4">
-            <h3 className="text-xs uppercase tracking-widest text-zinc-500 font-bold mb-3">Blockers</h3>
-            <div className="mb-3 flex gap-2">
-              <input
-                value={newBlockerLabel}
-                onChange={(e) => setNewBlockerLabel(e.target.value)}
-                placeholder="Add blocker"
-                className="flex-1 rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-xs text-zinc-100"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  if (!newBlockerLabel.trim()) return;
-                  createBlocker({ projectId: project.id, label: newBlockerLabel.trim(), ownerName: project.ownerName, status: 'open' }, actorName);
-                  setNewBlockerLabel('');
-                  setRefreshTick((value) => value + 1);
-                }}
-                className="rounded-md border border-zinc-700 px-2 py-1 text-[11px] text-zinc-100"
-              >
-                Add
-              </button>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h3 className="text-xs uppercase tracking-widest text-zinc-500 font-bold">Blockers</h3>
+              <button type="button" onClick={() => setActiveDrawer('blocker')} className="rounded-md border border-zinc-700 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-zinc-100">Quick Add</button>
             </div>
             {blockers.length === 0 ? (
               <p className="text-sm text-zinc-500">No blockers.</p>
@@ -1235,26 +1359,9 @@ const AdminProjectDetail: React.FC = () => {
             )}
           </div>
           <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-4">
-            <h3 className="text-xs uppercase tracking-widest text-zinc-500 font-bold mb-3">Dependencies</h3>
-            <div className="mb-3 flex gap-2">
-              <input
-                value={newDependencyLabel}
-                onChange={(e) => setNewDependencyLabel(e.target.value)}
-                placeholder="Add dependency"
-                className="flex-1 rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-xs text-zinc-100"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  if (!newDependencyLabel.trim()) return;
-                  createDependency({ projectId: project.id, label: newDependencyLabel.trim(), status: 'waiting' }, actorName);
-                  setNewDependencyLabel('');
-                  setRefreshTick((value) => value + 1);
-                }}
-                className="rounded-md border border-zinc-700 px-2 py-1 text-[11px] text-zinc-100"
-              >
-                Add
-              </button>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h3 className="text-xs uppercase tracking-widest text-zinc-500 font-bold">Dependencies</h3>
+              <button type="button" onClick={() => setActiveDrawer('dependency')} className="rounded-md border border-zinc-700 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-zinc-100">Quick Add</button>
             </div>
             {dependencies.length === 0 ? (
               <p className="text-sm text-zinc-500">No dependencies logged.</p>
@@ -1279,6 +1386,30 @@ const AdminProjectDetail: React.FC = () => {
               </ul>
             )}
           </div>
+          <AdminFormDrawer
+            open={activeDrawer === 'risk'}
+            onClose={() => setActiveDrawer(null)}
+            title="Quick Add Risk"
+            footer={<div className="flex justify-end gap-2"><button type="button" onClick={() => setActiveDrawer(null)} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300">Cancel</button><button type="button" onClick={() => { if (!newRiskLabel.trim()) { setMessage('Risk label is required.', 'error'); return; } createRisk({ projectId: project.id, label: newRiskLabel.trim(), ownerName: project.ownerName, severity: 'medium', status: 'open' }, actorName); setNewRiskLabel(''); setActiveDrawer(null); setRefreshTick((value) => value + 1); }} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-100">Add Risk</button></div>}
+          >
+            <input value={newRiskLabel} onChange={(e) => setNewRiskLabel(e.target.value)} placeholder="Risk label" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+          </AdminFormDrawer>
+          <AdminFormDrawer
+            open={activeDrawer === 'blocker'}
+            onClose={() => setActiveDrawer(null)}
+            title="Quick Add Blocker"
+            footer={<div className="flex justify-end gap-2"><button type="button" onClick={() => setActiveDrawer(null)} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300">Cancel</button><button type="button" onClick={() => { if (!newBlockerLabel.trim()) { setMessage('Blocker label is required.', 'error'); return; } createBlocker({ projectId: project.id, label: newBlockerLabel.trim(), ownerName: project.ownerName, status: 'open' }, actorName); setNewBlockerLabel(''); setActiveDrawer(null); setRefreshTick((value) => value + 1); }} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-100">Add Blocker</button></div>}
+          >
+            <input value={newBlockerLabel} onChange={(e) => setNewBlockerLabel(e.target.value)} placeholder="Blocker label" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+          </AdminFormDrawer>
+          <AdminFormDrawer
+            open={activeDrawer === 'dependency'}
+            onClose={() => setActiveDrawer(null)}
+            title="Quick Add Dependency"
+            footer={<div className="flex justify-end gap-2"><button type="button" onClick={() => setActiveDrawer(null)} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300">Cancel</button><button type="button" onClick={() => { if (!newDependencyLabel.trim()) { setMessage('Dependency label is required.', 'error'); return; } createDependency({ projectId: project.id, label: newDependencyLabel.trim(), status: 'waiting' }, actorName); setNewDependencyLabel(''); setActiveDrawer(null); setRefreshTick((value) => value + 1); }} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-100">Add Dependency</button></div>}
+          >
+            <input value={newDependencyLabel} onChange={(e) => setNewDependencyLabel(e.target.value)} placeholder="Dependency label" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+          </AdminFormDrawer>
         </div>
       ))}
 
@@ -1335,23 +1466,7 @@ const AdminProjectDetail: React.FC = () => {
                 <button
                   type="button"
                   disabled={!canRequestChangeOrder}
-                  onClick={() => {
-                    try {
-                      if (!projectId) return;
-                      const title = window.prompt('Change order title');
-                      if (!title?.trim()) {
-                        setMessage('Change order title is required.', 'error');
-                        return;
-                      }
-                      const amountRaw = window.prompt('Amount', '0');
-                      const amount = Number(amountRaw || '0');
-                      requestChangeOrder(projectId, title.trim(), Number.isFinite(amount) ? amount : -1, user?.displayName || 'System');
-                      setRefreshTick((value) => value + 1);
-                      setMessage('Change order request created.');
-                    } catch (error) {
-                      setMessage(error instanceof Error ? error.message : 'Could not request change order.', 'error');
-                    }
-                  }}
+                  onClick={() => setActiveDrawer('changeOrder')}
                   className="rounded-md border border-zinc-700 px-2.5 py-1 text-xs text-zinc-100 disabled:opacity-50"
                 >
                   Request change order
@@ -1415,65 +1530,21 @@ const AdminProjectDetail: React.FC = () => {
 
           <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-4">
             <h3 className="text-sm font-bold text-zinc-400 mb-2">Expenses (mock)</h3>
-            <div className="mb-3 flex flex-col sm:flex-row gap-2">
-              <input
-                value={newExpenseLabel}
-                onChange={(e) => setNewExpenseLabel(e.target.value)}
-                placeholder="Expense label"
-                className="flex-1 rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-2 text-sm text-zinc-100"
-              />
-              <input
-                value={newExpenseAmount}
-                onChange={(e) => setNewExpenseAmount(e.target.value.replace(/[^\d]/g, ''))}
-                placeholder="Amount"
-                className="w-32 rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-2 text-sm text-zinc-100"
-              />
+            <div className="mb-3 flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={() => {
-                  if (!newExpenseLabel.trim()) {
-                    setMessage('Expense label is required.', 'error');
-                    return;
-                  }
-                  createExpense({
-                    projectId: project.id,
-                    label: newExpenseLabel.trim(),
-                    amount: Number(newExpenseAmount || '0'),
-                    category: 'other',
-                    date: new Date().toISOString().slice(0, 10),
-                  }, actorName);
-                  setNewExpenseLabel('');
-                  setNewExpenseAmount('0');
-                  setRefreshTick((value) => value + 1);
-                  setMessage('Expense added.');
-                }}
+                onClick={() => setActiveDrawer('expense')}
                 className="rounded-md border border-zinc-700 px-3 py-2 text-xs text-zinc-100"
               >
-                Add Expense
+                Quick Add Expense
               </button>
               <button
                 type="button"
                 disabled={!canApproveFinance}
-                onClick={() => {
-                  try {
-                    createInvoice({
-                      projectId: project.id,
-                      clientName: project.clientName,
-                      amount: 1200,
-                      amountPaid: 0,
-                      status: 'draft',
-                      issuedDate: new Date().toISOString().slice(0, 10),
-                      dueDate: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14).toISOString().slice(0, 10),
-                    }, actorName);
-                    setRefreshTick((value) => value + 1);
-                    setMessage('Invoice added.');
-                  } catch (error) {
-                    setMessage(error instanceof Error ? error.message : 'Could not create invoice.', 'error');
-                  }
-                }}
+                onClick={() => setActiveDrawer('invoice')}
                 className="rounded-md border border-zinc-700 px-3 py-2 text-xs text-zinc-100 disabled:opacity-50"
               >
-                Add Invoice
+                Quick Add Invoice
               </button>
             </div>
             <ul className="text-sm text-zinc-300 space-y-1">
@@ -1497,6 +1568,39 @@ const AdminProjectDetail: React.FC = () => {
               </p>
             )}
           </div>
+          <AdminFormDrawer
+            open={activeDrawer === 'changeOrder'}
+            onClose={() => setActiveDrawer(null)}
+            title="Request Change Order"
+            footer={<div className="flex justify-end gap-2"><button type="button" onClick={() => setActiveDrawer(null)} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300">Cancel</button><button type="button" onClick={() => { try { if (!projectId) return; const amount = Number(newChangeOrderAmount || '0'); requestChangeOrder(projectId, newChangeOrderTitle.trim(), Number.isFinite(amount) ? amount : -1, user?.displayName || 'System'); setNewChangeOrderTitle(''); setNewChangeOrderAmount('0'); setActiveDrawer(null); setRefreshTick((value) => value + 1); setMessage('Change order request created.'); } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not request change order.', 'error'); } }} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-100">Submit Request</button></div>}
+          >
+            <div className="space-y-2">
+              <input value={newChangeOrderTitle} onChange={(e) => setNewChangeOrderTitle(e.target.value)} placeholder="Change order title" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+              <input value={newChangeOrderAmount} onChange={(e) => setNewChangeOrderAmount(e.target.value.replace(/[^\d]/g, ''))} placeholder="Amount" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+            </div>
+          </AdminFormDrawer>
+          <AdminFormDrawer
+            open={activeDrawer === 'expense'}
+            onClose={() => setActiveDrawer(null)}
+            title="Quick Add Expense"
+            footer={<div className="flex justify-end gap-2"><button type="button" onClick={() => setActiveDrawer(null)} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300">Cancel</button><button type="button" onClick={() => { if (!newExpenseLabel.trim()) { setMessage('Expense label is required.', 'error'); return; } createExpense({ projectId: project.id, label: newExpenseLabel.trim(), amount: Number(newExpenseAmount || '0'), category: 'other', date: new Date().toISOString().slice(0, 10), }, actorName); setNewExpenseLabel(''); setNewExpenseAmount('0'); setActiveDrawer(null); setRefreshTick((value) => value + 1); setMessage('Expense added.'); }} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-100">Add Expense</button></div>}
+          >
+            <div className="space-y-2">
+              <input value={newExpenseLabel} onChange={(e) => setNewExpenseLabel(e.target.value)} placeholder="Expense label" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+              <input value={newExpenseAmount} onChange={(e) => setNewExpenseAmount(e.target.value.replace(/[^\d]/g, ''))} placeholder="Amount" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+            </div>
+          </AdminFormDrawer>
+          <AdminFormDrawer
+            open={activeDrawer === 'invoice'}
+            onClose={() => setActiveDrawer(null)}
+            title="Quick Add Invoice"
+            footer={<div className="flex justify-end gap-2"><button type="button" onClick={() => setActiveDrawer(null)} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300">Cancel</button><button type="button" onClick={() => { try { createInvoice({ projectId: project.id, clientName: project.clientName, amount: Number(newInvoiceAmount || '0'), amountPaid: 0, status: 'draft', issuedDate: new Date().toISOString().slice(0, 10), dueDate: newInvoiceDueDate, }, actorName); setActiveDrawer(null); setRefreshTick((value) => value + 1); setMessage('Invoice added.'); } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not create invoice.', 'error'); } }} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-100">Add Invoice</button></div>}
+          >
+            <div className="space-y-2">
+              <input value={newInvoiceAmount} onChange={(e) => setNewInvoiceAmount(e.target.value.replace(/[^\d]/g, ''))} placeholder="Amount" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+              <input type="date" value={newInvoiceDueDate} onChange={(e) => setNewInvoiceDueDate(e.target.value)} style={dateTimeInput.style} className={`w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 ${dateTimeInput.className}`} />
+            </div>
+          </AdminFormDrawer>
         </div>
       ))}
 

@@ -156,6 +156,9 @@ export interface PlannerItem {
   column: PlannerBoardColumn;
   priority: PlannerItemPriority;
   dueDate: string; // ISO date
+  /** Multi-assignee model for project tasks. */
+  assigneeCrewIds?: string[];
+  assigneeNames?: string[];
   assigneeCrewId: string;
   assigneeName: string;
   done: boolean;

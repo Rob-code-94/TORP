@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { X } from 'lucide-react';
 import { MOCK_CLIENTS, MOCK_CREW, PROJECT_STAGE_ORDER } from '../../../data/adminMock';
 import { createClient, createProject, type CreateProjectRequest } from '../../../data/adminProjectsApi';
-import { useAdminTheme } from '../../../lib/adminTheme';
+import { adminDateTimeInputProps, useAdminTheme } from '../../../lib/adminTheme';
 import type { ProjectStage } from '../../../types';
 import { formatAdminDate, formatStage } from './adminFormat';
 
@@ -44,6 +44,7 @@ const AdminProjectWizard: React.FC<AdminProjectWizardProps> = ({ open, onClose, 
   const navigate = useNavigate();
   const { theme } = useAdminTheme();
   const isDark = theme === 'dark';
+  const dateTimeInput = adminDateTimeInputProps(theme);
   const [step, setStep] = useState<Step>(1);
   const [form, setForm] = useState<CreateProjectRequest>(initialDraft || initial);
   const [error, setError] = useState<string | null>(null);
@@ -94,7 +95,7 @@ const AdminProjectWizard: React.FC<AdminProjectWizardProps> = ({ open, onClose, 
   const quickCreateClient = () => {
     const result = createClient(quickClient);
     if (!result.ok) {
-      setError(result.error);
+      setError('error' in result ? result.error : 'Could not create client.');
       return;
     }
     setForm((current) => ({
@@ -339,8 +340,8 @@ const AdminProjectWizard: React.FC<AdminProjectWizardProps> = ({ open, onClose, 
                   type="date"
                   value={form.dueDate}
                   onChange={(e) => setForm((v) => ({ ...v, dueDate: e.target.value }))}
-                  style={{ colorScheme: isDark ? 'dark' : 'light' }}
-                  className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 [color-scheme:dark]"
+                  style={dateTimeInput.style}
+                  className={`mt-1 w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 ${dateTimeInput.className}`}
                 />
               </label>
             </div>

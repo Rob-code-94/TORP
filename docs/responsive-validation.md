@@ -207,3 +207,70 @@ These are allowed, local scroll regions (not page-level):
 - `320`: planner task editor and schedule forms stack vertically with no page-level horizontal overflow.
 - `375`: status dropdowns and row actions remain reachable; schedule editors preserve touch targets.
 - `390`: participant chips wrap correctly inside schedule editor; sticky headers remain usable.
+
+## Planner + Schedule v2 polish pass
+
+### Scope
+
+- `components/hq/admin/AdminProjectDetail.tsx`
+- `data/adminMock.ts`
+- `types.ts`
+- `lib/adminTheme.tsx`
+- `components/hq/admin/AdminProjectWizard.tsx`
+
+### Functional checks
+
+- Planner create/edit now supports task type + priority controls.
+- Planner assignment now supports multi-equal assignees with legacy-safe single-assignee fallback fields.
+- Schedule create flow now starts with event type selection (`Shoot` or `Meeting`) and opens one shared event editor.
+- Schedule event editor now handles both create and update for shoots/meetings with participant selection.
+- Added shared dark-mode date/time input utility (`adminDateTimeInputProps`) and applied it to wizard and detail forms.
+
+### Mobile/overflow checks
+
+- `320`: planner assignee chips and schedule controls wrap without introducing page-level horizontal scroll.
+- `375`: event type selector + schedule button remain reachable; shared editor stacks vertically.
+- `390`: planner table keeps overflow scoped locally; sticky headers and event editor controls remain touch-safe.
+
+## HQ Admin global quick-add drawer rollout
+
+### Scope
+
+- `components/hq/admin/AdminFormDrawer.tsx`
+- `components/hq/admin/AdminProjectDetail.tsx`
+- `components/hq/admin/AdminClients.tsx`
+- `lib/adminTheme.tsx`
+
+### Functional checks
+
+- Added shared right-side admin drawer shell for all add/edit/open form flows:
+  - backdrop close,
+  - `Esc` close,
+  - sticky header/footer,
+  - internal content scroll,
+  - mobile full-width fallback.
+- Planner:
+  - replaced inline add panel with `Quick Add Task` drawer flow,
+  - kept inline quick controls in task rows for `status`, `type`, and `priority`,
+  - retained full task detail editing in drawer.
+- Schedule:
+  - replaced inline editor with drawer-only create/edit flow,
+  - event type selection now lives in drawer for new events,
+  - row `Open` actions reuse same drawer surface.
+- Project-detail add forms moved to quick-add drawers (no inline expanding forms):
+  - assets,
+  - deliverables,
+  - risks,
+  - blockers,
+  - dependencies,
+  - expenses,
+  - invoices,
+  - change orders.
+- Clients module now supports a `Quick Add Client` drawer from header action.
+- Hardened global dark-mode date/time utility for stronger calendar/time picker indicator visibility.
+
+### Mobile/overflow checks
+
+- `320`: drawer opens full-width, sticky actions remain reachable, no page-level horizontal overflow.
+- `375`: quick-action rows wrap correctly and drawer forms remain touch-friendly.
+- `390`: planner/schedule tables keep overflow scoped locally while drawer interactions remain stable.

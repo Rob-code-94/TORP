@@ -582,7 +582,11 @@ export function createClientProfile(input: {
 }
 
 export function getPlannerByProject(id: string): PlannerItem[] {
-  return MOCK_PLANNER.filter((t) => t.projectId === id);
+  return MOCK_PLANNER.filter((t) => t.projectId === id).map((item) => {
+    const assigneeCrewIds = item.assigneeCrewIds?.length ? item.assigneeCrewIds : [item.assigneeCrewId];
+    const assigneeNames = item.assigneeNames?.length ? item.assigneeNames : [item.assigneeName];
+    return { ...item, assigneeCrewIds, assigneeNames };
+  });
 }
 
 export function getAssetsByProject(id: string): ProjectAsset[] {
@@ -861,9 +865,17 @@ export function removeCrewFromProject(projectId: string, crewId: string, actorNa
 
 export function createPlannerTask(input: Omit<PlannerItem, 'id'>, actorName: string): PlannerItem {
   if (!input.title.trim()) throw new Error('Task title is required.');
-  const assignee = validateProjectAssignee(input.projectId, input.assigneeCrewId);
-  if (!assignee.ok) throw new Error(assignee.error);
+  const assigneeIds = input.assigneeCrewIds?.length ? input.assigneeCrewIds : [input.assigneeCrewId];
+  const assignees = validateProjectAssignees(input.projectId, assigneeIds);
+  if (!assignees.ok) throw new Error(assignees.error);
+  const normalizedNames = assigneeIds
+    .map((crewId) => MOCK_CREW.find((crew) => crew.id === crewId)?.displayName)
+    .filter((name): name is string => Boolean(name));
   const item: PlannerItem = { ...input, id: `t${Date.now()}` };
+  item.assigneeCrewIds = assigneeIds;
+  item.assigneeNames = normalizedNames;
+  item.assigneeCrewId = assigneeIds[0] || input.assigneeCrewId;
+  item.assigneeName = normalizedNames[0] || input.assigneeName;
   MOCK_PLANNER.unshift(item);
   pushActivity({
     projectId: item.projectId,
@@ -878,11 +890,21 @@ export function createPlannerTask(input: Omit<PlannerItem, 'id'>, actorName: str
 export function updatePlannerTask(taskId: string, patch: Partial<PlannerItem>, actorName: string): { ok: boolean } {
   const item = MOCK_PLANNER.find((t) => t.id === taskId);
   if (!item) return { ok: false };
-  if (patch.assigneeCrewId) {
-    const assignee = validateProjectAssignee(item.projectId, patch.assigneeCrewId);
+  const requestedAssignees = patch.assigneeCrewIds?.length ? patch.assigneeCrewIds : patch.assigneeCrewId ? [patch.assigneeCrewId] : undefined;
+  if (requestedAssignees) {
+    const assignee = validateProjectAssignees(item.projectId, requestedAssignees);
     if (!assignee.ok) throw new Error(assignee.error);
   }
   const nextPatch = { ...patch };
+  if (requestedAssignees) {
+    const names = requestedAssignees
+      .map((crewId) => MOCK_CREW.find((crew) => crew.id === crewId)?.displayName)
+      .filter((name): name is string => Boolean(name));
+    nextPatch.assigneeCrewIds = requestedAssignees;
+    nextPatch.assigneeNames = names;
+    nextPatch.assigneeCrewId = requestedAssignees[0] || item.assigneeCrewId;
+    nextPatch.assigneeName = names[0] || item.assigneeName;
+  }
   if (nextPatch.status) {
     const mapped = plannerStatusToLegacy(nextPatch.status);
     nextPatch.column = mapped.column;
@@ -1045,6 +1067,14 @@ export function validateProjectAssignee(projectId: string, crewId: string): { ok
   if (!allowed.some((crew) => crew.id === crewId)) {
     return { ok: false, error: 'Assignee must be on this project team.' };
   }
+  return { ok: true };
+}
+
+export function validateProjectAssignees(projectId: string, crewIds: string[]): { ok: boolean; error?: string } {
+  if (!crewIds.length) return { ok: false, error: 'Select at least one assignee.' };
+  const allowedIds = new Set(projectAssignableCrew(projectId).map((crew) => crew.id));
+  const invalid = crewIds.find((crewId) => !allowedIds.has(crewId));
+  if (invalid) return { ok: false, error: 'One or more assignees are not on this project team.' };
   return { ok: true };
 }
 
