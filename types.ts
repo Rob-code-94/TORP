@@ -84,9 +84,40 @@ export interface ClientProfile {
   company: string;
   email: string;
   phone: string;
+  billingEmail: string;
+  billingContactName: string;
+  addressCity: string;
+  addressState: string;
+  addressPostal: string;
+  addressCountry: string;
+  preferredCommunication: 'email' | 'sms' | 'phone';
+  timezone: string;
+  clientStatus: 'active' | 'prospect' | 'paused';
   city?: string;
   notes: string;
   projectIds: string[];
+  updatedAt?: string;
+}
+
+export interface CrewAvailabilityWindow {
+  id: string;
+  dayOfWeek: 0 | 1 | 2 | 3 | 4 | 5 | 6;
+  startTime: string;
+  endTime: string;
+}
+
+export interface CrewAvailabilityException {
+  id: string;
+  startDate: string;
+  endDate: string;
+  reason?: string;
+}
+
+export interface CrewAvailability {
+  timezone: string;
+  windows: CrewAvailabilityWindow[];
+  exceptions: CrewAvailabilityException[];
+  notes?: string;
 }
 
 export interface CrewProfile {
@@ -94,12 +125,19 @@ export interface CrewProfile {
   displayName: string;
   role: 'director' | 'dp' | 'editor' | 'producer' | 'audio' | 'other';
   email: string;
+  phone?: string;
   rateShootHour: number;
   rateEditHour: number;
   active: boolean;
   assignedProjectIds: string[];
-  /** ISO week availability label for mock UI */
+  /** Legacy label used in table snapshots; keep in sync with structured availability. */
   availability: string;
+  availabilityDetail: CrewAvailability;
+  lastResetRequestedAt?: string;
+  lastResetRequestedBy?: string;
+  lastTempPasswordSetAt?: string;
+  lastTempPasswordSetBy?: string;
+  forcePasswordChange?: boolean;
 }
 
 export interface AdminProject {
@@ -247,6 +285,7 @@ export interface AdminShoot extends Shoot {
   projectTitle: string;
   gearSummary: string;
   description?: string;
+  crewIds?: string[];
 }
 
 export interface AdminMeeting {
@@ -258,6 +297,7 @@ export interface AdminMeeting {
   startTime: string;
   location: string;
   participants: string[];
+  participantCrewIds?: string[];
   description?: string;
 }
 

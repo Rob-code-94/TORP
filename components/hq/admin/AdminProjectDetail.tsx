@@ -340,7 +340,7 @@ const AdminProjectDetail: React.FC = () => {
         time: kind === 'shoot' ? '08:00' : '10:00',
         location: '',
         description: '',
-        participants: [project.ownerName],
+        participants: [project.ownerCrewId],
       });
       setOpenSchedule({ kind, id: '__new__' });
       setActiveDrawer('schedule');
@@ -355,7 +355,7 @@ const AdminProjectDetail: React.FC = () => {
         time: shoot.callTime,
         location: shoot.location,
         description: shoot.description || shoot.gearSummary,
-        participants: shoot.crew,
+        participants: shoot.crewIds?.length ? shoot.crewIds : shoot.crew,
       });
     } else {
       const meeting = meetings.find((item) => item.id === id);
@@ -366,7 +366,7 @@ const AdminProjectDetail: React.FC = () => {
         time: meeting.startTime,
         location: meeting.location,
         description: meeting.description || '',
-        participants: meeting.participants,
+        participants: meeting.participantCrewIds?.length ? meeting.participantCrewIds : meeting.participants,
       });
     }
     setOpenSchedule({ kind, id });
@@ -374,12 +374,12 @@ const AdminProjectDetail: React.FC = () => {
     setActiveDrawer('schedule');
   };
 
-  const toggleParticipant = (name: string) => {
+  const toggleParticipant = (crewId: string) => {
     setScheduleDraft((current) => ({
       ...current,
-      participants: current.participants.includes(name)
-        ? current.participants.filter((item) => item !== name)
-        : [...current.participants, name],
+      participants: current.participants.includes(crewId)
+        ? current.participants.filter((item) => item !== crewId)
+        : [...current.participants, crewId],
     }));
   };
 
@@ -1280,8 +1280,8 @@ const AdminProjectDetail: React.FC = () => {
                   <button
                     key={crew.id}
                     type="button"
-                    onClick={() => toggleParticipant(crew.displayName)}
-                    className={`rounded-full border px-2.5 py-1 text-xs ${scheduleDraft.participants.includes(crew.displayName) ? 'border-white bg-white text-black' : 'border-zinc-700 text-zinc-300'}`}
+                    onClick={() => toggleParticipant(crew.id)}
+                    className={`rounded-full border px-2.5 py-1 text-xs ${scheduleDraft.participants.includes(crew.id) ? 'border-white bg-white text-black' : 'border-zinc-700 text-zinc-300'}`}
                   >
                     {crew.displayName}
                   </button>

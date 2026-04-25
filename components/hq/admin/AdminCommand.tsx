@@ -36,6 +36,7 @@ import type { AdminProject, PlannerItemPriority } from '../../../types';
 import { columnLabel, formatAdminDate, formatAdminDateTime } from './adminFormat';
 import AdminProjectWizard from './AdminProjectWizard';
 import AdminFormDrawer from './AdminFormDrawer';
+import ClientProfileForm, { EMPTY_CLIENT_PROFILE_DRAFT, type ClientProfileDraft } from './ClientProfileForm';
 
 const revenueData = [
   { name: 'Jan', revenue: 40000 },
@@ -91,7 +92,7 @@ const AdminCommand: React.FC = () => {
   const canQuickClient = user?.role === 'ADMIN';
   const canQuickTaskShoot = hasProjectCapability(user?.role, 'project.create');
 
-  const [clientDraft, setClientDraft] = useState({ company: '', name: '', email: '', phone: '' });
+  const [clientDraft, setClientDraft] = useState<ClientProfileDraft>(EMPTY_CLIENT_PROFILE_DRAFT);
   const [taskDraft, setTaskDraft] = useState(() => {
     const project = defaultProject;
     return {
@@ -190,7 +191,7 @@ const AdminCommand: React.FC = () => {
       setStatus({ tone: 'error', message: 'error' in result ? result.error : 'Could not create client.' });
       return;
     }
-    setClientDraft({ company: '', name: '', email: '', phone: '' });
+    setClientDraft(EMPTY_CLIENT_PROFILE_DRAFT);
     setClientOpen(false);
     setRefreshTick((v) => v + 1);
     setStatus({ tone: 'ok', message: 'Client added.' });
@@ -642,12 +643,7 @@ const AdminCommand: React.FC = () => {
           </div>
         }
       >
-        <div className="space-y-2">
-          <input value={clientDraft.company} onChange={(e) => setClientDraft((v) => ({ ...v, company: e.target.value }))} placeholder="Company" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
-          <input value={clientDraft.name} onChange={(e) => setClientDraft((v) => ({ ...v, name: e.target.value }))} placeholder="Primary contact" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
-          <input value={clientDraft.email} onChange={(e) => setClientDraft((v) => ({ ...v, email: e.target.value }))} placeholder="Email" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
-          <input value={clientDraft.phone} onChange={(e) => setClientDraft((v) => ({ ...v, phone: e.target.value }))} placeholder="Phone (optional)" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
-        </div>
+        <ClientProfileForm value={clientDraft} onChange={setClientDraft} />
       </AdminFormDrawer>
 
       <AdminFormDrawer

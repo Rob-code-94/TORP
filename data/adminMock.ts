@@ -30,9 +30,19 @@ export const MOCK_CLIENTS: ClientProfile[] = [
     company: 'Jordan Brand',
     email: 'prod@jordan.nike.com',
     phone: '(312) 555-0140',
+    billingEmail: 'billing@jordan.nike.com',
+    billingContactName: 'Jordan AP',
+    addressCity: 'Chicago',
+    addressState: 'IL',
+    addressPostal: '60607',
+    addressCountry: 'US',
+    preferredCommunication: 'email',
+    timezone: 'America/Chicago',
+    clientStatus: 'active',
     city: 'Chicago, IL',
     notes: 'High-touch brand; prefers overnight review windows.',
     projectIds: ['p1'],
+    updatedAt: '2025-03-01T08:00:00Z',
   },
   {
     id: 'cl-2',
@@ -40,9 +50,19 @@ export const MOCK_CLIENTS: ClientProfile[] = [
     company: 'Franklin County',
     email: 'media@franklincounty.gov',
     phone: '(614) 555-0199',
+    billingEmail: 'ap@franklincounty.gov',
+    billingContactName: 'County AP',
+    addressCity: 'Columbus',
+    addressState: 'OH',
+    addressPostal: '43215',
+    addressCountry: 'US',
+    preferredCommunication: 'email',
+    timezone: 'America/New_York',
+    clientStatus: 'active',
     city: 'Columbus, OH',
     notes: 'Civic approvals; add VO + captions deliverable every time.',
     projectIds: ['p2'],
+    updatedAt: '2025-03-03T09:00:00Z',
   },
   {
     id: 'cl-3',
@@ -50,9 +70,19 @@ export const MOCK_CLIENTS: ClientProfile[] = [
     company: 'Sole Classics',
     email: 'creative@soleclassics.com',
     phone: '(614) 555-0101',
+    billingEmail: 'billing@soleclassics.com',
+    billingContactName: 'Retail AP',
+    addressCity: 'Columbus',
+    addressState: 'OH',
+    addressPostal: '43201',
+    addressCountry: 'US',
+    preferredCommunication: 'phone',
+    timezone: 'America/New_York',
+    clientStatus: 'active',
     city: 'Columbus, OH',
     notes: 'Retail + social; fast turnaround on verticals.',
     projectIds: ['p3', 'p4'],
+    updatedAt: '2025-03-06T11:00:00Z',
   },
 ];
 
@@ -62,33 +92,71 @@ export const MOCK_CREW: CrewProfile[] = [
     displayName: 'A. Vance',
     role: 'director',
     email: 'a@torp.life',
+    phone: '(312) 555-0100',
     rateShootHour: 175,
     rateEditHour: 75,
     active: true,
     assignedProjectIds: ['p1', 'p3'],
     availability: 'W14–W16 · mostly clear',
+    availabilityDetail: {
+      timezone: 'America/Chicago',
+      windows: [
+        { id: 'av-1', dayOfWeek: 1, startTime: '08:00', endTime: '18:00' },
+        { id: 'av-2', dayOfWeek: 2, startTime: '08:00', endTime: '18:00' },
+        { id: 'av-3', dayOfWeek: 3, startTime: '08:00', endTime: '18:00' },
+        { id: 'av-4', dayOfWeek: 4, startTime: '08:00', endTime: '18:00' },
+        { id: 'av-5', dayOfWeek: 5, startTime: '09:00', endTime: '15:00' },
+      ],
+      exceptions: [],
+      notes: 'Generally open weekdays.',
+    },
   },
   {
     id: 'cr-2',
     displayName: 'M. Reyes',
     role: 'dp',
     email: 'm@torp.life',
+    phone: '(312) 555-0102',
     rateShootHour: 100,
     rateEditHour: 75,
     active: true,
     assignedProjectIds: ['p1', 'p2'],
     availability: 'On location Mar 20–22',
+    availabilityDetail: {
+      timezone: 'America/Chicago',
+      windows: [
+        { id: 'av-6', dayOfWeek: 1, startTime: '07:00', endTime: '16:00' },
+        { id: 'av-7', dayOfWeek: 2, startTime: '07:00', endTime: '16:00' },
+        { id: 'av-8', dayOfWeek: 3, startTime: '07:00', endTime: '16:00' },
+        { id: 'av-9', dayOfWeek: 4, startTime: '07:00', endTime: '16:00' },
+      ],
+      exceptions: [{ id: 'ex-1', startDate: '2025-03-20', endDate: '2025-03-22', reason: 'On location' }],
+      notes: 'Prefers early calls.',
+    },
   },
   {
     id: 'cr-3',
     displayName: 'J. Park',
     role: 'editor',
     email: 'j@torp.life',
+    phone: '(312) 555-0103',
     rateShootHour: 100,
     rateEditHour: 75,
     active: true,
     assignedProjectIds: ['p2', 'p4'],
     availability: 'Post-heavy week',
+    availabilityDetail: {
+      timezone: 'America/Chicago',
+      windows: [
+        { id: 'av-10', dayOfWeek: 1, startTime: '10:00', endTime: '20:00' },
+        { id: 'av-11', dayOfWeek: 2, startTime: '10:00', endTime: '20:00' },
+        { id: 'av-12', dayOfWeek: 3, startTime: '10:00', endTime: '20:00' },
+        { id: 'av-13', dayOfWeek: 4, startTime: '10:00', endTime: '20:00' },
+        { id: 'av-14', dayOfWeek: 5, startTime: '10:00', endTime: '18:00' },
+      ],
+      exceptions: [],
+      notes: 'Primary post workflow window.',
+    },
   },
 ];
 
@@ -426,6 +494,7 @@ export const MOCK_SHOOTS_ADMIN: AdminShoot[] = [
     callTime: '17:00',
     location: 'Exterior blacktop, Chicago',
     crew: ['M. Reyes', 'A. Vance'],
+    crewIds: ['cr-2', 'cr-1'],
     gearSummary: 'Komodo-X + anamorphics, Teradek, 1× HMI',
   },
   {
@@ -437,6 +506,7 @@ export const MOCK_SHOOTS_ADMIN: AdminShoot[] = [
     callTime: '08:00',
     location: 'Downtown + suburbs',
     crew: ['M. Reyes', 'J. Park'],
+    crewIds: ['cr-2', 'cr-3'],
     gearSummary: '2-cam gimbal; drone (permit TBD)',
   },
 ];
@@ -451,6 +521,7 @@ export const MOCK_MEETINGS_ADMIN: AdminMeeting[] = [
     startTime: '14:00',
     location: 'Zoom',
     participants: ['A. Vance', 'J. Park'],
+    participantCrewIds: ['cr-1', 'cr-3'],
     description: 'Review latest cut and confirm final notes.',
   },
 ];
@@ -547,23 +618,86 @@ export function getProjectById(id: string): AdminProject | undefined {
   return MOCK_ADMIN_PROJECTS.find((p) => p.id === id);
 }
 
+function normalizeEmail(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function normalizeClientInput(input: {
+  company: string;
+  name: string;
+  email: string;
+  phone?: string;
+  billingEmail: string;
+  billingContactName: string;
+  addressCity: string;
+  addressState: string;
+  addressPostal: string;
+  addressCountry: string;
+  preferredCommunication: 'email' | 'sms' | 'phone';
+  timezone: string;
+  clientStatus: 'active' | 'prospect' | 'paused';
+  notes?: string;
+}) {
+  return {
+    company: input.company.trim(),
+    name: input.name.trim(),
+    email: normalizeEmail(input.email),
+    phone: input.phone?.trim() || '(000) 000-0000',
+    billingEmail: normalizeEmail(input.billingEmail),
+    billingContactName: input.billingContactName.trim(),
+    addressCity: input.addressCity.trim(),
+    addressState: input.addressState.trim(),
+    addressPostal: input.addressPostal.trim(),
+    addressCountry: input.addressCountry.trim() || 'US',
+    preferredCommunication: input.preferredCommunication,
+    timezone: input.timezone.trim() || 'America/New_York',
+    clientStatus: input.clientStatus,
+    notes: input.notes?.trim() || '',
+  };
+}
+
+function validateClientInput(input: ReturnType<typeof normalizeClientInput>): string | null {
+  if (!input.company) return 'Company is required.';
+  if (!input.name) return 'Primary contact is required.';
+  if (!isValidEmail(input.email)) return 'Valid email is required.';
+  if (!isValidEmail(input.billingEmail)) return 'Valid billing email is required.';
+  if (!input.billingContactName) return 'Billing contact is required.';
+  if (!input.addressCity || !input.addressState || !input.addressPostal || !input.addressCountry) {
+    return 'Full billing location is required.';
+  }
+  if (!input.timezone) return 'Timezone is required.';
+  return null;
+}
+
 export function createClientProfile(input: {
   company: string;
   name: string;
   email: string;
   phone?: string;
-  city?: string;
+  billingEmail: string;
+  billingContactName: string;
+  addressCity: string;
+  addressState: string;
+  addressPostal: string;
+  addressCountry: string;
+  preferredCommunication: 'email' | 'sms' | 'phone';
+  timezone: string;
+  clientStatus: 'active' | 'prospect' | 'paused';
   notes?: string;
 }): { ok: true; client: ClientProfile } | { ok: false; error: string } {
-  const company = input.company.trim();
-  const email = input.email.trim().toLowerCase();
-  const name = input.name.trim();
-  if (!company) return { ok: false, error: 'Company is required.' };
-  if (!name) return { ok: false, error: 'Primary contact is required.' };
-  if (!email || !email.includes('@')) return { ok: false, error: 'Valid email is required.' };
+  const normalized = normalizeClientInput(input);
+  const error = validateClientInput(normalized);
+  if (error) return { ok: false, error };
 
   const duplicate = MOCK_CLIENTS.find(
-    (item) => item.company.toLowerCase() === company.toLowerCase() || item.email.toLowerCase() === email
+    (item) =>
+      item.company.toLowerCase() === normalized.company.toLowerCase() ||
+      item.email.toLowerCase() === normalized.email ||
+      item.billingEmail.toLowerCase() === normalized.billingEmail
   );
   if (duplicate) {
     return { ok: false, error: 'A client with matching company or email already exists.' };
@@ -571,15 +705,81 @@ export function createClientProfile(input: {
 
   const client: ClientProfile = {
     id: `cl-${MOCK_CLIENTS.length + 1}`,
-    company,
-    name,
-    email,
-    phone: input.phone?.trim() || '(000) 000-0000',
-    city: input.city?.trim() || '',
-    notes: input.notes?.trim() || '',
+    company: normalized.company,
+    name: normalized.name,
+    email: normalized.email,
+    phone: normalized.phone,
+    billingEmail: normalized.billingEmail,
+    billingContactName: normalized.billingContactName,
+    addressCity: normalized.addressCity,
+    addressState: normalized.addressState,
+    addressPostal: normalized.addressPostal,
+    addressCountry: normalized.addressCountry,
+    preferredCommunication: normalized.preferredCommunication,
+    timezone: normalized.timezone,
+    clientStatus: normalized.clientStatus,
+    city: `${normalized.addressCity}, ${normalized.addressState}`,
+    notes: normalized.notes,
     projectIds: [],
+    updatedAt: new Date().toISOString(),
   };
   MOCK_CLIENTS.push(client);
+  return { ok: true, client };
+}
+
+export function updateClientProfile(
+  clientId: string,
+  input: {
+    company: string;
+    name: string;
+    email: string;
+    phone?: string;
+    billingEmail: string;
+    billingContactName: string;
+    addressCity: string;
+    addressState: string;
+    addressPostal: string;
+    addressCountry: string;
+    preferredCommunication: 'email' | 'sms' | 'phone';
+    timezone: string;
+    clientStatus: 'active' | 'prospect' | 'paused';
+    notes?: string;
+  }
+): { ok: true; client: ClientProfile } | { ok: false; error: string } {
+  const client = MOCK_CLIENTS.find((item) => item.id === clientId);
+  if (!client) return { ok: false, error: 'Client not found.' };
+  const normalized = normalizeClientInput(input);
+  const validationError = validateClientInput(normalized);
+  if (validationError) return { ok: false, error: validationError };
+
+  const duplicate = MOCK_CLIENTS.find(
+    (item) =>
+      item.id !== clientId &&
+      (item.company.toLowerCase() === normalized.company.toLowerCase() ||
+        item.email.toLowerCase() === normalized.email ||
+        item.billingEmail.toLowerCase() === normalized.billingEmail)
+  );
+  if (duplicate) return { ok: false, error: 'A client with matching company or email already exists.' };
+
+  Object.assign(client, {
+    company: normalized.company,
+    name: normalized.name,
+    email: normalized.email,
+    phone: normalized.phone,
+    billingEmail: normalized.billingEmail,
+    billingContactName: normalized.billingContactName,
+    addressCity: normalized.addressCity,
+    addressState: normalized.addressState,
+    addressPostal: normalized.addressPostal,
+    addressCountry: normalized.addressCountry,
+    preferredCommunication: normalized.preferredCommunication,
+    timezone: normalized.timezone,
+    clientStatus: normalized.clientStatus,
+    city: `${normalized.addressCity}, ${normalized.addressState}`,
+    notes: normalized.notes,
+    updatedAt: new Date().toISOString(),
+  });
+
   return { ok: true, client };
 }
 
@@ -843,6 +1043,156 @@ export function updateProjectNarrative(
   return { ok: true };
 }
 
+function defaultAvailability(): CrewProfile['availabilityDetail'] {
+  return {
+    timezone: 'America/New_York',
+    windows: [
+      { id: `av-${Date.now()}-1`, dayOfWeek: 1, startTime: '09:00', endTime: '17:00' },
+      { id: `av-${Date.now()}-2`, dayOfWeek: 2, startTime: '09:00', endTime: '17:00' },
+      { id: `av-${Date.now()}-3`, dayOfWeek: 3, startTime: '09:00', endTime: '17:00' },
+      { id: `av-${Date.now()}-4`, dayOfWeek: 4, startTime: '09:00', endTime: '17:00' },
+      { id: `av-${Date.now()}-5`, dayOfWeek: 5, startTime: '09:00', endTime: '17:00' },
+    ],
+    exceptions: [],
+    notes: '',
+  };
+}
+
+function summarizeAvailability(detail: CrewProfile['availabilityDetail']) {
+  if (detail.exceptions.length) {
+    const latest = detail.exceptions[0];
+    return `Limited ${latest.startDate}–${latest.endDate}`;
+  }
+  const weekdays = detail.windows.filter((window) => window.dayOfWeek >= 1 && window.dayOfWeek <= 5).length;
+  if (!weekdays) return 'No weekly hours configured';
+  return `${weekdays} weekday window${weekdays === 1 ? '' : 's'} configured`;
+}
+
+function validateAvailability(detail: CrewProfile['availabilityDetail']): string | null {
+  if (!detail.timezone.trim()) return 'Availability timezone is required.';
+  if (!detail.windows.length) return 'Select at least one availability day.';
+  for (const window of detail.windows) {
+    if (window.startTime >= window.endTime) return 'Availability windows must have a valid time range.';
+  }
+  for (const exception of detail.exceptions) {
+    if (exception.endDate < exception.startDate) return 'Availability exceptions must have a valid date range.';
+  }
+  return null;
+}
+
+export function createCrewMemberProfile(input: {
+  displayName: string;
+  role: CrewProfile['role'];
+  email: string;
+  phone?: string;
+  rateShootHour: number;
+  rateEditHour: number;
+  active?: boolean;
+}): { ok: true; crew: CrewProfile } | { ok: false; error: string } {
+  const displayName = input.displayName.trim();
+  const email = normalizeEmail(input.email);
+  if (!displayName) return { ok: false, error: 'Crew member name is required.' };
+  if (!isValidEmail(email)) return { ok: false, error: 'Valid crew email is required.' };
+  if (MOCK_CREW.some((item) => item.email.toLowerCase() === email)) {
+    return { ok: false, error: 'A crew member with this email already exists.' };
+  }
+  if (input.rateShootHour < 0 || input.rateEditHour < 0) {
+    return { ok: false, error: 'Rates must be non-negative values.' };
+  }
+  const availabilityDetail = defaultAvailability();
+  const crew: CrewProfile = {
+    id: `cr-${MOCK_CREW.length + 1}`,
+    displayName,
+    role: input.role,
+    email,
+    phone: input.phone?.trim() || '',
+    rateShootHour: input.rateShootHour,
+    rateEditHour: input.rateEditHour,
+    active: input.active ?? true,
+    assignedProjectIds: [],
+    availability: summarizeAvailability(availabilityDetail),
+    availabilityDetail,
+  };
+  MOCK_CREW.push(crew);
+  return { ok: true, crew };
+}
+
+export function updateCrewMemberProfile(
+  crewId: string,
+  patch: Partial<{
+    displayName: string;
+    role: CrewProfile['role'];
+    email: string;
+    phone?: string;
+    rateShootHour: number;
+    rateEditHour: number;
+    active: boolean;
+    availabilityDetail: CrewProfile['availabilityDetail'];
+  }>
+): { ok: true; crew: CrewProfile } | { ok: false; error: string } {
+  const crew = MOCK_CREW.find((item) => item.id === crewId);
+  if (!crew) return { ok: false, error: 'Crew member not found.' };
+
+  if (patch.email) {
+    const email = normalizeEmail(patch.email);
+    if (!isValidEmail(email)) return { ok: false, error: 'Valid crew email is required.' };
+    const duplicate = MOCK_CREW.find((item) => item.id !== crewId && item.email.toLowerCase() === email);
+    if (duplicate) return { ok: false, error: 'A crew member with this email already exists.' };
+    crew.email = email;
+  }
+  if (patch.displayName !== undefined) {
+    const next = patch.displayName.trim();
+    if (!next) return { ok: false, error: 'Crew member name is required.' };
+    crew.displayName = next;
+  }
+  if (patch.role) crew.role = patch.role;
+  if (patch.phone !== undefined) crew.phone = patch.phone.trim();
+  if (patch.rateShootHour !== undefined) {
+    if (patch.rateShootHour < 0) return { ok: false, error: 'Shoot rate must be non-negative.' };
+    crew.rateShootHour = patch.rateShootHour;
+  }
+  if (patch.rateEditHour !== undefined) {
+    if (patch.rateEditHour < 0) return { ok: false, error: 'Edit rate must be non-negative.' };
+    crew.rateEditHour = patch.rateEditHour;
+  }
+  if (patch.active !== undefined) crew.active = patch.active;
+  if (patch.availabilityDetail) {
+    const availabilityError = validateAvailability(patch.availabilityDetail);
+    if (availabilityError) return { ok: false, error: availabilityError };
+    crew.availabilityDetail = patch.availabilityDetail;
+    crew.availability = summarizeAvailability(patch.availabilityDetail);
+  }
+  return { ok: true, crew };
+}
+
+export function requestCrewPasswordReset(
+  crewId: string,
+  actorName: string
+): { ok: true; crew: CrewProfile } | { ok: false; error: string } {
+  const crew = MOCK_CREW.find((item) => item.id === crewId);
+  if (!crew) return { ok: false, error: 'Crew member not found.' };
+  if (!isValidEmail(crew.email)) return { ok: false, error: 'Crew member email is invalid for reset.' };
+  crew.lastResetRequestedAt = new Date().toISOString();
+  crew.lastResetRequestedBy = actorName;
+  return { ok: true, crew };
+}
+
+export function setCrewTemporaryPassword(
+  crewId: string,
+  actorName: string,
+  temporaryPassword: string
+): { ok: true; crew: CrewProfile } | { ok: false; error: string } {
+  const crew = MOCK_CREW.find((item) => item.id === crewId);
+  if (!crew) return { ok: false, error: 'Crew member not found.' };
+  if (temporaryPassword.trim().length < 8) {
+    return { ok: false, error: 'Temporary password must be at least 8 characters.' };
+  }
+  crew.lastTempPasswordSetAt = new Date().toISOString();
+  crew.lastTempPasswordSetBy = actorName;
+  crew.forcePasswordChange = true;
+  return { ok: true, crew };
+}
+
 export function assignCrewToProject(projectId: string, crewId: string, actorName: string): { ok: boolean; error?: string } {
   const project = getProjectById(projectId);
   if (!project) return { ok: false, error: 'Project not found.' };
@@ -883,6 +1233,9 @@ export function createPlannerTask(input: Omit<PlannerItem, 'id'>, actorName: str
   const assigneeIds = input.assigneeCrewIds?.length ? input.assigneeCrewIds : [input.assigneeCrewId];
   const assignees = validateProjectAssignees(input.projectId, assigneeIds);
   if (!assignees.ok) throw new Error(assignees.error);
+  const dueDate = input.dueDate || new Date().toISOString().slice(0, 10);
+  const availability = validateCrewAvailabilityForDate(input.projectId, assigneeIds, dueDate);
+  if (!availability.ok) throw new Error(availability.error);
   const normalizedNames = assigneeIds
     .map((crewId) => MOCK_CREW.find((crew) => crew.id === crewId)?.displayName)
     .filter((name): name is string => Boolean(name));
@@ -891,6 +1244,7 @@ export function createPlannerTask(input: Omit<PlannerItem, 'id'>, actorName: str
   item.assigneeNames = normalizedNames;
   item.assigneeCrewId = assigneeIds[0] || input.assigneeCrewId;
   item.assigneeName = normalizedNames[0] || input.assigneeName;
+  item.dueDate = dueDate;
   MOCK_PLANNER.unshift(item);
   pushActivity({
     projectId: item.projectId,
@@ -909,6 +1263,9 @@ export function updatePlannerTask(taskId: string, patch: Partial<PlannerItem>, a
   if (requestedAssignees) {
     const assignee = validateProjectAssignees(item.projectId, requestedAssignees);
     if (!assignee.ok) throw new Error(assignee.error);
+    const dueDate = patch.dueDate || item.dueDate;
+    const availability = validateCrewAvailabilityForDate(item.projectId, requestedAssignees, dueDate);
+    if (!availability.ok) throw new Error(availability.error);
   }
   const nextPatch = { ...patch };
   if (requestedAssignees) {
@@ -955,7 +1312,9 @@ export function createShoot(input: Omit<AdminShoot, 'id'>, actorName: string): A
   if (!input.date) throw new Error('Shoot date is required.');
   const participants = validateProjectParticipants(input.projectId, input.crew);
   if (!participants.ok) throw new Error(participants.error);
-  const item: AdminShoot = { ...input, id: `S-${Date.now()}` };
+  const availability = validateCrewAvailabilityForDate(input.projectId, participants.crewIds || [], input.date);
+  if (!availability.ok) throw new Error(availability.error);
+  const item: AdminShoot = { ...input, id: `S-${Date.now()}`, crew: participants.names || input.crew, crewIds: participants.crewIds };
   MOCK_SHOOTS_ADMIN.unshift(item);
   pushActivity({
     projectId: item.projectId,
@@ -972,7 +1331,14 @@ export function createMeeting(input: Omit<AdminMeeting, 'id'>, actorName: string
   if (!input.date) throw new Error('Meeting date is required.');
   const participants = validateProjectParticipants(input.projectId, input.participants);
   if (!participants.ok) throw new Error(participants.error);
-  const item: AdminMeeting = { ...input, id: `M-${Date.now()}` };
+  const availability = validateCrewAvailabilityForDate(input.projectId, participants.crewIds || [], input.date);
+  if (!availability.ok) throw new Error(availability.error);
+  const item: AdminMeeting = {
+    ...input,
+    id: `M-${Date.now()}`,
+    participants: participants.names || input.participants,
+    participantCrewIds: participants.crewIds,
+  };
   MOCK_MEETINGS_ADMIN.unshift(item);
   pushActivity({
     projectId: item.projectId,
@@ -990,6 +1356,10 @@ export function updateShoot(shootId: string, patch: Partial<AdminShoot>, actorNa
   if (patch.crew) {
     const participants = validateProjectParticipants(item.projectId, patch.crew);
     if (!participants.ok) throw new Error(participants.error);
+    const availability = validateCrewAvailabilityForDate(item.projectId, participants.crewIds || [], patch.date || item.date);
+    if (!availability.ok) throw new Error(availability.error);
+    patch.crew = participants.names;
+    patch.crewIds = participants.crewIds;
   }
   Object.assign(item, patch);
   pushActivity({
@@ -1022,6 +1392,10 @@ export function updateMeeting(meetingId: string, patch: Partial<AdminMeeting>, a
   if (patch.participants) {
     const participants = validateProjectParticipants(item.projectId, patch.participants);
     if (!participants.ok) throw new Error(participants.error);
+    const availability = validateCrewAvailabilityForDate(item.projectId, participants.crewIds || [], patch.date || item.date);
+    if (!availability.ok) throw new Error(availability.error);
+    patch.participants = participants.names;
+    patch.participantCrewIds = participants.crewIds;
   }
   Object.assign(item, patch);
   pushActivity({
@@ -1093,10 +1467,47 @@ export function validateProjectAssignees(projectId: string, crewIds: string[]): 
   return { ok: true };
 }
 
-export function validateProjectParticipants(projectId: string, participants: string[]): { ok: boolean; error?: string } {
-  const allowed = projectAssignableCrew(projectId).map((crew) => crew.displayName);
-  const invalid = participants.find((name) => !allowed.includes(name));
-  if (invalid) return { ok: false, error: `${invalid} is not on this project team.` };
+export function validateProjectParticipants(
+  projectId: string,
+  participants: string[]
+): { ok: true; crewIds: string[]; names: string[] } | { ok: false; error: string } {
+  const allowed = projectAssignableCrew(projectId);
+  const byId = new Map(allowed.map((crew) => [crew.id, crew]));
+  const byName = new Map(allowed.map((crew) => [crew.displayName, crew]));
+  const crewIds: string[] = [];
+  const names: string[] = [];
+  for (const participant of participants) {
+    const found = byId.get(participant) || byName.get(participant);
+    if (!found) return { ok: false, error: `${participant} is not on this project team.` };
+    if (!crewIds.includes(found.id)) {
+      crewIds.push(found.id);
+      names.push(found.displayName);
+    }
+  }
+  return { ok: true, crewIds, names };
+}
+
+export function validateCrewAvailabilityForDate(
+  projectId: string,
+  crewIds: string[],
+  date: string
+): { ok: true } | { ok: false; error: string } {
+  const allowed = projectAssignableCrew(projectId);
+  const byId = new Map(allowed.map((crew) => [crew.id, crew]));
+  const dateValue = new Date(`${date}T12:00:00`);
+  if (Number.isNaN(dateValue.getTime())) return { ok: false, error: 'A valid schedule date is required.' };
+  const day = dateValue.getDay();
+  for (const crewId of crewIds) {
+    const crew = byId.get(crewId);
+    if (!crew) return { ok: false, error: 'One or more selected crew members are not on this project team.' };
+    if (!crew.active) return { ok: false, error: `${crew.displayName} is inactive and cannot be scheduled.` };
+    const inException = crew.availabilityDetail.exceptions.some(
+      (exception) => date >= exception.startDate && date <= exception.endDate
+    );
+    if (inException) return { ok: false, error: `${crew.displayName} is unavailable on ${date}.` };
+    const hasWindow = crew.availabilityDetail.windows.some((window) => window.dayOfWeek === day);
+    if (!hasWindow) return { ok: false, error: `${crew.displayName} has no availability window on ${date}.` };
+  }
   return { ok: true };
 }
 

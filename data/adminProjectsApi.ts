@@ -9,6 +9,8 @@ import type {
 } from '../types';
 import {
   MOCK_CLIENTS,
+  MOCK_CREW,
+  createCrewMemberProfile,
   MOCK_ADMIN_PROJECTS,
   MOCK_BLOCKERS,
   MOCK_CHANGE_ORDERS,
@@ -16,9 +18,14 @@ import {
   MOCK_PROJECT_DELIVERABLES,
   MOCK_RISKS,
   createClientProfile,
+  requestCrewPasswordReset,
+  setCrewTemporaryPassword,
+  updateClientProfile,
+  updateCrewMemberProfile,
   updateProjectNarrative,
   transitionProjectStage,
 } from './adminMock';
+import type { CrewAvailability, CrewProfile } from '../types';
 
 export type UiLoadState = 'loading' | 'empty' | 'error' | 'success';
 
@@ -141,7 +148,15 @@ export interface CreateClientRequest {
   name: string;
   email: string;
   phone?: string;
-  city?: string;
+  billingEmail: string;
+  billingContactName: string;
+  addressCity: string;
+  addressState: string;
+  addressPostal: string;
+  addressCountry: string;
+  preferredCommunication: 'email' | 'sms' | 'phone';
+  timezone: string;
+  clientStatus: 'active' | 'prospect' | 'paused';
   notes?: string;
 }
 
@@ -151,6 +166,44 @@ export function listClients() {
 
 export function createClient(request: CreateClientRequest) {
   return createClientProfile(request);
+}
+
+export function updateClient(clientId: string, request: CreateClientRequest) {
+  return updateClientProfile(clientId, request);
+}
+
+export interface CreateCrewRequest {
+  displayName: string;
+  role: CrewProfile['role'];
+  email: string;
+  phone?: string;
+  rateShootHour: number;
+  rateEditHour: number;
+  active?: boolean;
+}
+
+export interface UpdateCrewRequest extends Partial<CreateCrewRequest> {
+  availabilityDetail?: CrewAvailability;
+}
+
+export function listCrew() {
+  return { items: MOCK_CREW };
+}
+
+export function createCrew(request: CreateCrewRequest) {
+  return createCrewMemberProfile(request);
+}
+
+export function updateCrew(crewId: string, request: UpdateCrewRequest) {
+  return updateCrewMemberProfile(crewId, request);
+}
+
+export function sendCrewResetLink(crewId: string, actorName: string) {
+  return requestCrewPasswordReset(crewId, actorName);
+}
+
+export function setCrewPassword(crewId: string, actorName: string, temporaryPassword: string) {
+  return setCrewTemporaryPassword(crewId, actorName, temporaryPassword);
 }
 
 export interface UpdateProjectNarrativeRequest {

@@ -6,6 +6,7 @@ import { createClient, createProject, type CreateProjectRequest } from '../../..
 import { adminDateTimeInputProps, useAdminTheme } from '../../../lib/adminTheme';
 import type { ProjectStage } from '../../../types';
 import { formatAdminDate, formatStage } from './adminFormat';
+import ClientProfileForm, { EMPTY_CLIENT_PROFILE_DRAFT, type ClientProfileDraft } from './ClientProfileForm';
 
 interface AdminProjectWizardProps {
   open: boolean;
@@ -50,12 +51,7 @@ const AdminProjectWizard: React.FC<AdminProjectWizardProps> = ({ open, onClose, 
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [quickClientOpen, setQuickClientOpen] = useState(false);
-  const [quickClient, setQuickClient] = useState({
-    company: '',
-    name: '',
-    email: '',
-    phone: '',
-  });
+  const [quickClient, setQuickClient] = useState<ClientProfileDraft>(EMPTY_CLIENT_PROFILE_DRAFT);
   const [customPackage, setCustomPackage] = useState('');
   const [budgetInput, setBudgetInput] = useState('0');
 
@@ -104,7 +100,7 @@ const AdminProjectWizard: React.FC<AdminProjectWizardProps> = ({ open, onClose, 
       clientName: result.client.company,
     }));
     setQuickClientOpen(false);
-    setQuickClient({ company: '', name: '', email: '', phone: '' });
+    setQuickClient(EMPTY_CLIENT_PROFILE_DRAFT);
     setError(null);
   };
 
@@ -216,30 +212,7 @@ const AdminProjectWizard: React.FC<AdminProjectWizardProps> = ({ open, onClose, 
               {quickClientOpen && (
                 <div className={`rounded-lg border p-3 space-y-2 ${isDark ? 'border-zinc-800 bg-zinc-900/50' : 'border-zinc-300 bg-zinc-50'}`}>
                   <p className={`text-xs font-semibold ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>Quick Add Client</p>
-                  <input
-                    placeholder="Company"
-                    value={quickClient.company}
-                    onChange={(e) => setQuickClient((v) => ({ ...v, company: e.target.value }))}
-                    className={`w-full rounded-md border px-2.5 py-1.5 text-sm ${isDark ? 'border-zinc-700 bg-zinc-900 text-zinc-100' : 'border-zinc-300 bg-white text-zinc-900'}`}
-                  />
-                  <input
-                    placeholder="Primary contact"
-                    value={quickClient.name}
-                    onChange={(e) => setQuickClient((v) => ({ ...v, name: e.target.value }))}
-                    className={`w-full rounded-md border px-2.5 py-1.5 text-sm ${isDark ? 'border-zinc-700 bg-zinc-900 text-zinc-100' : 'border-zinc-300 bg-white text-zinc-900'}`}
-                  />
-                  <input
-                    placeholder="Email"
-                    value={quickClient.email}
-                    onChange={(e) => setQuickClient((v) => ({ ...v, email: e.target.value }))}
-                    className={`w-full rounded-md border px-2.5 py-1.5 text-sm ${isDark ? 'border-zinc-700 bg-zinc-900 text-zinc-100' : 'border-zinc-300 bg-white text-zinc-900'}`}
-                  />
-                  <input
-                    placeholder="Phone (optional)"
-                    value={quickClient.phone}
-                    onChange={(e) => setQuickClient((v) => ({ ...v, phone: e.target.value }))}
-                    className={`w-full rounded-md border px-2.5 py-1.5 text-sm ${isDark ? 'border-zinc-700 bg-zinc-900 text-zinc-100' : 'border-zinc-300 bg-white text-zinc-900'}`}
-                  />
+                  <ClientProfileForm value={quickClient} onChange={setQuickClient} />
                   <button type="button" onClick={quickCreateClient} className="rounded-md bg-white text-black px-2.5 py-1.5 text-xs font-bold">
                     Save Client
                   </button>
