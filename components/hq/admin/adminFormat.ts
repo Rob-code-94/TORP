@@ -16,10 +16,10 @@ export function stageClass(s: ProjectStage): string {
 
 export function stageClassForTheme(s: ProjectStage, theme: AdminThemeMode): string {
   if (theme === 'light') {
-    if (s === 'delivered' || s === 'archived') return 'bg-emerald-100 text-emerald-800 border border-emerald-300';
-    if (s === 'inquiry' || s === 'scope' || s === 'estimate') return 'bg-zinc-100 text-zinc-700 border border-zinc-300';
-    if (s === 'pre_production') return 'bg-amber-100 text-amber-800 border border-amber-300';
-    return 'bg-zinc-200 text-zinc-900 border border-zinc-300';
+    if (s === 'delivered' || s === 'archived') return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+    if (s === 'inquiry' || s === 'scope' || s === 'estimate') return 'bg-zinc-100 text-zinc-700 border border-zinc-200';
+    if (s === 'pre_production') return 'bg-amber-50 text-amber-700 border border-amber-200';
+    return 'bg-zinc-200/80 text-zinc-800 border border-zinc-200';
   }
   if (s === 'delivered' || s === 'archived') {
     return 'bg-emerald-950/50 text-emerald-300 border border-emerald-900/60';
@@ -37,10 +37,10 @@ export function invoiceStatusClass(s: AdminInvoiceStatus): string {
 
 export function invoiceStatusClassForTheme(s: AdminInvoiceStatus, theme: AdminThemeMode): string {
   if (theme === 'light') {
-    if (s === 'paid') return 'bg-emerald-100 text-emerald-800 border border-emerald-300';
-    if (s === 'overdue' || s === 'void') return 'bg-red-100 text-red-800 border border-red-300';
-    if (s === 'partial') return 'bg-amber-100 text-amber-800 border border-amber-300';
-    return 'bg-zinc-100 text-zinc-700 border border-zinc-300';
+    if (s === 'paid') return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+    if (s === 'overdue' || s === 'void') return 'bg-red-50 text-red-700 border border-red-200';
+    if (s === 'partial') return 'bg-amber-50 text-amber-700 border border-amber-200';
+    return 'bg-zinc-100 text-zinc-700 border border-zinc-200';
   }
   if (s === 'paid') return 'bg-emerald-950/50 text-emerald-300 border border-emerald-900/60';
   if (s === 'overdue' || s === 'void') return 'bg-red-950/50 text-red-300 border border-red-900/50';
@@ -54,10 +54,10 @@ export function proposalStatusClass(s: ProposalContractStatus): string {
 
 export function proposalStatusClassForTheme(s: ProposalContractStatus, theme: AdminThemeMode): string {
   if (theme === 'light') {
-    if (s === 'signed') return 'bg-emerald-100 text-emerald-800 border border-emerald-300';
-    if (s === 'declined') return 'bg-red-100 text-red-800 border border-red-300';
-    if (s === 'viewed') return 'bg-blue-100 text-blue-800 border border-blue-300';
-    return 'bg-zinc-100 text-zinc-700 border border-zinc-300';
+    if (s === 'signed') return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+    if (s === 'declined') return 'bg-red-50 text-red-700 border border-red-200';
+    if (s === 'viewed') return 'bg-blue-50 text-blue-700 border border-blue-200';
+    return 'bg-zinc-100 text-zinc-700 border border-zinc-200';
   }
   if (s === 'signed') return 'bg-emerald-950/50 text-emerald-300 border border-emerald-900/60';
   if (s === 'declined') return 'bg-red-950/40 text-red-200 border border-red-900/50';
@@ -71,9 +71,9 @@ export function assetStatusClass(s: ProjectAssetStatus): string {
 
 export function assetStatusClassForTheme(s: ProjectAssetStatus, theme: AdminThemeMode): string {
   if (theme === 'light') {
-    if (s === 'delivered' || s === 'approved') return 'bg-emerald-100 text-emerald-800 border border-emerald-300';
-    if (s === 'client_review') return 'bg-amber-100 text-amber-800 border border-amber-300';
-    return 'bg-zinc-100 text-zinc-700 border border-zinc-300';
+    if (s === 'delivered' || s === 'approved') return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+    if (s === 'client_review') return 'bg-amber-50 text-amber-700 border border-amber-200';
+    return 'bg-zinc-100 text-zinc-700 border border-zinc-200';
   }
   if (s === 'delivered' || s === 'approved') {
     return 'bg-emerald-950/50 text-emerald-300 border border-emerald-900/60';

@@ -1,48 +1,55 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CalendarDays, KanbanSquare, ListFilter, Search } from 'lucide-react';
-import { MOCK_ADMIN_PROJECTS, PROJECT_STAGE_ORDER } from '../../../data/adminMock';
+import { MOCK_ADMIN_PROJECTS, PROJECT_STAGE_ORDER, transitionProjectStage } from '../../../data/adminMock';
 import { useAuth } from '../../../lib/auth';
 import { useAdminTheme } from '../../../lib/adminTheme';
 import { hasProjectCapability } from '../../../lib/projectPermissions';
 import type { AdminProject, ProjectStage } from '../../../types';
 import { formatAdminDate, formatStage, stageClassForTheme } from './adminFormat';
 import AdminProjectWizard from './AdminProjectWizard';
+import { PROJECT_WIZARD_DRAFT_KEY } from './AdminProjectWizard';
+import type { CreateProjectRequest } from '../../../data/adminProjectsApi';
 
 type ViewMode = 'list' | 'board' | 'calendar';
 
-const SAVED_VIEWS_KEY = 'torp.projects.savedViews';
-
-interface SavedView {
-  id: string;
-  label: string;
-  q: string;
-  stage: ProjectStage | 'all';
-}
+const VIEW_MODE_KEY = 'torp.projects.viewMode';
+const STAGE_FILTER_KEY = 'torp.projects.stageFilter';
 
 const AdminProjects: React.FC = () => {
   const { user } = useAuth();
   const { theme } = useAdminTheme();
   const isDark = theme === 'dark';
   const [q, setQ] = useState('');
-  const [stage, setStage] = useState<ProjectStage | 'all'>('all');
-  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [stage, setStage] = useState<ProjectStage | 'all'>(() => {
+    const raw = localStorage.getItem(STAGE_FILTER_KEY);
+    if (
+      raw === 'all' ||
+      raw === 'inquiry' ||
+      raw === 'scope' ||
+      raw === 'estimate' ||
+      raw === 'pre_production' ||
+      raw === 'production' ||
+      raw === 'post' ||
+      raw === 'delivered' ||
+      raw === 'archived'
+    ) {
+      return raw;
+    }
+    return 'all';
+  });
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    const raw = localStorage.getItem(VIEW_MODE_KEY);
+    if (raw === 'list' || raw === 'board' || raw === 'calendar') return raw;
+    return 'list';
+  });
+  const [bulkMode, setBulkMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
-  const [savedViews, setSavedViews] = useState<SavedView[]>(() => {
-    try {
-      const raw = localStorage.getItem(SAVED_VIEWS_KEY);
-      return raw ? (JSON.parse(raw) as SavedView[]) : [];
-    } catch {
-      return [];
-    }
-  });
-
-  const persistSavedViews = (next: SavedView[]) => {
-    setSavedViews(next);
-    localStorage.setItem(SAVED_VIEWS_KEY, JSON.stringify(next));
-  };
+  const [wizardDraft, setWizardDraft] = useState<CreateProjectRequest | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverStage, setDragOverStage] = useState<ProjectStage | null>(null);
 
   const rows = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -61,12 +68,17 @@ const AdminProjects: React.FC = () => {
   const canMoveStage = hasProjectCapability(user?.role, 'project.stage.move');
 
   const groupedByStage = useMemo(
-    () =>
-      PROJECT_STAGE_ORDER.map((stageItem) => ({
+    () => {
+      const laneStages =
+        stage === 'archived'
+          ? (['archived'] as ProjectStage[])
+          : PROJECT_STAGE_ORDER.filter((item) => item !== 'archived');
+      return laneStages.map((stageItem) => ({
         stage: stageItem,
         rows: rows.filter((item) => item.stage === stageItem),
-      })),
-    [rows]
+      }));
+    },
+    [rows, stage]
   );
 
   const sortedByDate = useMemo(
@@ -79,18 +91,21 @@ const AdminProjects: React.FC = () => {
   };
 
   const applyBulkAssign = () => {
+    if (!bulkMode) return;
     if (!canBulkAssign) return;
     setFeedback(selectedIds.length === 0 ? 'Select at least one project.' : `Assigned ${selectedIds.length} project(s).`);
     setSelectedIds([]);
   };
 
   const applyBulkArchive = () => {
+    if (!bulkMode) return;
     if (!canBulkArchive) return;
     setFeedback(selectedIds.length === 0 ? 'Select at least one project.' : `Archived ${selectedIds.length} project(s).`);
     setSelectedIds([]);
   };
 
   const applyBulkMoveToPost = () => {
+    if (!bulkMode) return;
     if (!canMoveStage) return;
     if (selectedIds.length === 0) {
       setFeedback('Select at least one project.');
@@ -104,30 +119,66 @@ const AdminProjects: React.FC = () => {
     setSelectedIds([]);
   };
 
-  const saveCurrentView = () => {
-    const label = window.prompt('Saved view name');
-    if (!label?.trim()) return;
-    const next = [
-      ...savedViews,
-      { id: `sv-${Date.now()}`, label: label.trim(), q, stage },
-    ];
-    persistSavedViews(next);
-    setFeedback(`Saved view "${label.trim()}"`);
-  };
-
-  const applySavedView = (view: SavedView) => {
-    setQ(view.q);
-    setStage(view.stage);
-    setFeedback(`Applied "${view.label}"`);
-  };
-
-  const removeSavedView = (id: string) => {
-    persistSavedViews(savedViews.filter((view) => view.id !== id));
-  };
-
   const renderProjectMeta = (p: AdminProject) => (
-    <><p className={`text-sm ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>{p.clientName}</p><p className={`text-xs mt-1 ${isDark ? 'text-zinc-600' : 'text-zinc-500'}`}>{p.packageLabel}</p></>
+    <>
+      <p className={`text-sm ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>{p.clientName}</p>
+      <p className={`text-xs mt-1 ${isDark ? 'text-zinc-600' : 'text-zinc-500'}`}>{p.packageLabel}</p>
+    </>
   );
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(PROJECT_WIZARD_DRAFT_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as CreateProjectRequest;
+      setWizardDraft(parsed);
+      setWizardOpen(true);
+      sessionStorage.removeItem(PROJECT_WIZARD_DRAFT_KEY);
+      setFeedback('Restored project draft from Clients.');
+    } catch {
+      sessionStorage.removeItem(PROJECT_WIZARD_DRAFT_KEY);
+    }
+  }, []);
+
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [viewMode, q, stage]);
+
+  useEffect(() => {
+    localStorage.setItem(VIEW_MODE_KEY, viewMode);
+  }, [viewMode]);
+
+  useEffect(() => {
+    localStorage.setItem(STAGE_FILTER_KEY, stage);
+  }, [stage]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setDraggingId(null);
+        setDragOverStage(null);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  const onDropToStage = (targetStage: ProjectStage) => {
+    if (!draggingId || !hasProjectCapability(user?.role, 'project.stage.move')) {
+      setDraggingId(null);
+      setDragOverStage(null);
+      return;
+    }
+    const moved = MOCK_ADMIN_PROJECTS.find((item) => item.id === draggingId);
+    const result = transitionProjectStage(draggingId, targetStage, user?.displayName || 'System');
+    setFeedback(
+      result.ok
+        ? `Moved ${moved?.title || 'project'} to ${formatStage(targetStage)}.`
+        : result.error || 'Unable to move project.'
+    );
+    setDraggingId(null);
+    setDragOverStage(null);
+  };
 
   return (
     <div className="max-w-6xl min-w-0 space-y-6 pb-8">
@@ -154,7 +205,11 @@ const AdminProjects: React.FC = () => {
           <button
             type="button"
             onClick={() => setWizardOpen(true)}
-            className="rounded-lg bg-white text-black px-3 py-2 text-xs font-bold uppercase tracking-wide"
+            className={`rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-wide transition-colors ${
+              isDark
+                ? 'bg-white text-black hover:bg-zinc-200'
+                : 'bg-zinc-900 text-white hover:bg-zinc-800'
+            }`}
           >
             New Project
           </button>
@@ -171,7 +226,7 @@ const AdminProjects: React.FC = () => {
                 ? 'border-white bg-white text-black'
                 : isDark
                   ? 'border-zinc-700 text-zinc-300 hover:border-zinc-500'
-                  : 'border-zinc-300 text-zinc-700 hover:border-zinc-400'
+                  : 'border-zinc-300 bg-zinc-50 text-zinc-700 hover:border-zinc-400'
             }`}
           >
             <ListFilter size={14} /> List
@@ -184,7 +239,7 @@ const AdminProjects: React.FC = () => {
                 ? 'border-white bg-white text-black'
                 : isDark
                   ? 'border-zinc-700 text-zinc-300 hover:border-zinc-500'
-                  : 'border-zinc-300 text-zinc-700 hover:border-zinc-400'
+                  : 'border-zinc-300 bg-zinc-50 text-zinc-700 hover:border-zinc-400'
             }`}
           >
             <KanbanSquare size={14} /> Board
@@ -197,7 +252,7 @@ const AdminProjects: React.FC = () => {
                 ? 'border-white bg-white text-black'
                 : isDark
                   ? 'border-zinc-700 text-zinc-300 hover:border-zinc-500'
-                  : 'border-zinc-300 text-zinc-700 hover:border-zinc-400'
+                  : 'border-zinc-300 bg-zinc-50 text-zinc-700 hover:border-zinc-400'
             }`}
           >
             <CalendarDays size={14} /> Calendar
@@ -216,67 +271,72 @@ const AdminProjects: React.FC = () => {
           </select>
           <button
             type="button"
-            onClick={saveCurrentView}
-            className={`rounded-md border px-3 py-1.5 text-xs font-bold uppercase ${isDark ? 'border-zinc-700 text-zinc-300 hover:border-zinc-500' : 'border-zinc-300 text-zinc-700 hover:border-zinc-400'}`}
+            onClick={() => {
+              setBulkMode((current) => {
+                const next = !current;
+                if (!next) setSelectedIds([]);
+                return next;
+              });
+            }}
+            className={`rounded-md border px-3 py-1.5 text-xs font-bold uppercase ${
+              bulkMode
+                ? 'border-white bg-white text-black'
+                : isDark
+                  ? 'border-zinc-700 text-zinc-300 hover:border-zinc-500'
+                  : 'border-zinc-300 text-zinc-700 hover:border-zinc-400'
+            }`}
           >
-            Save View
+            {bulkMode ? 'Exit Bulk Edit' : 'Bulk Edit'}
           </button>
         </div>
 
-        {savedViews.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {savedViews.map((view) => (
-              <div key={view.id} className={`inline-flex items-center gap-2 rounded-md border px-2 py-1 text-xs ${isDark ? 'border-zinc-700' : 'border-zinc-300'}`}>
-                <button type="button" onClick={() => applySavedView(view)} className={isDark ? 'text-zinc-200 hover:text-white' : 'text-zinc-700 hover:text-zinc-900'}>
-                  {view.label}
-                </button>
-                <button type="button" onClick={() => removeSavedView(view.id)} className={isDark ? 'text-zinc-500 hover:text-zinc-200' : 'text-zinc-500 hover:text-zinc-700'}>
-                  x
-                </button>
-              </div>
-            ))}
+        {bulkMode && (
+          <div className={`flex flex-wrap items-center gap-2 rounded-lg border p-2 ${isDark ? 'border-zinc-800 bg-zinc-950/40' : 'border-zinc-300 bg-zinc-50'}`}>
+            <span className={`text-xs ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>{selectedIds.length} selected</span>
+            <button
+              type="button"
+              disabled={!canBulkAssign}
+              onClick={applyBulkAssign}
+              className={`rounded-md border px-2.5 py-1 text-xs disabled:opacity-40 ${
+                isDark ? 'border-zinc-700 text-zinc-200' : 'border-zinc-300 text-zinc-700'
+              }`}
+            >
+              Bulk assign
+            </button>
+            <button
+              type="button"
+              disabled={!canMoveStage}
+              onClick={applyBulkMoveToPost}
+              className={`rounded-md border px-2.5 py-1 text-xs disabled:opacity-40 ${
+                isDark ? 'border-zinc-700 text-zinc-200' : 'border-zinc-300 text-zinc-700'
+              }`}
+            >
+              Move to Post
+            </button>
+            <button
+              type="button"
+              disabled={!canBulkArchive}
+              onClick={applyBulkArchive}
+              className={`rounded-md border px-2.5 py-1 text-xs disabled:opacity-40 ${
+                isDark ? 'border-red-900/60 text-red-300' : 'border-red-300 text-red-700'
+              }`}
+            >
+              Archive
+            </button>
+            {!canBulkArchive && <span className={`text-[11px] ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>Archive is Admin-only</span>}
           </div>
         )}
 
-        <div className={`flex flex-wrap items-center gap-2 rounded-lg border p-2 ${isDark ? 'border-zinc-800 bg-zinc-950/40' : 'border-zinc-300 bg-zinc-50'}`}>
-          <span className={`text-xs ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>{selectedIds.length} selected</span>
-          <button
-            type="button"
-            disabled={!canBulkAssign}
-            onClick={applyBulkAssign}
-            className="rounded-md border border-zinc-700 px-2.5 py-1 text-xs text-zinc-200 disabled:opacity-40"
-          >
-            Bulk assign
-          </button>
-          <button
-            type="button"
-            disabled={!canMoveStage}
-            onClick={applyBulkMoveToPost}
-            className="rounded-md border border-zinc-700 px-2.5 py-1 text-xs text-zinc-200 disabled:opacity-40"
-          >
-            Move to Post
-          </button>
-          <button
-            type="button"
-            disabled={!canBulkArchive}
-            onClick={applyBulkArchive}
-            className="rounded-md border border-red-900/60 px-2.5 py-1 text-xs text-red-300 disabled:opacity-40"
-          >
-            Archive
-          </button>
-          {!canBulkArchive && <span className="text-[11px] text-zinc-500">Archive is Admin-only</span>}
-        </div>
-
-        {feedback && <p className="text-xs text-zinc-400">{feedback}</p>}
+        {feedback && <p className={`text-xs ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>{feedback}</p>}
       </div>
 
       {viewMode === 'list' && (
-        <div className="bg-zinc-900/30 border border-zinc-800 rounded-xl overflow-hidden min-w-0">
+        <div className={`rounded-xl overflow-hidden min-w-0 border ${isDark ? 'bg-zinc-900/30 border-zinc-800' : 'bg-white border-zinc-300 shadow-[0_1px_0_0_rgba(24,24,27,0.02)]'}`}>
           <div className="hidden sm:block overflow-x-auto">
             <table className="w-full text-sm text-left min-w-[760px]">
-              <thead className="text-xs text-zinc-500 uppercase bg-zinc-950/80">
+              <thead className={`text-xs uppercase ${isDark ? 'text-zinc-500 bg-zinc-950/80' : 'text-zinc-600 bg-zinc-100/90'}`}>
                 <tr>
-                  <th className="px-4 py-3 font-medium w-8" />
+                  {bulkMode && <th className="px-4 py-3 font-medium w-8" />}
                   <th className="px-4 py-3 font-medium">Project</th>
                   <th className="px-4 py-3 font-medium">Client</th>
                   <th className="px-4 py-3 font-medium">Package</th>
@@ -287,20 +347,22 @@ const AdminProjects: React.FC = () => {
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-800/80">
+              <tbody className={isDark ? 'divide-y divide-zinc-800/80' : 'divide-y divide-zinc-200'}>
                 {rows.map((p) => (
-                  <tr key={p.id} className="hover:bg-zinc-900/40 transition-colors">
-                    <td className="px-4 py-3">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.includes(p.id)}
-                        onChange={() => toggleSelection(p.id)}
-                        className="accent-white"
-                      />
-                    </td>
-                    <td className="px-4 py-3 text-white font-medium">{p.title}</td>
-                    <td className="px-4 py-3 text-zinc-300">{p.clientName}</td>
-                    <td className="px-4 py-3 text-zinc-500 max-w-xs truncate" title={p.packageLabel}>
+                  <tr key={p.id} className={`transition-colors ${isDark ? 'hover:bg-zinc-900/40' : 'hover:bg-zinc-50'}`}>
+                    {bulkMode && (
+                      <td className="px-4 py-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(p.id)}
+                          onChange={() => toggleSelection(p.id)}
+                          className={isDark ? 'accent-white' : 'accent-zinc-900'}
+                        />
+                      </td>
+                    )}
+                    <td className={`px-4 py-3 font-medium ${isDark ? 'text-white' : 'text-zinc-900'}`}>{p.title}</td>
+                    <td className={`px-4 py-3 ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>{p.clientName}</td>
+                    <td className={`px-4 py-3 max-w-xs truncate ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`} title={p.packageLabel}>
                       {p.packageLabel}
                     </td>
                     <td className="px-4 py-3">
@@ -308,11 +370,18 @@ const AdminProjects: React.FC = () => {
                         {formatStage(p.stage)}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right text-zinc-200">${p.budget.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-zinc-500">{formatAdminDate(p.dueDate)}</td>
-                    <td className="px-4 py-3 text-zinc-400">{p.ownerName}</td>
+                    <td className={`px-4 py-3 text-right ${isDark ? 'text-zinc-200' : 'text-zinc-800'}`}>${p.budget.toLocaleString()}</td>
+                    <td className={`px-4 py-3 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>{formatAdminDate(p.dueDate)}</td>
+                    <td className={`px-4 py-3 ${isDark ? 'text-zinc-400' : 'text-zinc-700'}`}>{p.ownerName}</td>
                     <td className="px-4 py-3 text-right">
-                      <Link to={`/hq/admin/projects/${p.id}`} className="text-xs font-bold text-white border border-zinc-700 rounded-md px-2.5 py-1 hover:bg-white hover:text-black transition-colors">
+                      <Link
+                        to={`/hq/admin/projects/${p.id}`}
+                        className={`text-xs font-bold border rounded-md px-2.5 py-1 transition-colors ${
+                          isDark
+                            ? 'text-white border-zinc-700 hover:bg-white hover:text-black'
+                            : 'text-zinc-800 border-zinc-300 hover:bg-zinc-900 hover:text-white hover:border-zinc-900'
+                        }`}
+                      >
                         Open
                       </Link>
                     </td>
@@ -322,12 +391,14 @@ const AdminProjects: React.FC = () => {
             </table>
           </div>
 
-          <div className="sm:hidden divide-y divide-zinc-800/70">
+          <div className={isDark ? 'sm:hidden divide-y divide-zinc-800/70' : 'sm:hidden divide-y divide-zinc-200'}>
             {rows.map((p) => (
               <div key={p.id} className="p-4 space-y-2">
                 <div className="flex items-start justify-between gap-3">
-                  <label className="inline-flex items-center gap-2 text-sm text-zinc-200">
-                    <input type="checkbox" checked={selectedIds.includes(p.id)} onChange={() => toggleSelection(p.id)} className="accent-white" />
+                  <label className={`inline-flex items-center gap-2 text-sm ${isDark ? 'text-zinc-200' : 'text-zinc-800'}`}>
+                    {bulkMode && (
+                      <input type="checkbox" checked={selectedIds.includes(p.id)} onChange={() => toggleSelection(p.id)} className={isDark ? 'accent-white' : 'accent-zinc-900'} />
+                    )}
                     <span className="font-medium">{p.title}</span>
                   </label>
                   <span className={`text-[10px] uppercase font-bold tracking-wide px-2 py-0.5 rounded ${stageClassForTheme(p.stage, theme)}`}>
@@ -336,34 +407,87 @@ const AdminProjects: React.FC = () => {
                 </div>
                 {renderProjectMeta(p)}
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-zinc-400">${p.budget.toLocaleString()}</span>
-                  <span className="text-zinc-500">{formatAdminDate(p.dueDate)}</span>
-                  <Link to={`/hq/admin/projects/${p.id}`} className="rounded-md border border-zinc-700 px-2 py-1 text-zinc-200">
+                  <span className={isDark ? 'text-zinc-400' : 'text-zinc-700'}>${p.budget.toLocaleString()}</span>
+                  <span className={isDark ? 'text-zinc-500' : 'text-zinc-600'}>{formatAdminDate(p.dueDate)}</span>
+                  <Link
+                    to={`/hq/admin/projects/${p.id}`}
+                    className={`rounded-md border px-2 py-1 ${
+                      isDark ? 'border-zinc-700 text-zinc-200' : 'border-zinc-300 text-zinc-800'
+                    }`}
+                  >
                     Open
                   </Link>
                 </div>
               </div>
             ))}
           </div>
-          {rows.length === 0 && <p className="p-6 text-sm text-zinc-500">No matches.</p>}
+          {rows.length === 0 && <p className={`p-6 text-sm ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>No matches.</p>}
         </div>
       )}
 
       {viewMode === 'board' && (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-3 min-w-0">
+        <div className={`rounded-2xl border p-4 sm:p-5 min-w-0 ${isDark ? 'border-zinc-700/80 bg-zinc-900/40 shadow-[0_0_0_1px_rgba(63,63,70,0.35)]' : 'border-zinc-300 bg-white'}`}>
           <div className="overflow-x-auto">
-            <div className="grid min-w-[860px] grid-cols-4 gap-3">
+            <div
+              className="grid gap-4"
+              style={{
+                minWidth: `${Math.max(groupedByStage.length * 260, 980)}px`,
+                gridTemplateColumns: `repeat(${groupedByStage.length}, minmax(240px, 1fr))`,
+              }}
+            >
               {groupedByStage.map((group) => (
-                <div key={group.stage} className="rounded-lg border border-zinc-800 bg-zinc-950/50 p-2.5 space-y-2">
-                  <p className="text-xs font-bold uppercase tracking-wide text-zinc-400">
-                    {formatStage(group.stage)} <span className="text-zinc-600">({group.rows.length})</span>
+                <div
+                  key={group.stage}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragOverStage(group.stage);
+                  }}
+                  onDragEnter={() => setDragOverStage(group.stage)}
+                  onDragLeave={() =>
+                    setDragOverStage((current) => (current === group.stage ? null : current))
+                  }
+                  onDrop={() => onDropToStage(group.stage)}
+                  className={`rounded-xl border p-3 space-y-3 min-h-[360px] transition-colors duration-150 ${
+                    dragOverStage === group.stage
+                      ? isDark
+                        ? 'border-sky-400/70 bg-sky-950/20 shadow-[0_0_0_1px_rgba(56,189,248,0.45)]'
+                        : 'border-sky-500 bg-sky-50/70'
+                      : isDark
+                        ? 'border-zinc-800 bg-zinc-950/55'
+                        : 'border-zinc-200 bg-zinc-50/60'
+                  }`}
+                >
+                  <p className={`text-xs font-bold uppercase tracking-wide ${isDark ? 'text-zinc-400' : 'text-zinc-700'}`}>
+                    {formatStage(group.stage)} <span className={isDark ? 'text-zinc-600' : 'text-zinc-500'}>({group.rows.length})</span>
                   </p>
-                  {group.rows.length === 0 && <p className="text-xs text-zinc-600">No projects</p>}
+                  {draggingId && dragOverStage === group.stage && (
+                    <p className={`text-[11px] font-semibold ${isDark ? 'text-sky-300' : 'text-sky-700'}`}>
+                      Drop here to move to {formatStage(group.stage)}
+                    </p>
+                  )}
+                  {group.rows.length === 0 && <p className={`text-xs ${isDark ? 'text-zinc-600' : 'text-zinc-500'}`}>No projects</p>}
                   {group.rows.map((p) => (
-                    <Link key={p.id} to={`/hq/admin/projects/${p.id}`} className="block rounded-md border border-zinc-800 bg-zinc-900 p-2 hover:border-zinc-600">
-                      <p className="text-sm text-white">{p.title}</p>
-                      <p className="text-xs text-zinc-500 mt-1">{p.clientName}</p>
-                    </Link>
+                    <div
+                      key={p.id}
+                      draggable
+                      onDragStart={() => setDraggingId(p.id)}
+                      onDragEnd={() => {
+                        setDraggingId(null);
+                        setDragOverStage(null);
+                      }}
+                      className={`rounded-lg border p-3 transition-all duration-150 cursor-grab active:cursor-grabbing ${
+                        draggingId === p.id ? 'opacity-65' : ''
+                      } ${
+                        isDark
+                          ? 'border-zinc-800 bg-zinc-900 hover:border-zinc-600'
+                          : 'border-zinc-200 bg-white hover:border-zinc-300'
+                      } ${draggingId === p.id ? 'scale-[1.01] ring-1 ring-sky-400/60 shadow-lg' : ''}`}
+                    >
+                      <Link to={`/hq/admin/projects/${p.id}`} className="block">
+                        <p className={`text-sm font-medium ${isDark ? 'text-white' : 'text-zinc-900'}`}>{p.title}</p>
+                        <p className={`text-xs mt-1 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>{p.clientName}</p>
+                      </Link>
+                    </div>
                   ))}
                 </div>
               ))}
@@ -373,24 +497,37 @@ const AdminProjects: React.FC = () => {
       )}
 
       {viewMode === 'calendar' && (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 divide-y divide-zinc-800/80">
+        <div className={`rounded-xl border divide-y ${isDark ? 'border-zinc-800 bg-zinc-900/30 divide-zinc-800/80' : 'border-zinc-300 bg-white divide-zinc-200'}`}>
           {sortedByDate.map((p) => (
             <div key={p.id} className="p-3 sm:p-4 flex items-start justify-between gap-3">
               <div>
-                <p className="text-sm text-white font-medium">{p.title}</p>
-                <p className="text-xs text-zinc-500 mt-1">{p.clientName}</p>
-                <p className="text-xs text-zinc-600 mt-1">Due {formatAdminDate(p.dueDate)}</p>
+                <p className={`text-sm font-medium ${isDark ? 'text-white' : 'text-zinc-900'}`}>{p.title}</p>
+                <p className={`text-xs mt-1 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>{p.clientName}</p>
+                <p className={`text-xs mt-1 ${isDark ? 'text-zinc-600' : 'text-zinc-600'}`}>Due {formatAdminDate(p.dueDate)}</p>
               </div>
-              <Link to={`/hq/admin/projects/${p.id}`} className="rounded-md border border-zinc-700 px-2.5 py-1 text-xs text-zinc-200">
+              <Link
+                to={`/hq/admin/projects/${p.id}`}
+                className={`rounded-md border px-2.5 py-1 text-xs ${
+                  isDark ? 'border-zinc-700 text-zinc-200' : 'border-zinc-300 text-zinc-800'
+                }`}
+              >
                 Open
               </Link>
             </div>
           ))}
-          {sortedByDate.length === 0 && <p className="p-4 text-sm text-zinc-500">No projects in this range.</p>}
+          {sortedByDate.length === 0 && <p className={`p-4 text-sm ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>No projects in this range.</p>}
         </div>
       )}
 
-      <AdminProjectWizard open={wizardOpen} onClose={() => setWizardOpen(false)} onCreated={() => setFeedback('Project created successfully.')} />
+      <AdminProjectWizard
+        open={wizardOpen}
+        initialDraft={wizardDraft}
+        onClose={() => {
+          setWizardOpen(false);
+          setWizardDraft(null);
+        }}
+        onCreated={() => setFeedback('Project created successfully.')}
+      />
     </div>
   );
 };

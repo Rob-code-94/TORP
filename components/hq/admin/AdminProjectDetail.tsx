@@ -132,13 +132,13 @@ const AdminProjectDetail: React.FC = () => {
             <ArrowLeft size={14} />
             All projects
           </Link>
-          <h2 className="text-2xl font-bold text-white tracking-tight">{project.title}</h2>
+          <h2 className={`text-2xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-zinc-900'}`}>{project.title}</h2>
           <p className="text-sm text-zinc-500 mt-1">
             {project.clientName} · {project.packageLabel}
           </p>
         </div>
         <div className="flex flex-col sm:items-end gap-2 sm:text-right text-xs text-zinc-500 min-w-0">
-          <span className={`self-end text-[10px] uppercase font-bold tracking-wide px-2 py-0.5 rounded ${stageClass(project.stage)}`}>
+          <span className={`self-end text-[10px] uppercase font-bold tracking-wide px-2 py-0.5 rounded ${stageClassForTheme(project.stage, theme)}`}>
             {formatStage(project.stage)}
           </span>
           <p className="break-words">
@@ -313,7 +313,7 @@ const AdminProjectDetail: React.FC = () => {
                   </p>
                 </div>
                 <span
-                  className={`self-start text-[10px] uppercase font-bold px-2 py-0.5 rounded ${assetStatusClass(a.status)}`}
+                  className={`self-start text-[10px] uppercase font-bold px-2 py-0.5 rounded ${assetStatusClassForTheme(a.status, theme)}`}
                 >
                   {a.status}
                 </span>
@@ -416,7 +416,7 @@ const AdminProjectDetail: React.FC = () => {
                 <p className="text-xs text-zinc-500">{proposal.lastEvent}</p>
               )}
               <span
-                className={`mt-2 inline-block text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${proposalStatusClass(proposal.contractStatus)}`}
+                className={`mt-2 inline-block text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${proposalStatusClassForTheme(proposal.contractStatus, theme)}`}
               >
                 {proposal.contractStatus}
               </span>
@@ -496,7 +496,7 @@ const AdminProjectDetail: React.FC = () => {
                     </td>
                     <td className="px-3 py-2.5">
                       <span
-                        className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${invoiceStatusClass(inv.status)}`}
+                        className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${invoiceStatusClassForTheme(inv.status, theme)}`}
                       >
                         {inv.status}
                       </span>

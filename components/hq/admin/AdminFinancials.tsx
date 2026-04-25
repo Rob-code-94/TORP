@@ -2,7 +2,8 @@ import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { MOCK_INVOICES_ADMIN, MOCK_ADMIN_PROJECTS, MOCK_PROPOSALS } from '../../../data/adminMock';
-import { formatAdminDate, invoiceStatusClass, proposalStatusClass } from './adminFormat';
+import { useAdminTheme } from '../../../lib/adminTheme';
+import { formatAdminDate, invoiceStatusClassForTheme, proposalStatusClassForTheme } from './adminFormat';
 
 const chart = [
   { name: 'Jan', revenue: 40000 },
@@ -14,6 +15,8 @@ const chart = [
 ];
 
 const AdminFinancials: React.FC = () => {
+  const { theme } = useAdminTheme();
+  const isDark = theme === 'dark';
   const outstanding = useMemo(
     () => MOCK_INVOICES_ADMIN.filter((i) => i.status !== 'paid' && i.status !== 'void'),
     []
@@ -27,7 +30,7 @@ const AdminFinancials: React.FC = () => {
     <div className="max-w-6xl space-y-6">
       <div>
         <p className="text-xs font-mono uppercase text-zinc-500">Financials</p>
-        <h2 className="text-xl font-bold text-white">Invoices, proposals, cash (demo)</h2>
+        <h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-zinc-900'}`}>Invoices, proposals, cash (demo)</h2>
         <p className="text-sm text-zinc-500 mt-1">Stripe + Firebase in a later phase.</p>
       </div>
 
@@ -92,8 +95,9 @@ const AdminFinancials: React.FC = () => {
               </div>
               <div className="flex items-center gap-2">
                 <span
-                  className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border ${proposalStatusClass(
+                  className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border ${proposalStatusClassForTheme(
                     p.contractStatus
+                    , theme
                   )}`}
                 >
                   {p.contractStatus}
@@ -138,8 +142,9 @@ const AdminFinancials: React.FC = () => {
                   <td className="px-3 py-2.5 text-zinc-500 font-mono text-xs">{formatAdminDate(i.dueDate)}</td>
                   <td className="px-3 py-2.5">
                     <span
-                      className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${invoiceStatusClass(
+                      className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${invoiceStatusClassForTheme(
                         i.status
+                        , theme
                       )}`}
                     >
                       {i.status}

@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { MOCK_PLANNER, PLANNER_COLUMN_LABEL } from '../../../data/adminMock';
+import { useAdminTheme } from '../../../lib/adminTheme';
 import { columnLabel, formatAdminDate, typeLabel } from './adminFormat';
 import PlannerCalendar from './PlannerCalendar';
 import type { PlannerBoardColumn, PlannerItem } from '../../../types';
@@ -10,6 +11,8 @@ const COLUMNS: PlannerBoardColumn[] = ['queue', 'active', 'post', 'client_review
 type View = 'list' | 'board' | 'calendar';
 
 const AdminPlanner: React.FC = () => {
+  const { theme } = useAdminTheme();
+  const isDark = theme === 'dark';
   const [view, setView] = useState<View>('list');
   const items = MOCK_PLANNER;
 
@@ -36,7 +39,7 @@ const AdminPlanner: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <p className="text-xs font-mono uppercase text-zinc-500">Planner</p>
-          <h2 className="text-xl font-bold text-white">All projects — tasks &amp; deliverables</h2>
+          <h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-zinc-900'}`}>All projects — tasks &amp; deliverables</h2>
         </div>
         <div className="flex rounded-lg border border-zinc-800 p-0.5 bg-zinc-950/80 w-fit max-w-full overflow-x-auto">
           {(['list', 'board', 'calendar'] as const).map((v) => (

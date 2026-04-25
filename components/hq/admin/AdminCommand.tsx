@@ -10,6 +10,7 @@ import {
   MOCK_PLANNER,
   MOCK_SHOOTS_ADMIN,
 } from '../../../data/adminMock';
+import { useAdminTheme } from '../../../lib/adminTheme';
 import { columnLabel, formatAdminDate, formatAdminDateTime } from './adminFormat';
 
 const revenueData = [
@@ -22,6 +23,8 @@ const revenueData = [
 ];
 
 const AdminCommand: React.FC = () => {
+  const { theme } = useAdminTheme();
+  const isDark = theme === 'dark';
   const stats = getCommandStats();
 
   const urgent = useMemo(
@@ -45,7 +48,7 @@ const AdminCommand: React.FC = () => {
     <div className="space-y-8 max-w-7xl">
       <div>
         <p className="text-xs font-mono uppercase tracking-widest text-zinc-500 mb-1">Command center</p>
-        <h2 className="text-2xl font-bold text-white tracking-tight">What needs attention</h2>
+        <h2 className={`text-2xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-zinc-900'}`}>What needs attention</h2>
         <p className="text-sm text-zinc-500 mt-1">Operational view — same data will power Crew in read-only / filtered form.</p>
       </div>
 

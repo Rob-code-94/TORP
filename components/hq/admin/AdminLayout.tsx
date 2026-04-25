@@ -20,44 +20,53 @@ import { useAuth } from '../../../lib/auth';
 import { useAdminTheme } from '../../../lib/adminTheme';
 import { UserRole } from '../../../types';
 
-const nav: { to: string; label: string; icon: React.ReactNode; match: (p: string) => boolean }[] = [
+type NavItem = { id: string; to: string; label: string; icon: React.ReactNode; match: (p: string) => boolean };
+
+const nav: NavItem[] = [
   {
+    id: 'command',
     to: '/hq/admin',
     label: 'Command',
     icon: <LayoutDashboard size={20} />,
     match: (p) => p === '/hq/admin' || p === '/hq/admin/',
   },
   {
+    id: 'crew',
     to: '/hq/admin/crew',
     label: 'Crew',
     icon: <Users size={20} />,
     match: (p) => p.startsWith('/hq/admin/crew'),
   },
   {
+    id: 'projects',
     to: '/hq/admin/projects',
     label: 'Projects',
     icon: <Film size={20} />,
     match: (p) => p.startsWith('/hq/admin/projects'),
   },
   {
+    id: 'planner',
     to: '/hq/admin/planner',
     label: 'Planner',
     icon: <KanbanSquare size={20} />,
     match: (p) => p.startsWith('/hq/admin/planner'),
   },
   {
+    id: 'financials',
     to: '/hq/admin/financials',
     label: 'Financials',
     icon: <Banknote size={20} />,
     match: (p) => p.startsWith('/hq/admin/financials'),
   },
   {
+    id: 'clients',
     to: '/hq/admin/clients',
     label: 'Clients',
     icon: <Building2 size={20} />,
     match: (p) => p.startsWith('/hq/admin/clients'),
   },
   {
+    id: 'settings',
     to: '/hq/admin/settings',
     label: 'Settings',
     icon: <Settings size={20} />,
@@ -87,14 +96,17 @@ const AdminLayout: React.FC = () => {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const title = pageTitle(pathname);
   const isDark = theme === 'dark';
+  const middleDockIds = new Set(['crew', 'clients']);
+  const primaryNav = nav.filter((item) => !middleDockIds.has(item.id));
+  const middleDockNav = nav.filter((item) => middleDockIds.has(item.id));
 
   const onLogout = () => {
     logout();
     navigate('/hq/login');
   };
 
-  const renderNavItems = (compact: boolean, onNavigate?: () => void) =>
-    nav.map((item) => {
+  const renderNavItems = (items: NavItem[], compact: boolean, onNavigate?: () => void) =>
+    items.map((item) => {
       const active = item.match(pathname);
       return (
         <NavLink
@@ -124,24 +136,24 @@ const AdminLayout: React.FC = () => {
     });
 
   return (
-    <div className={`flex h-screen overflow-hidden font-sans ${isDark ? 'bg-zinc-950 text-white' : 'bg-zinc-100 text-zinc-900'}`}>
+    <div className={`flex h-screen overflow-hidden font-sans ${isDark ? 'bg-zinc-950 text-white' : 'bg-zinc-50 text-zinc-900'}`}>
       <aside
         className={[
           `hidden md:flex flex-col shrink-0 transition-all duration-200 border-r ${
-            isDark ? 'border-zinc-800 bg-black/40' : 'border-zinc-300 bg-white/95'
+            isDark ? 'border-zinc-800 bg-black/40' : 'border-zinc-200 bg-white'
           }`,
           sidebarCollapsed ? 'w-20' : 'w-64',
         ].join(' ')}
       >
         <div
           className={[
-            `h-16 flex items-center border-b ${isDark ? 'border-zinc-800' : 'border-zinc-300'}`,
+            `h-16 flex items-center border-b ${isDark ? 'border-zinc-800' : 'border-zinc-200'}`,
             sidebarCollapsed ? 'px-3 justify-center' : 'px-6',
           ].join(' ')}
         >
           <span className="font-black text-xl tracking-tighter">{sidebarCollapsed ? 'T' : 'TORP'}</span>
           {!sidebarCollapsed && (
-            <span className={`ml-2 text-[10px] font-mono px-2 py-0.5 border rounded uppercase ${isDark ? 'text-zinc-500 border-zinc-800' : 'text-zinc-600 border-zinc-300'}`}>
+            <span className={`ml-2 text-[10px] font-mono px-2 py-0.5 border rounded uppercase ${isDark ? 'text-zinc-500 border-zinc-800' : 'text-zinc-600 border-zinc-200'}`}>
               {user?.role === UserRole.PROJECT_MANAGER ? 'PM' : 'Admin'}
             </span>
           )}
@@ -152,9 +164,14 @@ const AdminLayout: React.FC = () => {
             sidebarCollapsed ? 'px-2' : 'px-3',
           ].join(' ')}
         >
-          {renderNavItems(sidebarCollapsed)}
+          {renderNavItems(primaryNav, sidebarCollapsed)}
         </nav>
-        <div className={`p-4 border-t ${isDark ? 'border-zinc-800' : 'border-zinc-300'}`}>
+        <div className={`px-2 pb-3 ${sidebarCollapsed ? '' : 'px-3'} flex justify-center`}>
+          <div className={`w-full max-w-[220px] rounded-xl border p-1.5 space-y-1.5 ${isDark ? 'border-zinc-800 bg-zinc-950/70' : 'border-zinc-200 bg-zinc-50'}`}>
+            {renderNavItems(middleDockNav, sidebarCollapsed)}
+          </div>
+        </div>
+        <div className={`p-4 border-t ${isDark ? 'border-zinc-800' : 'border-zinc-200'}`}>
           <button
             type="button"
             onClick={onLogout}
@@ -173,7 +190,7 @@ const AdminLayout: React.FC = () => {
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className={`h-14 flex items-center justify-between px-4 sm:px-6 border-b shrink-0 z-20 ${isDark ? 'border-zinc-800 bg-zinc-950/90' : 'border-zinc-300 bg-white/95'}`}>
+        <header className={`h-14 flex items-center justify-between px-4 sm:px-6 border-b shrink-0 z-20 ${isDark ? 'border-zinc-800 bg-zinc-950/90' : 'border-zinc-200 bg-white/95'}`}>
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -207,7 +224,7 @@ const AdminLayout: React.FC = () => {
               className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-semibold transition-colors ${
                 isDark
                   ? 'border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-600'
-                  : 'border-zinc-300 text-zinc-700 hover:text-zinc-900 hover:border-zinc-400'
+                  : 'border-zinc-200 text-zinc-700 hover:text-zinc-900 hover:border-zinc-300'
               }`}
               aria-label="Toggle admin theme"
               title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
@@ -217,7 +234,7 @@ const AdminLayout: React.FC = () => {
             </button>
             <div
               className={`w-8 h-8 rounded-full border flex items-center justify-center text-xs font-bold ${
-                isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-300' : 'bg-zinc-200 border-zinc-300 text-zinc-800'
+                isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-300' : 'bg-zinc-100 border-zinc-200 text-zinc-800'
               }`}
               title={user?.displayName || 'HQ'}
             >
@@ -238,11 +255,11 @@ const AdminLayout: React.FC = () => {
             onClick={() => setMobileNavOpen(false)}
             aria-label="Close navigation"
           />
-          <aside className={`absolute left-0 top-0 h-full w-72 max-w-[85vw] border-r flex flex-col ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-white border-zinc-300'}`}>
-            <div className={`h-14 px-4 border-b flex items-center justify-between ${isDark ? 'border-zinc-800' : 'border-zinc-300'}`}>
+          <aside className={`absolute left-0 top-0 h-full w-72 max-w-[85vw] border-r flex flex-col ${isDark ? 'bg-zinc-950 border-zinc-800' : 'bg-white border-zinc-200'}`}>
+            <div className={`h-14 px-4 border-b flex items-center justify-between ${isDark ? 'border-zinc-800' : 'border-zinc-200'}`}>
               <div className="flex items-center gap-2">
                 <span className="font-black tracking-tighter">TORP</span>
-                <span className={`text-[10px] font-mono px-2 py-0.5 border rounded uppercase ${isDark ? 'text-zinc-500 border-zinc-800' : 'text-zinc-600 border-zinc-300'}`}>
+                <span className={`text-[10px] font-mono px-2 py-0.5 border rounded uppercase ${isDark ? 'text-zinc-500 border-zinc-800' : 'text-zinc-600 border-zinc-200'}`}>
                   {user?.role === UserRole.PROJECT_MANAGER ? 'PM' : 'Admin'}
                 </span>
               </div>
@@ -250,7 +267,7 @@ const AdminLayout: React.FC = () => {
                 <button
                   type="button"
                   onClick={toggleTheme}
-                  className={`p-1.5 rounded-md border ${isDark ? 'border-zinc-800 text-zinc-400 hover:text-white' : 'border-zinc-300 text-zinc-600 hover:text-zinc-900'}`}
+                  className={`p-1.5 rounded-md border ${isDark ? 'border-zinc-800 text-zinc-400 hover:text-white' : 'border-zinc-200 text-zinc-600 hover:text-zinc-900'}`}
                   aria-label="Toggle admin theme"
                   title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
                 >
@@ -259,7 +276,7 @@ const AdminLayout: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setMobileNavOpen(false)}
-                  className={`p-1.5 rounded-md border ${isDark ? 'border-zinc-800 text-zinc-400 hover:text-white' : 'border-zinc-300 text-zinc-600 hover:text-zinc-900'}`}
+                  className={`p-1.5 rounded-md border ${isDark ? 'border-zinc-800 text-zinc-400 hover:text-white' : 'border-zinc-200 text-zinc-600 hover:text-zinc-900'}`}
                   aria-label="Close navigation"
                 >
                   <X size={16} />
@@ -267,9 +284,14 @@ const AdminLayout: React.FC = () => {
               </div>
             </div>
             <nav className="flex-1 py-4 px-3 space-y-0.5 overflow-y-auto">
-              {renderNavItems(false, () => setMobileNavOpen(false))}
+              {renderNavItems(primaryNav, false, () => setMobileNavOpen(false))}
             </nav>
-            <div className={`p-4 border-t ${isDark ? 'border-zinc-800' : 'border-zinc-300'}`}>
+            <div className="px-3 pb-3">
+              <div className={`rounded-xl border p-1.5 space-y-1.5 ${isDark ? 'border-zinc-800 bg-zinc-950/70' : 'border-zinc-200 bg-zinc-50'}`}>
+                {renderNavItems(middleDockNav, false, () => setMobileNavOpen(false))}
+              </div>
+            </div>
+            <div className={`p-4 border-t ${isDark ? 'border-zinc-800' : 'border-zinc-200'}`}>
               <button
                 type="button"
                 onClick={onLogout}

@@ -8,12 +8,14 @@ import type {
   DependencyItem,
 } from '../types';
 import {
+  MOCK_CLIENTS,
   MOCK_ADMIN_PROJECTS,
   MOCK_BLOCKERS,
   MOCK_CHANGE_ORDERS,
   MOCK_DEPENDENCIES,
   MOCK_PROJECT_DELIVERABLES,
   MOCK_RISKS,
+  createClientProfile,
   transitionProjectStage,
 } from './adminMock';
 
@@ -131,4 +133,21 @@ export function getProjectControls(projectId: string): ProjectControlsResponse {
     dependencies: MOCK_DEPENDENCIES.filter((item) => item.projectId === projectId),
     changeOrders: MOCK_CHANGE_ORDERS.filter((item) => item.projectId === projectId),
   };
+}
+
+export interface CreateClientRequest {
+  company: string;
+  name: string;
+  email: string;
+  phone?: string;
+  city?: string;
+  notes?: string;
+}
+
+export function listClients() {
+  return { items: MOCK_CLIENTS };
+}
+
+export function createClient(request: CreateClientRequest) {
+  return createClientProfile(request);
 }

@@ -64,3 +64,56 @@ These are allowed, local scroll regions (not page-level):
 - [x] At `375`, board overflow is confined to local panel (`overflow-x-auto`), not page root.
 - [x] At `390`, detail sticky actions remain reachable and tab controls wrap.
 - [x] Desktop and mobile both expose project open, filtering, and stage visibility.
+
+## Projects Round Two regression checks
+
+### Scope
+
+- `components/hq/admin/AdminProjectWizard.tsx`
+- `components/hq/admin/AdminProjects.tsx`
+- `components/hq/admin/AdminClients.tsx`
+- `components/hq/HQLogin.tsx`
+
+### Round Two checks
+
+- Added dual-path client flow in project wizard:
+  - existing client selection,
+  - inline quick-create client,
+  - detour to Clients tab with draft restore on return.
+- Added explicit `Bulk Edit` mode gate:
+  - checkboxes hidden until mode is enabled,
+  - bulk action tray only appears in bulk mode,
+  - exiting mode or changing filters/views clears selection state.
+- Simplified HQ login options to Admin + Crew only.
+
+### Mobile guardrail pass
+
+- `320`: wizard quick-create fields stack cleanly; sticky footer actions remain visible.
+- `375`: Projects header controls wrap; bulk mode toggle remains reachable.
+- `390`: list rows remain readable with/without bulk mode; no page-level overflow introduced.
+
+### Validation
+
+- Build: `npm run build` (pass after round-two changes).
+
+## Projects UI polish pass checks
+
+### Scope
+
+- `components/hq/admin/AdminProjects.tsx`
+- `components/hq/admin/AdminProjectWizard.tsx`
+
+### Confirmed behaviors
+
+- Added drag-and-drop support for project cards in Board view with stage transition guardrail feedback.
+- Archived lane now renders only when stage filter is set to `Archived`.
+- Removed Save View controls; current view mode and stage filter now persist until user switches.
+- Wizard stage dropdown labels use capitalized display labels and exclude Archived for new project creation.
+- Wizard budget field now uses a `$` prefix with numeric sanitization.
+- Due date control uses dark color scheme styling for improved calendar icon visibility.
+
+### Mobile/overflow audit
+
+- `320`: board remains locally scrollable inside lane container; no page-level horizontal scroll introduced.
+- `375`: control row wraps cleanly without clipping; bulk mode and stage filter remain reachable.
+- `390`: wizard step 2 fields remain readable and operable with currency/date styling.

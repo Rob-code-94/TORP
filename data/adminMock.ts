@@ -525,6 +525,42 @@ export function getProjectById(id: string): AdminProject | undefined {
   return MOCK_ADMIN_PROJECTS.find((p) => p.id === id);
 }
 
+export function createClientProfile(input: {
+  company: string;
+  name: string;
+  email: string;
+  phone?: string;
+  city?: string;
+  notes?: string;
+}): { ok: true; client: ClientProfile } | { ok: false; error: string } {
+  const company = input.company.trim();
+  const email = input.email.trim().toLowerCase();
+  const name = input.name.trim();
+  if (!company) return { ok: false, error: 'Company is required.' };
+  if (!name) return { ok: false, error: 'Primary contact is required.' };
+  if (!email || !email.includes('@')) return { ok: false, error: 'Valid email is required.' };
+
+  const duplicate = MOCK_CLIENTS.find(
+    (item) => item.company.toLowerCase() === company.toLowerCase() || item.email.toLowerCase() === email
+  );
+  if (duplicate) {
+    return { ok: false, error: 'A client with matching company or email already exists.' };
+  }
+
+  const client: ClientProfile = {
+    id: `cl-${MOCK_CLIENTS.length + 1}`,
+    company,
+    name,
+    email,
+    phone: input.phone?.trim() || '(000) 000-0000',
+    city: input.city?.trim() || '',
+    notes: input.notes?.trim() || '',
+    projectIds: [],
+  };
+  MOCK_CLIENTS.push(client);
+  return { ok: true, client };
+}
+
 export function getPlannerByProject(id: string): PlannerItem[] {
   return MOCK_PLANNER.filter((t) => t.projectId === id);
 }
@@ -655,7 +691,9 @@ export function canTransitionStage(fromStage: ProjectStage, toStage: ProjectStag
   const toIdx = PROJECT_STAGE_ORDER.indexOf(toStage);
   if (fromIdx < 0 || toIdx < 0) return false;
   if (fromStage === toStage) return true;
-  return toIdx === fromIdx + 1 || (fromStage === 'delivered' && toStage === 'archived');
+  if (fromStage === 'archived' && toStage !== 'archived') return false;
+  if (toStage === 'archived') return fromStage === 'delivered';
+  return toIdx >= 0 && toIdx <= PROJECT_STAGE_ORDER.length - 2;
 }
 
 export function transitionProjectStage(projectId: string, toStage: ProjectStage, actorName: string): { ok: boolean; error?: string } {

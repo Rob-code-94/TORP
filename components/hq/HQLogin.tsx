@@ -19,11 +19,6 @@ const HQLogin: React.FC = () => {
     navigate('/hq/staff', { replace: true });
   };
 
-  const goProjectManager = () => {
-    loginAs(UserRole.PROJECT_MANAGER, 'Project Manager');
-    navigate('/hq/admin/projects', { replace: true });
-  };
-
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center p-6 font-sans">
       <div className="w-full max-w-md">
@@ -64,13 +59,6 @@ const HQLogin: React.FC = () => {
               className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-4 rounded-xl transition-all hover:scale-[1.02]"
             >
               Continue as Crew
-            </button>
-            <button
-              type="button"
-              onClick={goProjectManager}
-              className="w-full bg-zinc-900 hover:bg-zinc-800 text-zinc-100 font-bold py-4 rounded-xl border border-zinc-700 transition-all hover:scale-[1.02]"
-            >
-              Continue as Project Manager
             </button>
           </div>
 

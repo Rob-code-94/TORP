@@ -1,17 +1,30 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { X } from 'lucide-react';
 import { MOCK_CLIENTS, MOCK_CREW, PROJECT_STAGE_ORDER } from '../../../data/adminMock';
-import { createProject, type CreateProjectRequest } from '../../../data/adminProjectsApi';
+import { createClient, createProject, type CreateProjectRequest } from '../../../data/adminProjectsApi';
+import { useAdminTheme } from '../../../lib/adminTheme';
 import type { ProjectStage } from '../../../types';
-import { formatAdminDate } from './adminFormat';
+import { formatAdminDate, formatStage } from './adminFormat';
 
 interface AdminProjectWizardProps {
   open: boolean;
   onClose: () => void;
   onCreated: () => void;
+  initialDraft?: CreateProjectRequest | null;
 }
 
 type Step = 1 | 2 | 3;
+
+const PACKAGE_OPTIONS = [
+  'Essentials (5h / 5 deliverables)',
+  'Custom doc + 30s cutdowns',
+  'Product + lookbook (custom)',
+  'Podcast pack (1 ep)',
+  'Campaign sprint',
+  'Event coverage',
+  'Social cutdown bundle',
+];
 
 const initial: CreateProjectRequest = {
   title: '',
@@ -25,24 +38,76 @@ const initial: CreateProjectRequest = {
   stage: 'inquiry',
 };
 
-const AdminProjectWizard: React.FC<AdminProjectWizardProps> = ({ open, onClose, onCreated }) => {
+export const PROJECT_WIZARD_DRAFT_KEY = 'torp.projects.wizardDraft';
+
+const AdminProjectWizard: React.FC<AdminProjectWizardProps> = ({ open, onClose, onCreated, initialDraft }) => {
+  const navigate = useNavigate();
+  const { theme } = useAdminTheme();
+  const isDark = theme === 'dark';
   const [step, setStep] = useState<Step>(1);
-  const [form, setForm] = useState<CreateProjectRequest>(initial);
+  const [form, setForm] = useState<CreateProjectRequest>(initialDraft || initial);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [quickClientOpen, setQuickClientOpen] = useState(false);
+  const [quickClient, setQuickClient] = useState({
+    company: '',
+    name: '',
+    email: '',
+    phone: '',
+  });
+  const [customPackage, setCustomPackage] = useState('');
+  const [budgetInput, setBudgetInput] = useState('0');
 
   const selectedClient = useMemo(() => MOCK_CLIENTS.find((c) => c.id === form.clientId), [form.clientId]);
   const selectedOwner = useMemo(() => MOCK_CREW.find((c) => c.id === form.ownerCrewId), [form.ownerCrewId]);
+
+  useEffect(() => {
+    if (open && initialDraft) {
+      setForm(initialDraft);
+      setBudgetInput(String(initialDraft.budget || 0));
+    }
+  }, [open, initialDraft]);
 
   if (!open) return null;
 
   const closeAndReset = () => {
     setStep(1);
     setForm(initial);
+    setBudgetInput('0');
     setError(null);
     setSaving(false);
     onClose();
   };
+  const updateBudget = (raw: string) => {
+    const normalized = raw.replace(/[^\d]/g, '');
+    const num = normalized ? Number(normalized) : 0;
+    setBudgetInput(normalized);
+    setForm((v) => ({ ...v, budget: num }));
+  };
+
+
+  const detourToClients = () => {
+    sessionStorage.setItem(PROJECT_WIZARD_DRAFT_KEY, JSON.stringify(form));
+    navigate('/hq/admin/clients?returnTo=projects');
+  };
+
+  const quickCreateClient = () => {
+    const result = createClient(quickClient);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setForm((current) => ({
+      ...current,
+      clientId: result.client.id,
+      clientName: result.client.company,
+    }));
+    setQuickClientOpen(false);
+    setQuickClient({ company: '', name: '', email: '', phone: '' });
+    setError(null);
+  };
+
+  const packageValue = PACKAGE_OPTIONS.includes(form.packageLabel) ? form.packageLabel : form.packageLabel ? '__custom__' : '';
 
   const goNext = () => {
     if (step === 1) {
@@ -83,11 +148,11 @@ const AdminProjectWizard: React.FC<AdminProjectWizardProps> = ({ open, onClose, 
   return (
     <div className="fixed inset-0 z-50">
       <button type="button" onClick={closeAndReset} className="absolute inset-0 bg-black/70" aria-label="Close wizard" />
-      <aside className="absolute right-0 top-0 h-full w-full sm:w-[520px] max-w-[100vw] border-l border-zinc-800 bg-zinc-950 flex flex-col">
-        <div className="h-14 border-b border-zinc-800 px-4 flex items-center justify-between">
+      <aside className={`absolute right-0 top-0 h-full w-full sm:w-[520px] max-w-[100vw] border-l flex flex-col ${isDark ? 'border-zinc-800 bg-zinc-950' : 'border-zinc-300 bg-white'}`}>
+        <div className={`h-14 border-b px-4 flex items-center justify-between ${isDark ? 'border-zinc-800' : 'border-zinc-300'}`}>
           <div>
             <p className="text-[10px] uppercase tracking-widest text-zinc-500">New project</p>
-            <h3 className="text-sm font-semibold text-white">Create project profile</h3>
+            <h3 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-zinc-900'}`}>Create project profile</h3>
           </div>
           <button type="button" onClick={closeAndReset} className="p-1.5 rounded-md border border-zinc-800 text-zinc-400">
             <X size={14} />
@@ -126,14 +191,101 @@ const AdminProjectWizard: React.FC<AdminProjectWizardProps> = ({ open, onClose, 
                   ))}
                 </select>
               </label>
+              {MOCK_CLIENTS.length === 0 && (
+                <p className="text-xs text-amber-300">
+                  No clients found yet. Use Quick add client or create one in the Clients tab.
+                </p>
+              )}
+              <div className="flex flex-wrap gap-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setQuickClientOpen((v) => !v)}
+                  className={`rounded-md border px-2.5 py-1.5 ${isDark ? 'border-zinc-700 text-zinc-200' : 'border-zinc-300 text-zinc-700'}`}
+                >
+                  {quickClientOpen ? 'Cancel quick add' : 'Quick add client'}
+                </button>
+                <button
+                  type="button"
+                  onClick={detourToClients}
+                  className={`rounded-md border px-2.5 py-1.5 ${isDark ? 'border-zinc-700 text-zinc-400' : 'border-zinc-300 text-zinc-600'}`}
+                >
+                  Create in Clients tab
+                </button>
+              </div>
+              {quickClientOpen && (
+                <div className={`rounded-lg border p-3 space-y-2 ${isDark ? 'border-zinc-800 bg-zinc-900/50' : 'border-zinc-300 bg-zinc-50'}`}>
+                  <p className={`text-xs font-semibold ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>Quick Add Client</p>
+                  <input
+                    placeholder="Company"
+                    value={quickClient.company}
+                    onChange={(e) => setQuickClient((v) => ({ ...v, company: e.target.value }))}
+                    className={`w-full rounded-md border px-2.5 py-1.5 text-sm ${isDark ? 'border-zinc-700 bg-zinc-900 text-zinc-100' : 'border-zinc-300 bg-white text-zinc-900'}`}
+                  />
+                  <input
+                    placeholder="Primary contact"
+                    value={quickClient.name}
+                    onChange={(e) => setQuickClient((v) => ({ ...v, name: e.target.value }))}
+                    className={`w-full rounded-md border px-2.5 py-1.5 text-sm ${isDark ? 'border-zinc-700 bg-zinc-900 text-zinc-100' : 'border-zinc-300 bg-white text-zinc-900'}`}
+                  />
+                  <input
+                    placeholder="Email"
+                    value={quickClient.email}
+                    onChange={(e) => setQuickClient((v) => ({ ...v, email: e.target.value }))}
+                    className={`w-full rounded-md border px-2.5 py-1.5 text-sm ${isDark ? 'border-zinc-700 bg-zinc-900 text-zinc-100' : 'border-zinc-300 bg-white text-zinc-900'}`}
+                  />
+                  <input
+                    placeholder="Phone (optional)"
+                    value={quickClient.phone}
+                    onChange={(e) => setQuickClient((v) => ({ ...v, phone: e.target.value }))}
+                    className={`w-full rounded-md border px-2.5 py-1.5 text-sm ${isDark ? 'border-zinc-700 bg-zinc-900 text-zinc-100' : 'border-zinc-300 bg-white text-zinc-900'}`}
+                  />
+                  <button type="button" onClick={quickCreateClient} className="rounded-md bg-white text-black px-2.5 py-1.5 text-xs font-bold">
+                    Save Client
+                  </button>
+                </div>
+              )}
               <label className="block text-xs text-zinc-400">
                 Package / scope label
-                <input
-                  value={form.packageLabel}
-                  onChange={(e) => setForm((v) => ({ ...v, packageLabel: e.target.value }))}
-                  className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
-                />
+                <select
+                  value={packageValue}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    if (next === '__custom__') {
+                      setForm((v) => ({ ...v, packageLabel: customPackage }));
+                      return;
+                    }
+                    setForm((v) => ({ ...v, packageLabel: next }));
+                  }}
+                  className={`mt-1 w-full rounded-md border px-3 py-2 text-sm ${
+                    isDark ? 'border-zinc-700 bg-zinc-900 text-zinc-100' : 'border-zinc-300 bg-white text-zinc-900'
+                  }`}
+                >
+                  <option value="">Select package</option>
+                  {PACKAGE_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                  <option value="__custom__">Custom package</option>
+                </select>
               </label>
+              {packageValue === '__custom__' && (
+                <label className="block text-xs text-zinc-400">
+                  Custom package label
+                  <input
+                    value={customPackage}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setCustomPackage(next);
+                      setForm((v) => ({ ...v, packageLabel: next }));
+                    }}
+                    placeholder="Type package / scope label"
+                    className={`mt-1 w-full rounded-md border px-3 py-2 text-sm ${
+                      isDark ? 'border-zinc-700 bg-zinc-900 text-zinc-100' : 'border-zinc-300 bg-white text-zinc-900'
+                    }`}
+                  />
+                </label>
+              )}
             </div>
           )}
 
@@ -146,9 +298,9 @@ const AdminProjectWizard: React.FC<AdminProjectWizardProps> = ({ open, onClose, 
                   onChange={(e) => setForm((v) => ({ ...v, stage: e.target.value as ProjectStage }))}
                   className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
                 >
-                  {PROJECT_STAGE_ORDER.map((stage) => (
+                  {PROJECT_STAGE_ORDER.filter((stage) => stage !== 'archived').map((stage) => (
                     <option key={stage} value={stage}>
-                      {stage.replaceAll('_', ' ')}
+                      {formatStage(stage)}
                     </option>
                   ))}
                 </select>
@@ -170,12 +322,16 @@ const AdminProjectWizard: React.FC<AdminProjectWizardProps> = ({ open, onClose, 
               </label>
               <label className="block text-xs text-zinc-400">
                 Budget (USD)
-                <input
-                  type="number"
-                  value={form.budget}
-                  onChange={(e) => setForm((v) => ({ ...v, budget: Number(e.target.value || '0') }))}
-                  className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
-                />
+                <div className="relative mt-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 text-sm">$</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={budgetInput}
+                    onChange={(e) => updateBudget(e.target.value)}
+                    className="w-full rounded-md border border-zinc-700 bg-zinc-900 pl-7 pr-3 py-2 text-sm text-zinc-100"
+                  />
+                </div>
               </label>
               <label className="block text-xs text-zinc-400">
                 Due date
@@ -183,7 +339,8 @@ const AdminProjectWizard: React.FC<AdminProjectWizardProps> = ({ open, onClose, 
                   type="date"
                   value={form.dueDate}
                   onChange={(e) => setForm((v) => ({ ...v, dueDate: e.target.value }))}
-                  className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+                  style={{ colorScheme: isDark ? 'dark' : 'light' }}
+                  className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 [color-scheme:dark]"
                 />
               </label>
             </div>
@@ -203,7 +360,7 @@ const AdminProjectWizard: React.FC<AdminProjectWizardProps> = ({ open, onClose, 
           {error && <p className="text-xs text-red-300">{error}</p>}
         </div>
 
-        <div className="border-t border-zinc-800 p-3 sticky bottom-0 bg-zinc-950 flex items-center justify-between gap-2">
+        <div className={`border-t p-3 sticky bottom-0 flex items-center justify-between gap-2 ${isDark ? 'border-zinc-800 bg-zinc-950' : 'border-zinc-300 bg-white'}`}>
           <button
             type="button"
             onClick={() => setStep((Math.max(1, step - 1) as Step))}
