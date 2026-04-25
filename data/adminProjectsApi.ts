@@ -16,6 +16,7 @@ import {
   MOCK_PROJECT_DELIVERABLES,
   MOCK_RISKS,
   createClientProfile,
+  updateProjectNarrative,
   transitionProjectStage,
 } from './adminMock';
 
@@ -150,4 +151,15 @@ export function listClients() {
 
 export function createClient(request: CreateClientRequest) {
   return createClientProfile(request);
+}
+
+export interface UpdateProjectNarrativeRequest {
+  summary: string;
+  brief: string;
+  goals: string;
+  nextMilestone: string;
+}
+
+export function saveProjectNarrative(projectId: string, request: UpdateProjectNarrativeRequest, actorName: string) {
+  return updateProjectNarrative(projectId, request, actorName);
 }

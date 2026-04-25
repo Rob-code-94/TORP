@@ -120,6 +120,7 @@ export interface AdminProject {
   sourceChannel?: 'referral' | 'inbound' | 'outbound' | 'repeat';
   ownerCrewId: string;
   ownerName: string;
+  assignedCrewIds?: string[];
   summary: string;
   brief: string;
   goals: string;
@@ -142,6 +143,7 @@ export type PlannerItemType =
 export type PlannerBoardColumn = 'queue' | 'active' | 'post' | 'client_review' | 'complete';
 
 export type PlannerItemPriority = 'low' | 'medium' | 'high' | 'urgent';
+export type PlannerTaskStatus = 'todo' | 'in_progress' | 'client_review' | 'done';
 
 export interface PlannerItem {
   id: string;
@@ -157,7 +159,10 @@ export interface PlannerItem {
   assigneeCrewId: string;
   assigneeName: string;
   done: boolean;
+  status?: PlannerTaskStatus;
   notes?: string;
+  description?: string;
+  referenceLink?: string;
 }
 
 export type ProjectAssetType = 'video' | 'still' | 'doc' | 'audio';
@@ -212,7 +217,7 @@ export interface ActivityEntry {
   id: string;
   projectId: string;
   projectTitle: string;
-  entityType: 'project' | 'planner' | 'invoice' | 'asset' | 'proposal' | 'shoot';
+  entityType: 'project' | 'planner' | 'invoice' | 'asset' | 'proposal' | 'shoot' | 'meeting';
   entityLabel: string;
   actorName: string;
   action: string;
@@ -225,6 +230,19 @@ export interface AdminShoot extends Shoot {
   callTime: string;
   projectTitle: string;
   gearSummary: string;
+  description?: string;
+}
+
+export interface AdminMeeting {
+  id: string;
+  projectId: string;
+  projectTitle: string;
+  title: string;
+  date: string;
+  startTime: string;
+  location: string;
+  participants: string[];
+  description?: string;
 }
 
 export type ExpenseCategory = 'rental' | 'talent' | 'permit' | 'travel' | 'location' | 'other';

@@ -1,5 +1,6 @@
 import type {
   ActivityEntry,
+  AdminMeeting,
   AdminInvoice,
   AdminProject,
   AdminProposal,
@@ -10,6 +11,7 @@ import type {
   CrewProfile,
   DependencyItem,
   PlannerItem,
+  PlannerTaskStatus,
   ProjectCapability,
   ProjectDeliverable,
   ProjectAsset,
@@ -101,6 +103,7 @@ export const MOCK_ADMIN_PROJECTS: AdminProject[] = [
     dueDate: '2025-04-12',
     ownerCrewId: 'cr-1',
     ownerName: 'A. Vance',
+    assignedCrewIds: ['cr-1', 'cr-3'],
     summary: 'Hero 60s + 9×16 suite; grade locked by Apr 1.',
     brief: 'Match energy with chain nets, hand speed, and after-dark color. No generic gym stock.',
     goals: 'Lift SNKRS + retail windows; 3s hook for social.',
@@ -121,6 +124,7 @@ export const MOCK_ADMIN_PROJECTS: AdminProject[] = [
     dueDate: '2025-05-01',
     ownerCrewId: 'cr-2',
     ownerName: 'M. Reyes',
+    assignedCrewIds: ['cr-2'],
     summary: '3 min civic anthem + VO; courthouse + neighborhood blocks.',
     brief: 'Institutional but warm. Avoid partisan cues; lead with people + place.',
     goals: 'Event premiere + YouTube; ADA captions required.',
@@ -141,6 +145,7 @@ export const MOCK_ADMIN_PROJECTS: AdminProject[] = [
     dueDate: '2025-03-28',
     ownerCrewId: 'cr-1',
     ownerName: 'A. Vance',
+    assignedCrewIds: ['cr-1'],
     summary: '45s retail hero + lookbook; client waiting on v2 stills.',
     brief: 'Shelf-to-street; macro texture + fit.',
     goals: 'Paid social + in-store loop.',
@@ -161,6 +166,7 @@ export const MOCK_ADMIN_PROJECTS: AdminProject[] = [
     dueDate: '2025-04-20',
     ownerCrewId: 'cr-3',
     ownerName: 'J. Park',
+    assignedCrewIds: ['cr-3'],
     summary: '3h record block; 1h ep + promos.',
     brief: 'Tight set; 2-cam; minimal lighting footprint.',
     goals: '3 promos for IG + YT same week.',
@@ -433,6 +439,20 @@ export const MOCK_SHOOTS_ADMIN: AdminShoot[] = [
   },
 ];
 
+export const MOCK_MEETINGS_ADMIN: AdminMeeting[] = [
+  {
+    id: 'M-101',
+    projectId: 'p1',
+    projectTitle: 'Blacktop: Spring Push',
+    title: 'Client post review',
+    date: '2025-04-05',
+    startTime: '14:00',
+    location: 'Zoom',
+    participants: ['A. Vance', 'J. Park'],
+    description: 'Review latest cut and confirm final notes.',
+  },
+];
+
 export const MOCK_EXPENSES: ProjectExpense[] = [
   {
     id: 'e1',
@@ -579,6 +599,10 @@ export function getProposalByProject(id: string): AdminProposal | undefined {
 
 export function getShootsByProject(id: string): AdminShoot[] {
   return MOCK_SHOOTS_ADMIN.filter((s) => s.projectId === id);
+}
+
+export function getMeetingsByProject(id: string): AdminMeeting[] {
+  return MOCK_MEETINGS_ADMIN.filter((m) => m.projectId === id);
 }
 
 export function getExpensesByProject(id: string): ProjectExpense[] {
@@ -752,6 +776,12 @@ export function getChangeOrdersByProject(id: string): ChangeOrder[] {
 }
 
 export function requestChangeOrder(projectId: string, title: string, amount: number, actorName: string): ChangeOrder {
+  if (!title.trim()) {
+    throw new Error('Change order title is required.');
+  }
+  if (!Number.isFinite(amount) || amount < 0) {
+    throw new Error('Change order amount must be a valid non-negative number.');
+  }
   const item: ChangeOrder = {
     id: `co${MOCK_CHANGE_ORDERS.length + 1}`,
     projectId,
@@ -770,6 +800,416 @@ export function requestChangeOrder(projectId: string, title: string, amount: num
     action: `requested change order: ${title}`,
   });
   return item;
+}
+
+export function updateProjectNarrative(
+  projectId: string,
+  patch: Pick<AdminProject, 'summary' | 'brief' | 'goals' | 'nextMilestone'>,
+  actorName: string
+): { ok: boolean; error?: string } {
+  const project = getProjectById(projectId);
+  if (!project) return { ok: false, error: 'Project not found.' };
+  project.summary = patch.summary.trim();
+  project.brief = patch.brief.trim();
+  project.goals = patch.goals.trim();
+  project.nextMilestone = patch.nextMilestone.trim();
+  pushActivity({
+    projectId,
+    entityType: 'project',
+    entityLabel: 'Narrative',
+    actorName,
+    action: 'updated summary and brief details',
+    projectTitle: project.title,
+  });
+  return { ok: true };
+}
+
+export function assignCrewToProject(projectId: string, crewId: string, actorName: string): { ok: boolean; error?: string } {
+  const project = getProjectById(projectId);
+  if (!project) return { ok: false, error: 'Project not found.' };
+  project.assignedCrewIds = project.assignedCrewIds || [];
+  if (!project.assignedCrewIds.includes(crewId)) {
+    project.assignedCrewIds.push(crewId);
+    const crew = MOCK_CREW.find((c) => c.id === crewId);
+    pushActivity({
+      projectId,
+      entityType: 'project',
+      entityLabel: 'Team',
+      actorName,
+      action: `added ${crew?.displayName || crewId} to project team`,
+      projectTitle: project.title,
+    });
+  }
+  return { ok: true };
+}
+
+export function removeCrewFromProject(projectId: string, crewId: string, actorName: string): { ok: boolean; error?: string } {
+  const project = getProjectById(projectId);
+  if (!project) return { ok: false, error: 'Project not found.' };
+  project.assignedCrewIds = (project.assignedCrewIds || []).filter((id) => id !== crewId);
+  const crew = MOCK_CREW.find((c) => c.id === crewId);
+  pushActivity({
+    projectId,
+    entityType: 'project',
+    entityLabel: 'Team',
+    actorName,
+    action: `removed ${crew?.displayName || crewId} from project team`,
+    projectTitle: project.title,
+  });
+  return { ok: true };
+}
+
+export function createPlannerTask(input: Omit<PlannerItem, 'id'>, actorName: string): PlannerItem {
+  if (!input.title.trim()) throw new Error('Task title is required.');
+  const assignee = validateProjectAssignee(input.projectId, input.assigneeCrewId);
+  if (!assignee.ok) throw new Error(assignee.error);
+  const item: PlannerItem = { ...input, id: `t${Date.now()}` };
+  MOCK_PLANNER.unshift(item);
+  pushActivity({
+    projectId: item.projectId,
+    entityType: 'planner',
+    entityLabel: item.title,
+    actorName,
+    action: 'created task',
+  });
+  return item;
+}
+
+export function updatePlannerTask(taskId: string, patch: Partial<PlannerItem>, actorName: string): { ok: boolean } {
+  const item = MOCK_PLANNER.find((t) => t.id === taskId);
+  if (!item) return { ok: false };
+  if (patch.assigneeCrewId) {
+    const assignee = validateProjectAssignee(item.projectId, patch.assigneeCrewId);
+    if (!assignee.ok) throw new Error(assignee.error);
+  }
+  const nextPatch = { ...patch };
+  if (nextPatch.status) {
+    const mapped = plannerStatusToLegacy(nextPatch.status);
+    nextPatch.column = mapped.column;
+    nextPatch.done = mapped.done;
+  }
+  Object.assign(item, nextPatch);
+  pushActivity({
+    projectId: item.projectId,
+    entityType: 'planner',
+    entityLabel: item.title,
+    actorName,
+    action: 'updated task',
+  });
+  return { ok: true };
+}
+
+export function deletePlannerTask(taskId: string, actorName: string): { ok: boolean } {
+  const idx = MOCK_PLANNER.findIndex((t) => t.id === taskId);
+  if (idx < 0) return { ok: false };
+  const [item] = MOCK_PLANNER.splice(idx, 1);
+  pushActivity({
+    projectId: item.projectId,
+    entityType: 'planner',
+    entityLabel: item.title,
+    actorName,
+    action: 'deleted task',
+  });
+  return { ok: true };
+}
+
+export function createShoot(input: Omit<AdminShoot, 'id'>, actorName: string): AdminShoot {
+  if (!input.title.trim()) throw new Error('Shoot title is required.');
+  if (!input.date) throw new Error('Shoot date is required.');
+  const participants = validateProjectParticipants(input.projectId, input.crew);
+  if (!participants.ok) throw new Error(participants.error);
+  const item: AdminShoot = { ...input, id: `S-${Date.now()}` };
+  MOCK_SHOOTS_ADMIN.unshift(item);
+  pushActivity({
+    projectId: item.projectId,
+    entityType: 'shoot',
+    entityLabel: item.title,
+    actorName,
+    action: 'created shoot day',
+  });
+  return item;
+}
+
+export function createMeeting(input: Omit<AdminMeeting, 'id'>, actorName: string): AdminMeeting {
+  if (!input.title.trim()) throw new Error('Meeting title is required.');
+  if (!input.date) throw new Error('Meeting date is required.');
+  const participants = validateProjectParticipants(input.projectId, input.participants);
+  if (!participants.ok) throw new Error(participants.error);
+  const item: AdminMeeting = { ...input, id: `M-${Date.now()}` };
+  MOCK_MEETINGS_ADMIN.unshift(item);
+  pushActivity({
+    projectId: item.projectId,
+    entityType: 'meeting',
+    entityLabel: item.title,
+    actorName,
+    action: 'created meeting',
+  });
+  return item;
+}
+
+export function updateShoot(shootId: string, patch: Partial<AdminShoot>, actorName: string): { ok: boolean } {
+  const item = MOCK_SHOOTS_ADMIN.find((s) => s.id === shootId);
+  if (!item) return { ok: false };
+  if (patch.crew) {
+    const participants = validateProjectParticipants(item.projectId, patch.crew);
+    if (!participants.ok) throw new Error(participants.error);
+  }
+  Object.assign(item, patch);
+  pushActivity({
+    projectId: item.projectId,
+    entityType: 'shoot',
+    entityLabel: item.title,
+    actorName,
+    action: 'updated shoot day',
+  });
+  return { ok: true };
+}
+
+export function deleteShoot(shootId: string, actorName: string): { ok: boolean } {
+  const idx = MOCK_SHOOTS_ADMIN.findIndex((s) => s.id === shootId);
+  if (idx < 0) return { ok: false };
+  const [item] = MOCK_SHOOTS_ADMIN.splice(idx, 1);
+  pushActivity({
+    projectId: item.projectId,
+    entityType: 'shoot',
+    entityLabel: item.title,
+    actorName,
+    action: 'deleted shoot day',
+  });
+  return { ok: true };
+}
+
+export function updateMeeting(meetingId: string, patch: Partial<AdminMeeting>, actorName: string): { ok: boolean } {
+  const item = MOCK_MEETINGS_ADMIN.find((m) => m.id === meetingId);
+  if (!item) return { ok: false };
+  if (patch.participants) {
+    const participants = validateProjectParticipants(item.projectId, patch.participants);
+    if (!participants.ok) throw new Error(participants.error);
+  }
+  Object.assign(item, patch);
+  pushActivity({
+    projectId: item.projectId,
+    entityType: 'meeting',
+    entityLabel: item.title,
+    actorName,
+    action: 'updated meeting',
+  });
+  return { ok: true };
+}
+
+export function deleteMeeting(meetingId: string, actorName: string): { ok: boolean } {
+  const idx = MOCK_MEETINGS_ADMIN.findIndex((m) => m.id === meetingId);
+  if (idx < 0) return { ok: false };
+  const [item] = MOCK_MEETINGS_ADMIN.splice(idx, 1);
+  pushActivity({
+    projectId: item.projectId,
+    entityType: 'meeting',
+    entityLabel: item.title,
+    actorName,
+    action: 'deleted meeting',
+  });
+  return { ok: true };
+}
+
+export function plannerStatusFromItem(item: PlannerItem): PlannerTaskStatus {
+  if (item.status) return item.status;
+  if (item.done || item.column === 'complete') return 'done';
+  if (item.column === 'client_review') return 'client_review';
+  if (item.column === 'active' || item.column === 'post') return 'in_progress';
+  return 'todo';
+}
+
+export function plannerStatusToLegacy(status: PlannerTaskStatus): { column: PlannerItem['column']; done: boolean } {
+  switch (status) {
+    case 'done':
+      return { column: 'complete', done: true };
+    case 'client_review':
+      return { column: 'client_review', done: false };
+    case 'in_progress':
+      return { column: 'active', done: false };
+    case 'todo':
+    default:
+      return { column: 'queue', done: false };
+  }
+}
+
+export function projectAssignableCrew(projectId: string) {
+  const project = getProjectById(projectId);
+  if (!project) return [];
+  const allowed = new Set<string>([project.ownerCrewId, ...(project.assignedCrewIds || [])]);
+  return MOCK_CREW.filter((crew) => allowed.has(crew.id));
+}
+
+export function validateProjectAssignee(projectId: string, crewId: string): { ok: boolean; error?: string } {
+  const allowed = projectAssignableCrew(projectId);
+  if (!allowed.some((crew) => crew.id === crewId)) {
+    return { ok: false, error: 'Assignee must be on this project team.' };
+  }
+  return { ok: true };
+}
+
+export function validateProjectParticipants(projectId: string, participants: string[]): { ok: boolean; error?: string } {
+  const allowed = projectAssignableCrew(projectId).map((crew) => crew.displayName);
+  const invalid = participants.find((name) => !allowed.includes(name));
+  if (invalid) return { ok: false, error: `${invalid} is not on this project team.` };
+  return { ok: true };
+}
+
+export function createProjectAsset(input: Omit<ProjectAsset, 'id' | 'updatedAt' | 'commentCount'>, actorName: string): ProjectAsset {
+  if (!input.label.trim()) throw new Error('Asset label is required.');
+  const item: ProjectAsset = { ...input, id: `a-${Date.now()}`, updatedAt: new Date().toISOString(), commentCount: 0 };
+  MOCK_ASSETS.unshift(item);
+  pushActivity({
+    projectId: item.projectId,
+    entityType: 'asset',
+    entityLabel: item.label,
+    actorName,
+    action: 'created asset',
+  });
+  return item;
+}
+
+export function updateProjectAsset(assetId: string, patch: Partial<ProjectAsset>, actorName: string): { ok: boolean } {
+  const item = MOCK_ASSETS.find((a) => a.id === assetId);
+  if (!item) return { ok: false };
+  Object.assign(item, patch, { updatedAt: new Date().toISOString() });
+  pushActivity({
+    projectId: item.projectId,
+    entityType: 'asset',
+    entityLabel: item.label,
+    actorName,
+    action: 'updated asset',
+  });
+  return { ok: true };
+}
+
+export function deleteProjectAsset(assetId: string, actorName: string): { ok: boolean } {
+  const idx = MOCK_ASSETS.findIndex((a) => a.id === assetId);
+  if (idx < 0) return { ok: false };
+  const [item] = MOCK_ASSETS.splice(idx, 1);
+  pushActivity({
+    projectId: item.projectId,
+    entityType: 'asset',
+    entityLabel: item.label,
+    actorName,
+    action: 'deleted asset',
+  });
+  return { ok: true };
+}
+
+export function createDeliverable(input: Omit<ProjectDeliverable, 'id'>, actorName: string): ProjectDeliverable {
+  if (!input.label.trim()) throw new Error('Deliverable label is required.');
+  const item: ProjectDeliverable = { ...input, id: `d-${Date.now()}` };
+  MOCK_PROJECT_DELIVERABLES.unshift(item);
+  pushActivity({
+    projectId: item.projectId,
+    entityType: 'project',
+    entityLabel: item.label,
+    actorName,
+    action: 'created deliverable',
+  });
+  return item;
+}
+
+export function updateDeliverable(id: string, patch: Partial<ProjectDeliverable>, actorName: string): { ok: boolean } {
+  const item = MOCK_PROJECT_DELIVERABLES.find((d) => d.id === id);
+  if (!item) return { ok: false };
+  Object.assign(item, patch);
+  pushActivity({
+    projectId: item.projectId,
+    entityType: 'project',
+    entityLabel: item.label,
+    actorName,
+    action: 'updated deliverable',
+  });
+  return { ok: true };
+}
+
+export function deleteDeliverable(id: string, actorName: string): { ok: boolean } {
+  const idx = MOCK_PROJECT_DELIVERABLES.findIndex((d) => d.id === id);
+  if (idx < 0) return { ok: false };
+  const [item] = MOCK_PROJECT_DELIVERABLES.splice(idx, 1);
+  pushActivity({
+    projectId: item.projectId,
+    entityType: 'project',
+    entityLabel: item.label,
+    actorName,
+    action: 'deleted deliverable',
+  });
+  return { ok: true };
+}
+
+function createControlEntity<T extends RiskItem | BlockerItem | DependencyItem>(
+  list: T[],
+  item: T,
+  entityLabel: string,
+  projectId: string,
+  actorName: string
+) {
+  list.unshift(item);
+  pushActivity({
+    projectId,
+    entityType: 'project',
+    entityLabel,
+    actorName,
+    action: 'added control item',
+  });
+}
+
+export function createRisk(item: Omit<RiskItem, 'id'>, actorName: string) {
+  createControlEntity(MOCK_RISKS, { ...item, id: `r-${Date.now()}` }, item.label, item.projectId, actorName);
+}
+export function createBlocker(item: Omit<BlockerItem, 'id'>, actorName: string) {
+  createControlEntity(MOCK_BLOCKERS, { ...item, id: `b-${Date.now()}` }, item.label, item.projectId, actorName);
+}
+export function createDependency(item: Omit<DependencyItem, 'id'>, actorName: string) {
+  createControlEntity(MOCK_DEPENDENCIES, { ...item, id: `dep-${Date.now()}` }, item.label, item.projectId, actorName);
+}
+
+export function updateRisk(id: string, patch: Partial<RiskItem>, actorName: string): { ok: boolean } {
+  const item = MOCK_RISKS.find((r) => r.id === id);
+  if (!item) return { ok: false };
+  Object.assign(item, patch);
+  pushActivity({ projectId: item.projectId, entityType: 'project', entityLabel: item.label, actorName, action: 'updated risk' });
+  return { ok: true };
+}
+export function updateBlocker(id: string, patch: Partial<BlockerItem>, actorName: string): { ok: boolean } {
+  const item = MOCK_BLOCKERS.find((r) => r.id === id);
+  if (!item) return { ok: false };
+  Object.assign(item, patch);
+  pushActivity({ projectId: item.projectId, entityType: 'project', entityLabel: item.label, actorName, action: 'updated blocker' });
+  return { ok: true };
+}
+export function updateDependency(id: string, patch: Partial<DependencyItem>, actorName: string): { ok: boolean } {
+  const item = MOCK_DEPENDENCIES.find((r) => r.id === id);
+  if (!item) return { ok: false };
+  Object.assign(item, patch);
+  pushActivity({ projectId: item.projectId, entityType: 'project', entityLabel: item.label, actorName, action: 'updated dependency' });
+  return { ok: true };
+}
+
+export function createExpense(item: Omit<ProjectExpense, 'id'>, actorName: string): ProjectExpense {
+  const exp: ProjectExpense = { ...item, id: `e-${Date.now()}` };
+  MOCK_EXPENSES.unshift(exp);
+  pushActivity({ projectId: exp.projectId, entityType: 'invoice', entityLabel: exp.label, actorName, action: 'logged expense' });
+  return exp;
+}
+
+export function createInvoice(item: Omit<AdminInvoice, 'id'>, actorName: string): AdminInvoice {
+  if (!item.clientName.trim()) throw new Error('Client name is required.');
+  if (!item.issuedDate || !item.dueDate) throw new Error('Issued date and due date are required.');
+  const invoice: AdminInvoice = { ...item, id: `INV-${new Date().getFullYear()}-${Math.floor(Math.random() * 900 + 100)}` };
+  MOCK_INVOICES_ADMIN.unshift(invoice);
+  pushActivity({ projectId: invoice.projectId, entityType: 'invoice', entityLabel: invoice.id, actorName, action: 'created invoice' });
+  return invoice;
+}
+
+export function updateInvoice(id: string, patch: Partial<AdminInvoice>, actorName: string): { ok: boolean } {
+  const item = MOCK_INVOICES_ADMIN.find((i) => i.id === id);
+  if (!item) return { ok: false };
+  Object.assign(item, patch);
+  pushActivity({ projectId: item.projectId, entityType: 'invoice', entityLabel: item.id, actorName, action: 'updated invoice' });
+  return { ok: true };
 }
 
 function formatStageLabel(stage: ProjectStage): string {

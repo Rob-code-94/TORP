@@ -117,3 +117,93 @@ These are allowed, local scroll regions (not page-level):
 - `320`: board remains locally scrollable inside lane container; no page-level horizontal scroll introduced.
 - `375`: control row wraps cleanly without clipping; bulk mode and stage filter remain reachable.
 - `390`: wizard step 2 fields remain readable and operable with currency/date styling.
+
+## Project Detail functional pass (PD-001 to PD-008)
+
+### Scope
+
+- `components/hq/admin/AdminProjectDetail.tsx`
+- `data/adminMock.ts`
+- `types.ts`
+
+### Functional parity checks
+
+- Removed bottom debug tab-state strip from `AdminProjectDetail`.
+- Added practical in-tab CRUD controls for:
+  - Planner (task add/update/complete/delete),
+  - Schedule (shoot day add/edit/delete),
+  - Assets and Deliverables (create/update/delete),
+  - Controls (risk/blocker/dependency add + resolve toggles),
+  - Financials (expense add, invoice create/status update, change-order request).
+- Added Overview staffing panel with owner context and assigned crew add/remove interactions.
+- Extended mock mutation paths to emit activity entries for all key tab mutations.
+
+### Mobile/overflow QA
+
+- `320`: project-detail tab controls and create forms stack cleanly; no page-level horizontal overflow.
+- `375`: planner/invoice wide tables stay in local `overflow-x-auto` containers.
+- `390`: controls and finance action rows wrap without clipping; all action buttons remain reachable.
+
+## Project Detail deep audit pass
+
+### Scope
+
+- `components/hq/admin/AdminProjectDetail.tsx`
+- `data/adminMock.ts`
+- `data/adminProjectsApi.ts`
+
+### Functional status matrix
+
+- `Overview`:
+  - Working now: team assignment add/remove, summary display, next milestone display.
+  - Working now: hybrid narrative editing (manual edit/save + optional auto-suggest draft + save confirmation).
+- `Brief`:
+  - Working now: manual edit/save/cancel for brief + goals.
+- `Planner`:
+  - Working now: add task, mark done/undo, move column, delete.
+- `Schedule`:
+  - Working now: add shoot day, quick location edit, delete.
+- `Assets`:
+  - Working now: add asset metadata record, visibility toggle, delete.
+  - Deferred: binary upload/storage pipeline (metadata CRUD only in mock pass).
+- `Deliverables`:
+  - Working now: add deliverable, approve/reopen, delete.
+  - Guard retained: transition to `delivered` still checks required deliverables.
+- `Controls`:
+  - Working now: add/resolve/reopen risks, blockers, and dependencies.
+- `Financials`:
+  - Working now: request change order, add expense, add invoice, invoice status update (role-gated).
+  - Budget source: project budget set from project profile/create flow, displayed as source of truth in detail.
+- `Activity`:
+  - Working now: key mutations across tabs emit activity events; filter/watch/read controls still operational.
+
+### Deep-pass mobile/overflow verification
+
+- `320`: sticky project identity stays visible while scrolling; action rows stack safely.
+- `375`: tab actions and inline forms remain reachable; no page-level horizontal overflow.
+- `390`: sticky identity + sticky context controls coexist without clipping and preserve touch access.
+
+## Planner + Schedule workflow upgrade pass
+
+### Scope
+
+- `components/hq/admin/AdminProjectDetail.tsx`
+- `data/adminMock.ts`
+- `types.ts`
+
+### Functional checks
+
+- Planner now uses explicit status dropdowns: `To Do`, `In Progress`, `Client Review`, `Done`.
+- Removed legacy `Mark done` and `Move column` actions from planner rows.
+- Added planner `Open` editor for task title, description, reference link, due date, and assignee.
+- Schedule now supports two creation flows:
+  - shoot items (`Add Shoot Day`)
+  - meeting items (`Add Meeting`)
+- Added schedule item `Open` editor for date/time/location/description and participants.
+- Assignment guardrails now enforce project-team-only assignees/participants across planner and schedule mutations.
+
+### Mobile/overflow checks
+
+- `320`: planner task editor and schedule forms stack vertically with no page-level horizontal overflow.
+- `375`: status dropdowns and row actions remain reachable; schedule editors preserve touch targets.
+- `390`: participant chips wrap correctly inside schedule editor; sticky headers remain usable.
