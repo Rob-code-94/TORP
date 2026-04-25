@@ -274,3 +274,30 @@ These are allowed, local scroll regions (not page-level):
 - `320`: drawer opens full-width, sticky actions remain reachable, no page-level horizontal overflow.
 - `375`: quick-action rows wrap correctly and drawer forms remain touch-friendly.
 - `390`: planner/schedule tables keep overflow scoped locally while drawer interactions remain stable.
+
+## Assets + Deliverables realization pass
+
+### Scope
+
+- `components/hq/admin/AdminProjectDetail.tsx`
+- `data/adminMock.ts`
+- `types.ts`
+- `lib/projectAssetStorage.ts`
+
+### Functional checks
+
+- Assets:
+  - Added richer asset contract support (source type, storage metadata, optional notes).
+  - Added deterministic storage path strategy (`projects/{projectId}/assets/{assetId}/{filename}`) through a mock-first storage adapter.
+  - Upgraded quick add/edit drawer to collect label, media type, source type, upload/link value, version, status, client visibility, and notes.
+  - Added drawer-level validation and save-state feedback for create/update.
+- Deliverables:
+  - Added deliverable `step` model plus optional `acceptanceCriteria` and `notes` with backward-safe defaults.
+  - Upgraded quick add/edit drawer to collect owner, due date, required flag, step, status, linked assets, acceptance criteria, and notes.
+  - Added inline per-row selectors for status and step, wired through existing mutation + activity logging flow.
+
+### Mobile/overflow checks
+
+- `320`: assets/deliverables action rows wrap, inline selectors stay reachable, no page-level horizontal overflow introduced.
+- `375`: drawer form fields stack to one column and linked-asset chips wrap without clipping.
+- `390`: row controls (status + step + edit/delete) wrap safely and keep touch targets reachable.

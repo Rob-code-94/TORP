@@ -171,6 +171,15 @@ export interface PlannerItem {
 export type ProjectAssetType = 'video' | 'still' | 'doc' | 'audio';
 
 export type ProjectAssetStatus = 'internal' | 'client_review' | 'approved' | 'delivered';
+export type ProjectAssetSourceType = 'upload' | 'external_link';
+
+export interface ProjectAssetStorageMetadata {
+  path?: string;
+  url?: string;
+  mimeType?: string;
+  sizeBytes?: number;
+  filename?: string;
+}
 
 export interface ProjectAsset {
   id: string;
@@ -178,6 +187,10 @@ export interface ProjectAsset {
   label: string;
   version: string;
   type: ProjectAssetType;
+  sourceType?: ProjectAssetSourceType;
+  sourceUrl?: string;
+  storage?: ProjectAssetStorageMetadata;
+  notes?: string;
   status: ProjectAssetStatus;
   clientVisible: boolean;
   /** ISO datetime */
@@ -274,6 +287,7 @@ export type DeliverableStatus =
   | 'ready_for_approval'
   | 'approved'
   | 'delivered';
+export type DeliverableStep = 'pre_production' | 'production' | 'post_production' | 'delivery';
 
 export interface ProjectDeliverable {
   id: string;
@@ -283,8 +297,11 @@ export interface ProjectDeliverable {
   ownerName: string;
   dueDate: string;
   required: boolean;
+  step?: DeliverableStep;
   status: DeliverableStatus;
   linkedAssetIds: string[];
+  acceptanceCriteria?: string;
+  notes?: string;
 }
 
 export interface RiskItem {

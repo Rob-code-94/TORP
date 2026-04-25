@@ -53,12 +53,15 @@ import {
 import { saveProjectNarrative } from '../../../data/adminProjectsApi';
 import { useAuth } from '../../../lib/auth';
 import { adminDateTimeInputProps, useAdminTheme } from '../../../lib/adminTheme';
-import { hasProjectCapability } from '../../../lib/projectPermissions';
+import { hasProjectCapability, isProjectRole } from '../../../lib/projectPermissions';
 import type {
   AdminInvoiceStatus,
+  DeliverableStep,
   DeliverableStatus,
   PlannerItemPriority,
   PlannerItemType,
+  ProjectAssetSourceType,
+  ProjectAssetType,
   PlannerTaskStatus,
   ProjectAssetStatus,
   ProjectStage,
@@ -78,6 +81,7 @@ type Tab = 'overview' | 'brief' | 'planner' | 'schedule' | 'assets' | 'deliverab
 type LoadState = 'loading' | 'empty' | 'error' | 'success';
 type ActivityFilter = 'all' | 'alerts' | 'mentions' | 'unread';
 type ScheduleFormType = 'shoot' | 'meeting';
+type DrawerStatus = { tone: 'ok' | 'error'; message: string } | null;
 type DrawerForm =
   | 'planner'
   | 'schedule'
@@ -113,8 +117,6 @@ const AdminProjectDetail: React.FC = () => {
   const [watching, setWatching] = useState(false);
   const [readIds, setReadIds] = useState<string[]>([]);
   const [activeDrawer, setActiveDrawer] = useState<DrawerForm | null>(null);
-  const [newAssetLabel, setNewAssetLabel] = useState('');
-  const [newDeliverableLabel, setNewDeliverableLabel] = useState('');
   const [newRiskLabel, setNewRiskLabel] = useState('');
   const [newBlockerLabel, setNewBlockerLabel] = useState('');
   const [newDependencyLabel, setNewDependencyLabel] = useState('');
@@ -142,6 +144,34 @@ const AdminProjectDetail: React.FC = () => {
     priority: 'medium' as 'low' | 'medium' | 'high' | 'urgent',
   });
   const [scheduleQuickType, setScheduleQuickType] = useState<ScheduleFormType>('shoot');
+  const [openAssetId, setOpenAssetId] = useState<string | null>(null);
+  const [assetDrawerBusy, setAssetDrawerBusy] = useState(false);
+  const [assetDrawerStatus, setAssetDrawerStatus] = useState<DrawerStatus>(null);
+  const [assetDraft, setAssetDraft] = useState({
+    label: '',
+    mediaType: 'video' as ProjectAssetType,
+    sourceType: 'upload' as ProjectAssetSourceType,
+    uploadFilename: '',
+    externalUrl: '',
+    version: 'v0.1',
+    status: 'internal' as ProjectAssetStatus,
+    clientVisible: false,
+    notes: '',
+  });
+  const [openDeliverableId, setOpenDeliverableId] = useState<string | null>(null);
+  const [deliverableDrawerBusy, setDeliverableDrawerBusy] = useState(false);
+  const [deliverableDrawerStatus, setDeliverableDrawerStatus] = useState<DrawerStatus>(null);
+  const [deliverableDraft, setDeliverableDraft] = useState({
+    label: '',
+    ownerCrewId: '',
+    dueDate: '',
+    required: true,
+    step: 'post_production' as DeliverableStep,
+    status: 'not_started' as DeliverableStatus,
+    linkedAssetIds: [] as string[],
+    acceptanceCriteria: '',
+    notes: '',
+  });
   const [openSchedule, setOpenSchedule] = useState<{ kind: ScheduleFormType; id: string } | null>(null);
   const [scheduleDraft, setScheduleDraft] = useState({
     title: '',
@@ -190,6 +220,7 @@ const AdminProjectDetail: React.FC = () => {
   const canMoveStage = hasProjectCapability(user?.role, 'project.stage.move');
   const canApproveFinance = hasProjectCapability(user?.role, 'project.financial.approve');
   const canRequestChangeOrder = hasProjectCapability(user?.role, 'project.changeOrder.request');
+  const canEditAssetDeliverables = isProjectRole(user?.role);
   const actorName = user?.displayName || 'System';
   const dateTimeInput = adminDateTimeInputProps(theme);
 
@@ -307,6 +338,83 @@ const AdminProjectDetail: React.FC = () => {
         ? current.assigneeCrewIds.filter((id) => id !== crewId)
         : [...current.assigneeCrewIds, crewId],
     }));
+  };
+
+  const openAssetEditor = (assetId: string | '__new__') => {
+    setAssetDrawerStatus(null);
+    if (assetId === '__new__') {
+      setOpenAssetId('__new__');
+      setAssetDraft({
+        label: '',
+        mediaType: 'video',
+        sourceType: 'upload',
+        uploadFilename: '',
+        externalUrl: '',
+        version: 'v0.1',
+        status: 'internal',
+        clientVisible: false,
+        notes: '',
+      });
+    } else {
+      const asset = assets.find((item) => item.id === assetId);
+      if (!asset) return;
+      setOpenAssetId(assetId);
+      setAssetDraft({
+        label: asset.label,
+        mediaType: asset.type,
+        sourceType: asset.sourceType ?? 'upload',
+        uploadFilename: asset.storage?.filename || '',
+        externalUrl: asset.sourceUrl || '',
+        version: asset.version,
+        status: asset.status,
+        clientVisible: asset.clientVisible,
+        notes: asset.notes || '',
+      });
+    }
+    setActiveDrawer('asset');
+  };
+
+  const toggleDeliverableAsset = (assetId: string) => {
+    setDeliverableDraft((current) => ({
+      ...current,
+      linkedAssetIds: current.linkedAssetIds.includes(assetId)
+        ? current.linkedAssetIds.filter((id) => id !== assetId)
+        : [...current.linkedAssetIds, assetId],
+    }));
+  };
+
+  const openDeliverableEditor = (deliverableId: string | '__new__') => {
+    setDeliverableDrawerStatus(null);
+    if (deliverableId === '__new__') {
+      setOpenDeliverableId('__new__');
+      setDeliverableDraft({
+        label: '',
+        ownerCrewId: project.ownerCrewId,
+        dueDate: project.dueDate,
+        required: true,
+        step: 'post_production',
+        status: 'not_started',
+        linkedAssetIds: [],
+        acceptanceCriteria: '',
+        notes: '',
+      });
+    } else {
+      const deliverable = deliverables.find((item) => item.id === deliverableId);
+      if (!deliverable) return;
+      setOpenDeliverableId(deliverableId);
+      setDeliverableDraft({
+        label: deliverable.label,
+        ownerCrewId: deliverable.ownerCrewId,
+        dueDate: deliverable.dueDate,
+        required: deliverable.required,
+        step: deliverable.step ?? 'post_production',
+        status: deliverable.status,
+        linkedAssetIds: deliverable.linkedAssetIds || [],
+        acceptanceCriteria: deliverable.acceptanceCriteria || '',
+        notes: deliverable.notes || '',
+      });
+    }
+    setActiveDrawer('deliverable');
   };
 
   const tabBtn = (id: Tab, label: string) => (
@@ -1084,9 +1192,9 @@ const AdminProjectDetail: React.FC = () => {
 
       {tab === 'assets' && withState('assets', true, (
         <div className="space-y-3">
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-3 flex items-center justify-between gap-2">
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-3 flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs uppercase tracking-widest text-zinc-500">Assets</p>
-            <button type="button" onClick={() => setActiveDrawer('asset')} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-zinc-100">
+            <button type="button" onClick={() => openAssetEditor('__new__')} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-zinc-100">
               Quick Add Asset
             </button>
           </div>
@@ -1102,11 +1210,16 @@ const AdminProjectDetail: React.FC = () => {
                 <div>
                   <p className="text-white text-sm font-medium">
                     {a.label}{' '}
-                    <span className="text-zinc-500 font-mono text-xs">v{a.version}</span>
+                    <span className="text-zinc-500 font-mono text-xs">{a.version}</span>
                   </p>
                   <p className="text-xs text-zinc-500">
                     {a.type.toUpperCase()} — {a.commentCount} comment(s) —{' '}
                     {a.clientVisible ? 'Client visible' : 'Internal only'}
+                  </p>
+                  <p className="text-xs text-zinc-600 mt-1 break-all">
+                    {a.sourceType === 'external_link'
+                      ? (a.sourceUrl || 'External link not set')
+                      : (a.storage?.path || 'Upload path not set')}
                   </p>
                 </div>
                 <span
@@ -1114,14 +1227,23 @@ const AdminProjectDetail: React.FC = () => {
                 >
                   {a.status}
                 </span>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openAssetEditor(a.id)}
+                    disabled={!canEditAssetDeliverables}
+                    className="text-[11px] underline text-zinc-400 disabled:opacity-50"
+                  >
+                    Edit
+                  </button>
                   <button
                     type="button"
                     onClick={() => {
                       updateProjectAsset(a.id, { clientVisible: !a.clientVisible }, actorName);
                       setRefreshTick((value) => value + 1);
                     }}
-                    className="text-[11px] underline text-zinc-400"
+                    disabled={!canEditAssetDeliverables}
+                    className="text-[11px] underline text-zinc-400 disabled:opacity-50"
                   >
                     {a.clientVisible ? 'Set internal' : 'Set client-visible'}
                   </button>
@@ -1131,7 +1253,8 @@ const AdminProjectDetail: React.FC = () => {
                       deleteProjectAsset(a.id, actorName);
                       setRefreshTick((value) => value + 1);
                     }}
-                    className="text-[11px] underline text-red-300"
+                    disabled={!canEditAssetDeliverables}
+                    className="text-[11px] underline text-red-300 disabled:opacity-50"
                   >
                     Delete
                   </button>
@@ -1140,64 +1263,128 @@ const AdminProjectDetail: React.FC = () => {
             ))
           )}
           </div>
-          <p className="text-xs text-zinc-500">
-            Deferred in this mock pass: binary upload/storage pipeline. Asset records are metadata-only for now.
-          </p>
           <AdminFormDrawer
             open={activeDrawer === 'asset'}
-            onClose={() => setActiveDrawer(null)}
-            title="Quick Add Asset"
-            subtitle="Create a new project asset record"
+            onClose={() => {
+              setActiveDrawer(null);
+              setOpenAssetId(null);
+              setAssetDrawerStatus(null);
+            }}
+            title={openAssetId === '__new__' ? 'Quick Add Asset' : 'Edit Asset'}
+            subtitle="Capture asset source, visibility, and delivery metadata"
             footer={
               <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setActiveDrawer(null)} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300">Cancel</button>
+                <button type="button" onClick={() => { setActiveDrawer(null); setOpenAssetId(null); }} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300">Cancel</button>
                 <button
                   type="button"
+                  disabled={assetDrawerBusy}
                   onClick={() => {
                     try {
-                      if (!newAssetLabel.trim()) {
+                      if (!assetDraft.label.trim()) {
                         setMessage('Asset label is required.', 'error');
+                        setAssetDrawerStatus({ tone: 'error', message: 'Asset label is required.' });
                         return;
                       }
-                      const status: ProjectAssetStatus = 'internal';
-                      createProjectAsset({
-                        projectId: project.id,
-                        label: newAssetLabel.trim(),
-                        type: 'video',
-                        status,
-                        clientVisible: false,
-                        version: 'v0.1',
-                      }, actorName);
-                      setNewAssetLabel('');
+                      if (assetDraft.sourceType === 'external_link' && !assetDraft.externalUrl.trim()) {
+                        setAssetDrawerStatus({ tone: 'error', message: 'External link URL is required.' });
+                        return;
+                      }
+                      if (assetDraft.sourceType === 'upload' && !assetDraft.uploadFilename.trim()) {
+                        setAssetDrawerStatus({ tone: 'error', message: 'Upload filename is required.' });
+                        return;
+                      }
+                      setAssetDrawerBusy(true);
+                      if (openAssetId === '__new__') {
+                        createProjectAsset({
+                          projectId: project.id,
+                          label: assetDraft.label.trim(),
+                          type: assetDraft.mediaType,
+                          sourceType: assetDraft.sourceType,
+                          sourceUrl: assetDraft.sourceType === 'external_link' ? assetDraft.externalUrl.trim() : undefined,
+                          storage: assetDraft.sourceType === 'upload' ? { filename: assetDraft.uploadFilename.trim() } : undefined,
+                          status: assetDraft.status,
+                          clientVisible: assetDraft.clientVisible,
+                          version: assetDraft.version.trim() || 'v0.1',
+                          notes: assetDraft.notes.trim(),
+                        }, actorName);
+                      } else if (openAssetId) {
+                        updateProjectAsset(openAssetId, {
+                          label: assetDraft.label.trim(),
+                          type: assetDraft.mediaType,
+                          sourceType: assetDraft.sourceType,
+                          sourceUrl: assetDraft.sourceType === 'external_link' ? assetDraft.externalUrl.trim() : '',
+                          storage: assetDraft.sourceType === 'upload' ? { filename: assetDraft.uploadFilename.trim() } : undefined,
+                          status: assetDraft.status,
+                          clientVisible: assetDraft.clientVisible,
+                          version: assetDraft.version.trim() || 'v0.1',
+                          notes: assetDraft.notes.trim(),
+                        }, actorName);
+                      }
                       setActiveDrawer(null);
+                      setOpenAssetId(null);
                       setRefreshTick((value) => value + 1);
-                      setMessage('Asset added.');
+                      setAssetDrawerStatus({ tone: 'ok', message: openAssetId === '__new__' ? 'Asset added.' : 'Asset updated.' });
+                      setMessage(openAssetId === '__new__' ? 'Asset added.' : 'Asset updated.');
                     } catch (error) {
                       setMessage(error instanceof Error ? error.message : 'Could not add asset.', 'error');
+                      setAssetDrawerStatus({ tone: 'error', message: error instanceof Error ? error.message : 'Could not save asset.' });
+                    } finally {
+                      setAssetDrawerBusy(false);
                     }
                   }}
-                  className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-100"
+                  className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-100 disabled:opacity-60"
                 >
-                  Add Asset
+                  {assetDrawerBusy ? 'Saving...' : openAssetId === '__new__' ? 'Add Asset' : 'Save Asset'}
                 </button>
               </div>
             }
           >
-            <input
-              value={newAssetLabel}
-              onChange={(e) => setNewAssetLabel(e.target.value)}
-              placeholder="New asset label"
-              className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
-            />
+            <div className="space-y-2">
+              {assetDrawerStatus && (
+                <p className={`text-xs ${assetDrawerStatus.tone === 'error' ? 'text-red-300' : 'text-emerald-300'}`}>{assetDrawerStatus.message}</p>
+              )}
+              <input value={assetDraft.label} onChange={(e) => setAssetDraft((current) => ({ ...current, label: e.target.value }))} placeholder="Asset label" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <select value={assetDraft.mediaType} onChange={(e) => setAssetDraft((current) => ({ ...current, mediaType: e.target.value as ProjectAssetType }))} className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100">
+                  <option value="video">Video</option>
+                  <option value="still">Still</option>
+                  <option value="doc">Doc</option>
+                  <option value="audio">Audio</option>
+                </select>
+                <select value={assetDraft.sourceType} onChange={(e) => setAssetDraft((current) => ({ ...current, sourceType: e.target.value as ProjectAssetSourceType }))} className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100">
+                  <option value="upload">Upload</option>
+                  <option value="external_link">External link</option>
+                </select>
+              </div>
+              {assetDraft.sourceType === 'upload' ? (
+                <input value={assetDraft.uploadFilename} onChange={(e) => setAssetDraft((current) => ({ ...current, uploadFilename: e.target.value }))} placeholder="Upload filename (e.g. hero-cut-v3.mp4)" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+              ) : (
+                <input value={assetDraft.externalUrl} onChange={(e) => setAssetDraft((current) => ({ ...current, externalUrl: e.target.value }))} placeholder="External URL" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <input value={assetDraft.version} onChange={(e) => setAssetDraft((current) => ({ ...current, version: e.target.value }))} placeholder="Version" className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+                <select value={assetDraft.status} onChange={(e) => setAssetDraft((current) => ({ ...current, status: e.target.value as ProjectAssetStatus }))} className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100">
+                  <option value="internal">Internal</option>
+                  <option value="client_review">Client review</option>
+                  <option value="approved">Approved</option>
+                  <option value="delivered">Delivered</option>
+                </select>
+                <label className="flex items-center gap-2 rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs text-zinc-200">
+                  <input type="checkbox" checked={assetDraft.clientVisible} onChange={(e) => setAssetDraft((current) => ({ ...current, clientVisible: e.target.checked }))} />
+                  Client visible
+                </label>
+              </div>
+              <textarea value={assetDraft.notes} onChange={(e) => setAssetDraft((current) => ({ ...current, notes: e.target.value }))} rows={2} placeholder="Notes" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+            </div>
           </AdminFormDrawer>
         </div>
       ))}
 
       {tab === 'deliverables' && withState('deliverables', true, (
         <div className="space-y-3">
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-3 flex items-center justify-between gap-2">
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-3 flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs uppercase tracking-widest text-zinc-500">Deliverables</p>
-            <button type="button" onClick={() => setActiveDrawer('deliverable')} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-zinc-100">
+            <button type="button" onClick={() => openDeliverableEditor('__new__')} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-zinc-100">
               Quick Add Deliverable
             </button>
           </div>
@@ -1212,19 +1399,52 @@ const AdminProjectDetail: React.FC = () => {
                   <p className="text-xs text-zinc-500 mt-1">
                     Owner {d.ownerName} · Due {formatAdminDate(d.dueDate)} · {d.required ? 'Required' : 'Optional'}
                   </p>
+                  <p className="text-xs text-zinc-600 mt-1">
+                    Step {d.step?.replaceAll('_', ' ') || 'post production'} · {d.linkedAssetIds.length} linked asset(s)
+                  </p>
                 </div>
-                <span className="text-[10px] uppercase rounded border border-zinc-700 px-2 py-0.5 text-zinc-200 self-start">{d.status.replaceAll('_', ' ')}</span>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const next: DeliverableStatus = d.status === 'approved' ? 'in_progress' : 'approved';
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[10px] uppercase rounded border border-zinc-700 px-2 py-0.5 text-zinc-200 self-start">{d.status.replaceAll('_', ' ')}</span>
+                  <select
+                    value={d.status}
+                    onChange={(e) => {
+                      const next = e.target.value as DeliverableStatus;
                       updateDeliverable(d.id, { status: next }, actorName);
                       setRefreshTick((value) => value + 1);
+                      setMessage(`Deliverable status moved to ${next.replaceAll('_', ' ')}.`);
                     }}
-                    className="text-[11px] underline text-zinc-400"
+                    disabled={!canEditAssetDeliverables}
+                    className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-100 disabled:opacity-50"
                   >
-                    {d.status === 'approved' ? 'Reopen' : 'Approve'}
+                    <option value="not_started">Not started</option>
+                    <option value="in_progress">In progress</option>
+                    <option value="ready_for_approval">Ready for approval</option>
+                    <option value="approved">Approved</option>
+                    <option value="delivered">Delivered</option>
+                  </select>
+                  <select
+                    value={d.step ?? 'post_production'}
+                    onChange={(e) => {
+                      const next = e.target.value as DeliverableStep;
+                      updateDeliverable(d.id, { step: next }, actorName);
+                      setRefreshTick((value) => value + 1);
+                      setMessage(`Deliverable step moved to ${next.replaceAll('_', ' ')}.`);
+                    }}
+                    disabled={!canEditAssetDeliverables}
+                    className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-100 disabled:opacity-50"
+                  >
+                    <option value="pre_production">Pre-production</option>
+                    <option value="production">Production</option>
+                    <option value="post_production">Post-production</option>
+                    <option value="delivery">Delivery</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => openDeliverableEditor(d.id)}
+                    disabled={!canEditAssetDeliverables}
+                    className="text-[11px] underline text-zinc-400 disabled:opacity-50"
+                  >
+                    Edit
                   </button>
                   <button
                     type="button"
@@ -1232,7 +1452,8 @@ const AdminProjectDetail: React.FC = () => {
                       deleteDeliverable(d.id, actorName);
                       setRefreshTick((value) => value + 1);
                     }}
-                    className="text-[11px] underline text-red-300"
+                    disabled={!canEditAssetDeliverables}
+                    className="text-[11px] underline text-red-300 disabled:opacity-50"
                   >
                     Delete
                   </button>
@@ -1243,52 +1464,123 @@ const AdminProjectDetail: React.FC = () => {
           </div>
           <AdminFormDrawer
             open={activeDrawer === 'deliverable'}
-            onClose={() => setActiveDrawer(null)}
-            title="Quick Add Deliverable"
-            subtitle="Create a deliverable for this project"
+            onClose={() => {
+              setActiveDrawer(null);
+              setOpenDeliverableId(null);
+              setDeliverableDrawerStatus(null);
+            }}
+            title={openDeliverableId === '__new__' ? 'Quick Add Deliverable' : 'Edit Deliverable'}
+            subtitle="Set owner, dates, status, linked assets, and acceptance details"
             footer={
               <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setActiveDrawer(null)} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300">Cancel</button>
+                <button type="button" onClick={() => { setActiveDrawer(null); setOpenDeliverableId(null); }} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300">Cancel</button>
                 <button
                   type="button"
+                  disabled={deliverableDrawerBusy}
                   onClick={() => {
                     try {
-                      if (!newDeliverableLabel.trim()) {
-                        setMessage('Deliverable label is required.', 'error');
+                      if (!deliverableDraft.label.trim()) {
+                        setDeliverableDrawerStatus({ tone: 'error', message: 'Deliverable label is required.' });
                         return;
                       }
-                      const status: DeliverableStatus = 'not_started';
-                      createDeliverable({
+                      if (!deliverableDraft.ownerCrewId) {
+                        setDeliverableDrawerStatus({ tone: 'error', message: 'Owner is required.' });
+                        return;
+                      }
+                      const owner = assignableCrew.find((crew) => crew.id === deliverableDraft.ownerCrewId);
+                      if (!owner) {
+                        setDeliverableDrawerStatus({ tone: 'error', message: 'Owner must be on this project team.' });
+                        return;
+                      }
+                      setDeliverableDrawerBusy(true);
+                      const payload = {
                         projectId: project.id,
-                        label: newDeliverableLabel.trim(),
-                        ownerCrewId: project.ownerCrewId,
-                        ownerName: project.ownerName,
-                        dueDate: project.dueDate,
-                        required: true,
-                        status,
-                        linkedAssetIds: [],
-                      }, actorName);
-                      setNewDeliverableLabel('');
+                        label: deliverableDraft.label.trim(),
+                        ownerCrewId: deliverableDraft.ownerCrewId,
+                        ownerName: owner.displayName,
+                        dueDate: deliverableDraft.dueDate || project.dueDate,
+                        required: deliverableDraft.required,
+                        step: deliverableDraft.step,
+                        status: deliverableDraft.status,
+                        linkedAssetIds: deliverableDraft.linkedAssetIds,
+                        acceptanceCriteria: deliverableDraft.acceptanceCriteria.trim(),
+                        notes: deliverableDraft.notes.trim(),
+                      };
+                      if (openDeliverableId === '__new__') {
+                        createDeliverable(payload, actorName);
+                      } else if (openDeliverableId) {
+                        updateDeliverable(openDeliverableId, payload, actorName);
+                      }
                       setActiveDrawer(null);
+                      setOpenDeliverableId(null);
                       setRefreshTick((value) => value + 1);
-                      setMessage('Deliverable added.');
+                      setDeliverableDrawerStatus({ tone: 'ok', message: openDeliverableId === '__new__' ? 'Deliverable added.' : 'Deliverable updated.' });
+                      setMessage(openDeliverableId === '__new__' ? 'Deliverable added.' : 'Deliverable updated.');
                     } catch (error) {
                       setMessage(error instanceof Error ? error.message : 'Could not add deliverable.', 'error');
+                      setDeliverableDrawerStatus({ tone: 'error', message: error instanceof Error ? error.message : 'Could not save deliverable.' });
+                    } finally {
+                      setDeliverableDrawerBusy(false);
                     }
                   }}
-                  className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-100"
+                  className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-100 disabled:opacity-60"
                 >
-                  Add Deliverable
+                  {deliverableDrawerBusy ? 'Saving...' : openDeliverableId === '__new__' ? 'Add Deliverable' : 'Save Deliverable'}
                 </button>
               </div>
             }
           >
-            <input
-              value={newDeliverableLabel}
-              onChange={(e) => setNewDeliverableLabel(e.target.value)}
-              placeholder="New deliverable"
-              className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
-            />
+            <div className="space-y-2">
+              {deliverableDrawerStatus && (
+                <p className={`text-xs ${deliverableDrawerStatus.tone === 'error' ? 'text-red-300' : 'text-emerald-300'}`}>{deliverableDrawerStatus.message}</p>
+              )}
+              <input value={deliverableDraft.label} onChange={(e) => setDeliverableDraft((current) => ({ ...current, label: e.target.value }))} placeholder="Deliverable label" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <select value={deliverableDraft.ownerCrewId} onChange={(e) => setDeliverableDraft((current) => ({ ...current, ownerCrewId: e.target.value }))} className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100">
+                  {assignableCrew.map((crew) => (
+                    <option key={crew.id} value={crew.id}>{crew.displayName}</option>
+                  ))}
+                </select>
+                <input type="date" value={deliverableDraft.dueDate} onChange={(e) => setDeliverableDraft((current) => ({ ...current, dueDate: e.target.value }))} style={dateTimeInput.style} className={`rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 ${dateTimeInput.className}`} />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <label className="flex items-center gap-2 rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs text-zinc-200">
+                  <input type="checkbox" checked={deliverableDraft.required} onChange={(e) => setDeliverableDraft((current) => ({ ...current, required: e.target.checked }))} />
+                  Required
+                </label>
+                <select value={deliverableDraft.step} onChange={(e) => setDeliverableDraft((current) => ({ ...current, step: e.target.value as DeliverableStep }))} className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100">
+                  <option value="pre_production">Pre-production</option>
+                  <option value="production">Production</option>
+                  <option value="post_production">Post-production</option>
+                  <option value="delivery">Delivery</option>
+                </select>
+                <select value={deliverableDraft.status} onChange={(e) => setDeliverableDraft((current) => ({ ...current, status: e.target.value as DeliverableStatus }))} className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100">
+                  <option value="not_started">Not started</option>
+                  <option value="in_progress">In progress</option>
+                  <option value="ready_for_approval">Ready for approval</option>
+                  <option value="approved">Approved</option>
+                  <option value="delivered">Delivered</option>
+                </select>
+              </div>
+              <div className="rounded-md border border-zinc-800 bg-zinc-950/60 p-2">
+                <p className="text-[11px] uppercase tracking-wide text-zinc-500 mb-2">Linked Assets</p>
+                <div className="flex flex-wrap gap-2">
+                  {assets.map((asset) => (
+                    <button
+                      key={asset.id}
+                      type="button"
+                      onClick={() => toggleDeliverableAsset(asset.id)}
+                      className={`rounded-full border px-2.5 py-1 text-xs ${deliverableDraft.linkedAssetIds.includes(asset.id) ? 'border-white bg-white text-black' : 'border-zinc-700 text-zinc-300'}`}
+                    >
+                      {asset.label}
+                    </button>
+                  ))}
+                  {assets.length === 0 && <span className="text-xs text-zinc-500">No assets yet.</span>}
+                </div>
+              </div>
+              <textarea value={deliverableDraft.acceptanceCriteria} onChange={(e) => setDeliverableDraft((current) => ({ ...current, acceptanceCriteria: e.target.value }))} rows={2} placeholder="Acceptance criteria" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+              <textarea value={deliverableDraft.notes} onChange={(e) => setDeliverableDraft((current) => ({ ...current, notes: e.target.value }))} rows={2} placeholder="Notes" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+            </div>
           </AdminFormDrawer>
         </div>
       ))}

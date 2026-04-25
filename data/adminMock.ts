@@ -12,6 +12,7 @@ import type {
   DependencyItem,
   PlannerItem,
   PlannerTaskStatus,
+  ProjectAssetSourceType,
   ProjectCapability,
   ProjectDeliverable,
   ProjectAsset,
@@ -20,6 +21,7 @@ import type {
   ProjectStageTransition,
   RiskItem,
 } from '../types';
+import { getProjectAssetStorageAdapter } from '../lib/projectAssetStorage';
 
 export const MOCK_CLIENTS: ClientProfile[] = [
   {
@@ -590,7 +592,13 @@ export function getPlannerByProject(id: string): PlannerItem[] {
 }
 
 export function getAssetsByProject(id: string): ProjectAsset[] {
-  return MOCK_ASSETS.filter((a) => a.projectId === id);
+  return MOCK_ASSETS
+    .filter((a) => a.projectId === id)
+    .map((item) => ({
+      ...item,
+      sourceType: item.sourceType ?? 'upload',
+      notes: item.notes ?? '',
+    }));
 }
 
 export function getInvoicesByProject(id: string): AdminInvoice[] {
@@ -760,7 +768,14 @@ export function transitionProjectStage(projectId: string, toStage: ProjectStage,
 }
 
 export function getDeliverablesByProject(id: string): ProjectDeliverable[] {
-  return MOCK_PROJECT_DELIVERABLES.filter((item) => item.projectId === id);
+  return MOCK_PROJECT_DELIVERABLES
+    .filter((item) => item.projectId === id)
+    .map((deliverable) => ({
+      ...deliverable,
+      step: deliverable.step ?? 'post_production',
+      acceptanceCriteria: deliverable.acceptanceCriteria ?? '',
+      notes: deliverable.notes ?? '',
+    }));
 }
 
 export function getRisksByProject(id: string): RiskItem[] {
@@ -1087,7 +1102,32 @@ export function validateProjectParticipants(projectId: string, participants: str
 
 export function createProjectAsset(input: Omit<ProjectAsset, 'id' | 'updatedAt' | 'commentCount'>, actorName: string): ProjectAsset {
   if (!input.label.trim()) throw new Error('Asset label is required.');
-  const item: ProjectAsset = { ...input, id: `a-${Date.now()}`, updatedAt: new Date().toISOString(), commentCount: 0 };
+  const id = `a-${Date.now()}`;
+  const sourceType: ProjectAssetSourceType = input.sourceType ?? 'upload';
+  const normalizedFile = input.storage?.filename?.trim() || input.label.trim().replace(/\s+/g, '-').toLowerCase();
+  const storage = sourceType === 'upload'
+    ? {
+      ...getProjectAssetStorageAdapter().resolveStorage({
+        projectId: input.projectId,
+        assetId: id,
+        filename: normalizedFile,
+        sourceType,
+      }),
+      mimeType: input.storage?.mimeType,
+      sizeBytes: input.storage?.sizeBytes,
+      filename: normalizedFile,
+    }
+    : undefined;
+  const item: ProjectAsset = {
+    ...input,
+    id,
+    sourceType,
+    sourceUrl: sourceType === 'external_link' ? input.sourceUrl?.trim() || '' : undefined,
+    storage,
+    notes: input.notes ?? '',
+    updatedAt: new Date().toISOString(),
+    commentCount: 0,
+  };
   MOCK_ASSETS.unshift(item);
   pushActivity({
     projectId: item.projectId,
@@ -1102,7 +1142,28 @@ export function createProjectAsset(input: Omit<ProjectAsset, 'id' | 'updatedAt' 
 export function updateProjectAsset(assetId: string, patch: Partial<ProjectAsset>, actorName: string): { ok: boolean } {
   const item = MOCK_ASSETS.find((a) => a.id === assetId);
   if (!item) return { ok: false };
-  Object.assign(item, patch, { updatedAt: new Date().toISOString() });
+  const nextSourceType = patch.sourceType ?? item.sourceType ?? 'upload';
+  const nextStorageFilename = patch.storage?.filename || item.storage?.filename || item.label.replace(/\s+/g, '-').toLowerCase();
+  const nextStorage = nextSourceType === 'upload'
+    ? {
+      ...getProjectAssetStorageAdapter().resolveStorage({
+        projectId: item.projectId,
+        assetId: item.id,
+        filename: nextStorageFilename,
+        sourceType: nextSourceType,
+      }),
+      ...(item.storage || {}),
+      ...(patch.storage || {}),
+      filename: nextStorageFilename,
+    }
+    : undefined;
+  Object.assign(item, patch, {
+    sourceType: nextSourceType,
+    sourceUrl: nextSourceType === 'external_link' ? (patch.sourceUrl ?? item.sourceUrl ?? '') : undefined,
+    storage: nextStorage,
+    notes: patch.notes ?? item.notes ?? '',
+    updatedAt: new Date().toISOString(),
+  });
   pushActivity({
     projectId: item.projectId,
     entityType: 'asset',
@@ -1129,7 +1190,13 @@ export function deleteProjectAsset(assetId: string, actorName: string): { ok: bo
 
 export function createDeliverable(input: Omit<ProjectDeliverable, 'id'>, actorName: string): ProjectDeliverable {
   if (!input.label.trim()) throw new Error('Deliverable label is required.');
-  const item: ProjectDeliverable = { ...input, id: `d-${Date.now()}` };
+  const item: ProjectDeliverable = {
+    ...input,
+    id: `d-${Date.now()}`,
+    step: input.step ?? 'post_production',
+    acceptanceCriteria: input.acceptanceCriteria ?? '',
+    notes: input.notes ?? '',
+  };
   MOCK_PROJECT_DELIVERABLES.unshift(item);
   pushActivity({
     projectId: item.projectId,
@@ -1144,7 +1211,11 @@ export function createDeliverable(input: Omit<ProjectDeliverable, 'id'>, actorNa
 export function updateDeliverable(id: string, patch: Partial<ProjectDeliverable>, actorName: string): { ok: boolean } {
   const item = MOCK_PROJECT_DELIVERABLES.find((d) => d.id === id);
   if (!item) return { ok: false };
-  Object.assign(item, patch);
+  Object.assign(item, patch, {
+    step: patch.step ?? item.step ?? 'post_production',
+    acceptanceCriteria: patch.acceptanceCriteria ?? item.acceptanceCriteria ?? '',
+    notes: patch.notes ?? item.notes ?? '',
+  });
   pushActivity({
     projectId: item.projectId,
     entityType: 'project',
