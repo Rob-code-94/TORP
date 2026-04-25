@@ -353,10 +353,32 @@ const AdminProjectDetail: React.FC = () => {
           <span className={`self-end text-[10px] uppercase font-bold tracking-wide px-2 py-0.5 rounded ${stageClassForTheme(project.stage, theme)}`}>
             {formatStage(project.stage)}
           </span>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <select
+              value={project.stage}
+              onChange={(e) => {
+                if (!canMoveStage) return;
+                const nextStage = e.target.value as ProjectStage;
+                const result = transitionProjectStage(project.id, nextStage, user?.displayName || 'System');
+                setStageMessage(result.ok ? `Stage updated to ${formatStage(nextStage)}.` : result.error || 'Unable to update stage.');
+                if (result.ok) setRefreshTick((value) => value + 1);
+              }}
+              disabled={!canMoveStage}
+              className="rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-xs text-zinc-100 disabled:opacity-50"
+            >
+              {PROJECT_STAGE_ORDER.map((item) => (
+                <option key={item} value={item}>
+                  {formatStage(item)}
+                </option>
+              ))}
+            </select>
+            {!canMoveStage && <span className="text-[11px] text-zinc-500">Stage updates are restricted for this role</span>}
+          </div>
           <p className="break-words">
             Due <span className="text-zinc-300 font-mono">{formatAdminDate(project.dueDate)}</span> · Owner{' '}
             <span className="text-zinc-300">{project.ownerName}</span>
           </p>
+          {stageMessage && <p className="text-xs text-zinc-400">{stageMessage}</p>}
         </div>
         </div>
       </div>
@@ -383,37 +405,6 @@ const AdminProjectDetail: React.FC = () => {
         </div>
       )}
 
-      <div className="sticky top-0 z-10 rounded-xl border border-zinc-800 bg-zinc-950/90 backdrop-blur px-3 py-3 sm:px-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <p className="text-xs text-zinc-500 uppercase tracking-widest">Project context</p>
-            <p className="text-sm text-zinc-300 truncate">Owner {project.ownerName} · Due {formatAdminDate(project.dueDate)}</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <select
-              value={project.stage}
-              onChange={(e) => {
-                if (!canMoveStage) return;
-                const nextStage = e.target.value as ProjectStage;
-                const result = transitionProjectStage(project.id, nextStage, user?.displayName || 'System');
-                setStageMessage(result.ok ? `Stage updated to ${formatStage(nextStage)}.` : result.error || 'Unable to update stage.');
-                if (result.ok) setRefreshTick((value) => value + 1);
-              }}
-              disabled={!canMoveStage}
-              className="rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-xs text-zinc-100 disabled:opacity-50"
-            >
-              {PROJECT_STAGE_ORDER.map((item) => (
-                <option key={item} value={item}>
-                  {formatStage(item)}
-                </option>
-              ))}
-            </select>
-            {!canMoveStage && <span className="text-[11px] text-zinc-500 self-center">Stage updates are restricted for this role</span>}
-          </div>
-        </div>
-        {stageMessage && <p className="mt-2 text-xs text-zinc-400">{stageMessage}</p>}
-      </div>
-
       {tab === 'overview' && withState('overview', true, (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-zinc-300 min-w-0">
           <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-4">
@@ -432,11 +423,15 @@ const AdminProjectDetail: React.FC = () => {
           </div>
           <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-4">
             <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500 mb-2">Deliverables</h3>
-            <ul className="list-disc list-inside text-zinc-200 space-y-1">
-              {project.deliverables.map((d) => (
-                <li key={d}>{d}</li>
-              ))}
-            </ul>
+            {deliverables.length === 0 ? (
+              <p className="text-sm text-zinc-500">No deliverables yet. Add one in the Deliverables tab.</p>
+            ) : (
+              <ul className="list-disc list-inside text-zinc-200 space-y-1">
+                {deliverables.map((item) => (
+                  <li key={item.id}>{item.label}</li>
+                ))}
+              </ul>
+            )}
           </div>
           <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-4 md:col-span-2">
             <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500 mb-2">Team on this project</h3>
@@ -870,15 +865,17 @@ const AdminProjectDetail: React.FC = () => {
             <p className="text-xs uppercase tracking-widest text-zinc-500">Timeline + Logistics</p>
             <p className="text-xs text-zinc-400">{shoots.length + meetings.length} event(s)</p>
           </div>
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-3 space-y-3">
-            <button
-              type="button"
-              onClick={() => openScheduleEditor('shoot', '__new__')}
-              className="rounded-md border border-zinc-700 px-3 py-2 text-xs font-bold uppercase tracking-wide text-zinc-100"
-            >
-              Schedule Event
-            </button>
-            <p className="text-xs text-zinc-500">Choose event type, then schedule it with full details and participants.</p>
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-zinc-500">Choose event type, then schedule it with full details and participants.</p>
+              <button
+                type="button"
+                onClick={() => openScheduleEditor('shoot', '__new__')}
+                className="rounded-md border border-zinc-700 px-3 py-2 text-xs font-bold uppercase tracking-wide text-zinc-100"
+              >
+                Schedule Event
+              </button>
+            </div>
           </div>
           {shoots.length === 0 && meetings.length === 0 ? (
             <p className="text-sm text-zinc-500">No schedule items on this project yet.</p>
@@ -956,27 +953,7 @@ const AdminProjectDetail: React.FC = () => {
               title={openSchedule.id === '__new__' ? 'Schedule Event' : openSchedule.kind === 'shoot' ? 'Edit Shoot' : 'Edit Meeting'}
               subtitle="Set timing, location, and participants"
               footer={
-                <div className="flex justify-between gap-2">
-                  <div className="inline-flex items-center gap-2">
-                    <span className="text-xs text-zinc-500">Event Type</span>
-                    <select
-                      value={scheduleQuickType}
-                      onChange={(e) => {
-                        const next = e.target.value as ScheduleFormType;
-                        setScheduleQuickType(next);
-                        setOpenSchedule((current) => (current ? { ...current, kind: next } : current));
-                        setScheduleDraft((current) => ({
-                          ...current,
-                          time: current.time || (next === 'shoot' ? '08:00' : '10:00'),
-                        }));
-                      }}
-                      disabled={openSchedule.id !== '__new__'}
-                      className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-100 disabled:opacity-50"
-                    >
-                      <option value="shoot">Shoot</option>
-                      <option value="meeting">Meeting</option>
-                    </select>
-                  </div>
+                <div className="flex justify-end gap-2">
                   <div className="flex gap-2">
                     <button
                       type="button"
@@ -1061,6 +1038,26 @@ const AdminProjectDetail: React.FC = () => {
                 </div>
               }
             >
+              <div className="space-y-1">
+                <label className="block text-xs font-medium uppercase tracking-wide text-zinc-500">Event Type</label>
+                <select
+                  value={scheduleQuickType}
+                  onChange={(e) => {
+                    const next = e.target.value as ScheduleFormType;
+                    setScheduleQuickType(next);
+                    setOpenSchedule((current) => (current ? { ...current, kind: next } : current));
+                    setScheduleDraft((current) => ({
+                      ...current,
+                      time: current.time || (next === 'shoot' ? '08:00' : '10:00'),
+                    }));
+                  }}
+                  disabled={openSchedule.id !== '__new__'}
+                  className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-2 text-sm text-zinc-100 disabled:opacity-50"
+                >
+                  <option value="shoot">Shoot</option>
+                  <option value="meeting">Meeting</option>
+                </select>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <input value={scheduleDraft.title} onChange={(e) => setScheduleDraft((current) => ({ ...current, title: e.target.value }))} className="rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-2 text-sm text-zinc-100" placeholder="Title" />
                 <input type="date" value={scheduleDraft.date} onChange={(e) => setScheduleDraft((current) => ({ ...current, date: e.target.value }))} style={dateTimeInput.style} className={`rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-2 text-sm text-zinc-100 ${dateTimeInput.className}`} />

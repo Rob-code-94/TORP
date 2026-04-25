@@ -40,7 +40,7 @@ const AdminFormDrawer: React.FC<AdminFormDrawerProps> = ({ open, title, subtitle
         }`}
       >
         <div
-          className={`sticky top-0 z-10 border-b px-4 py-3 flex items-start justify-between gap-3 ${
+          className={`sticky top-0 z-10 border-b px-4 py-4 sm:px-5 sm:py-4 flex items-start justify-between gap-3 ${
             isDark ? 'border-zinc-800 bg-zinc-950/95' : 'border-zinc-300 bg-white/95'
           }`}
         >
@@ -57,10 +57,12 @@ const AdminFormDrawer: React.FC<AdminFormDrawerProps> = ({ open, title, subtitle
             <X size={14} />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-4 min-w-0">{children}</div>
+        <div className="flex-1 overflow-y-auto min-w-0 px-4 py-4 sm:px-5 sm:py-5">
+          <div className="space-y-4 sm:space-y-5">{children}</div>
+        </div>
         {footer && (
           <div
-            className={`sticky bottom-0 z-10 border-t px-4 py-3 ${
+            className={`sticky bottom-0 z-10 border-t px-4 py-3 sm:px-5 sm:py-4 ${
               isDark ? 'border-zinc-800 bg-zinc-950/95' : 'border-zinc-300 bg-white/95'
             }`}
           >
