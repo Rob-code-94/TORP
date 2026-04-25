@@ -2,8 +2,10 @@ import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { MOCK_CREW } from '../../../data/adminMock';
 import { createCrew, sendCrewResetLink, setCrewPassword, updateCrew } from '../../../data/adminProjectsApi';
+import { useAuth } from '../../../lib/auth';
 import AdminFormDrawer from './AdminFormDrawer';
 import type { CrewProfile } from '../../../types';
+import { UserRole } from '../../../types';
 
 const WEEKDAY_OPTIONS = [
   { value: 0, label: 'Sun' },
@@ -18,6 +20,7 @@ const WEEKDAY_OPTIONS = [
 type CrewDraft = {
   displayName: string;
   role: CrewProfile['role'];
+  systemRole: CrewProfile['systemRole'];
   email: string;
   phone: string;
   rateShootHour: string;
@@ -36,6 +39,7 @@ type CrewDraft = {
 const EMPTY_CREW_DRAFT: CrewDraft = {
   displayName: '',
   role: 'other',
+  systemRole: UserRole.STAFF,
   email: '',
   phone: '',
   rateShootHour: '0',
@@ -52,6 +56,12 @@ const EMPTY_CREW_DRAFT: CrewDraft = {
 };
 
 const AdminCrew: React.FC = () => {
+  const { user } = useAuth();
+  const isAdmin = user?.role === UserRole.ADMIN;
+  const isProjectManager = user?.role === UserRole.PROJECT_MANAGER;
+  const crewReadOnly = isProjectManager;
+  const actorLabel = user?.displayName?.trim() || user?.email || 'HQ';
+
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingCrewId, setEditingCrewId] = useState<string | null>(null);
   const [draft, setDraft] = useState<CrewDraft>(EMPTY_CREW_DRAFT);
@@ -73,6 +83,7 @@ const AdminCrew: React.FC = () => {
     setDraft({
       displayName: crew.displayName,
       role: crew.role,
+      systemRole: crew.systemRole,
       email: crew.email,
       phone: crew.phone || '',
       rateShootHour: String(crew.rateShootHour),
@@ -116,9 +127,16 @@ const AdminCrew: React.FC = () => {
   };
 
   const saveCrew = () => {
+    if (crewReadOnly) return;
+    if (draft.systemRole === UserRole.ADMIN && !isAdmin) {
+      setStatus('Only an admin can assign the Admin system role.');
+      setStatusTone('error');
+      return;
+    }
     const payload = {
       displayName: draft.displayName,
       role: draft.role,
+      systemRole: draft.systemRole,
       email: draft.email,
       phone: draft.phone,
       rateShootHour: Number(draft.rateShootHour || 0),
@@ -136,8 +154,8 @@ const AdminCrew: React.FC = () => {
   };
 
   const sendResetLink = () => {
-    if (!editingCrewId) return;
-    const result = sendCrewResetLink(editingCrewId, 'Admin');
+    if (!editingCrewId || crewReadOnly) return;
+    const result = sendCrewResetLink(editingCrewId, actorLabel);
     if (!result.ok) {
       setStatus('error' in result ? result.error : 'Could not send reset link.');
       setStatusTone('error');
@@ -148,6 +166,7 @@ const AdminCrew: React.FC = () => {
   };
 
   const toggleDay = (day: 0 | 1 | 2 | 3 | 4 | 5 | 6) => {
+    if (crewReadOnly) return;
     setDraft((current) => ({
       ...current,
       availableDays: current.availableDays.includes(day)
@@ -157,8 +176,8 @@ const AdminCrew: React.FC = () => {
   };
 
   const saveTempPassword = () => {
-    if (!editingCrewId) return;
-    const result = setCrewPassword(editingCrewId, 'Admin', draft.tempPassword);
+    if (!editingCrewId || crewReadOnly) return;
+    const result = setCrewPassword(editingCrewId, actorLabel, draft.tempPassword);
     if (!result.ok) {
       setStatus('error' in result ? result.error : 'Could not set temporary password.');
       setStatusTone('error');
@@ -175,21 +194,25 @@ const AdminCrew: React.FC = () => {
         <div>
         <p className="text-xs font-mono uppercase text-zinc-500">Crew</p>
         <h2 className="text-xl font-bold text-white">Directory &amp; rates (mock)</h2>
+        {crewReadOnly && <p className="text-xs text-zinc-500 mt-1">Read-only for project managers.</p>}
         </div>
-        <button
-          type="button"
-          onClick={openCreate}
-          className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-zinc-200"
-        >
-          Add Crew Member
-        </button>
+        {!crewReadOnly && (
+          <button
+            type="button"
+            onClick={openCreate}
+            className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-zinc-200 shrink-0"
+          >
+            Add Crew Member
+          </button>
+        )}
       </div>
       <div className="bg-zinc-900/30 border border-zinc-800 rounded-xl overflow-x-auto">
         <table className="w-full text-sm min-w-[720px]">
           <thead className="text-xs text-zinc-500 uppercase border-b border-zinc-800 bg-zinc-950/60">
             <tr>
               <th className="text-left px-3 py-2">Name</th>
-              <th className="text-left px-3 py-2">Role</th>
+              <th className="text-left px-3 py-2">Craft</th>
+              <th className="text-left px-3 py-2">System</th>
               <th className="text-right px-3 py-2">Shoot $/hr</th>
               <th className="text-right px-3 py-2">Edit $/hr</th>
               <th className="text-left px-3 py-2">Availability</th>
@@ -205,6 +228,7 @@ const AdminCrew: React.FC = () => {
                   </button>
                 </td>
                 <td className="px-3 py-2.5 text-zinc-500">{c.role}</td>
+                <td className="px-3 py-2.5 text-zinc-500 text-xs">{c.systemRole}</td>
                 <td className="px-3 py-2.5 text-right font-mono text-xs">{c.rateShootHour}</td>
                 <td className="px-3 py-2.5 text-right font-mono text-xs">{c.rateEditHour}</td>
                 <td className="px-3 py-2.5 text-zinc-500 text-xs max-w-xs">{c.availability}</td>
@@ -234,16 +258,29 @@ const AdminCrew: React.FC = () => {
             <button type="button" onClick={closeDrawer} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300">
               Cancel
             </button>
-            <button type="button" onClick={saveCrew} className="rounded-md bg-white px-3 py-1.5 text-xs font-bold text-black hover:bg-zinc-200">
-              {editingCrewId ? 'Save Changes' : 'Create Crew'}
-            </button>
+            {!crewReadOnly && (
+              <button type="button" onClick={saveCrew} className="rounded-md bg-white px-3 py-1.5 text-xs font-bold text-black hover:bg-zinc-200">
+                {editingCrewId ? 'Save Changes' : 'Create Crew'}
+              </button>
+            )}
           </div>
         }
       >
         <div className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <input value={draft.displayName} onChange={(e) => setDraft((v) => ({ ...v, displayName: e.target.value }))} placeholder="Full name" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
-            <select value={draft.role} onChange={(e) => setDraft((v) => ({ ...v, role: e.target.value as CrewProfile['role'] }))} className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100">
+            <input
+              value={draft.displayName}
+              onChange={(e) => setDraft((v) => ({ ...v, displayName: e.target.value }))}
+              placeholder="Full name"
+              disabled={crewReadOnly}
+              className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 disabled:opacity-50"
+            />
+            <select
+              value={draft.role}
+              onChange={(e) => setDraft((v) => ({ ...v, role: e.target.value as CrewProfile['role'] }))}
+              disabled={crewReadOnly}
+              className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 disabled:opacity-50"
+            >
               <option value="director">Director</option>
               <option value="dp">DP</option>
               <option value="editor">Editor</option>
@@ -252,23 +289,63 @@ const AdminCrew: React.FC = () => {
               <option value="other">Other</option>
             </select>
           </div>
+          <div>
+            <label className="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1">System role (HQ access)</label>
+            <select
+              value={draft.systemRole}
+              onChange={(e) => setDraft((v) => ({ ...v, systemRole: e.target.value as CrewProfile['systemRole'] }))}
+              disabled={crewReadOnly || !isAdmin}
+              className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 disabled:opacity-50"
+            >
+              <option value={UserRole.STAFF}>Staff</option>
+              <option value={UserRole.PROJECT_MANAGER}>Project manager</option>
+              <option value={UserRole.ADMIN}>Admin</option>
+            </select>
+            {!isAdmin && !crewReadOnly && (
+              <p className="text-[11px] text-zinc-500 mt-1">Only admins can change system role.</p>
+            )}
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <input value={draft.email} onChange={(e) => setDraft((v) => ({ ...v, email: e.target.value }))} placeholder="Email" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
-            <input value={draft.phone} onChange={(e) => setDraft((v) => ({ ...v, phone: e.target.value }))} placeholder="Phone" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+            <input
+              value={draft.email}
+              onChange={(e) => setDraft((v) => ({ ...v, email: e.target.value }))}
+              placeholder="Email"
+              disabled={crewReadOnly}
+              className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 disabled:opacity-50"
+            />
+            <input
+              value={draft.phone}
+              onChange={(e) => setDraft((v) => ({ ...v, phone: e.target.value }))}
+              placeholder="Phone"
+              disabled={crewReadOnly}
+              className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 disabled:opacity-50"
+            />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <label className="block text-[11px] uppercase tracking-wide text-zinc-500">
               Shoot Rate ($/hr)
               <div className="relative mt-1">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">$</span>
-                <input value={draft.rateShootHour} onChange={(e) => setDraft((v) => ({ ...v, rateShootHour: e.target.value.replace(/[^\d.]/g, '') }))} placeholder="0.00" className="w-full rounded-md border border-zinc-700 bg-zinc-900 pl-7 pr-3 py-2 text-sm text-zinc-100" />
+                <input
+                  value={draft.rateShootHour}
+                  onChange={(e) => setDraft((v) => ({ ...v, rateShootHour: e.target.value.replace(/[^\d.]/g, '') }))}
+                  placeholder="0.00"
+                  disabled={crewReadOnly}
+                  className="w-full rounded-md border border-zinc-700 bg-zinc-900 pl-7 pr-3 py-2 text-sm text-zinc-100 disabled:opacity-50"
+                />
               </div>
             </label>
             <label className="block text-[11px] uppercase tracking-wide text-zinc-500">
               Edit Rate ($/hr)
               <div className="relative mt-1">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">$</span>
-                <input value={draft.rateEditHour} onChange={(e) => setDraft((v) => ({ ...v, rateEditHour: e.target.value.replace(/[^\d.]/g, '') }))} placeholder="0.00" className="w-full rounded-md border border-zinc-700 bg-zinc-900 pl-7 pr-3 py-2 text-sm text-zinc-100" />
+                <input
+                  value={draft.rateEditHour}
+                  onChange={(e) => setDraft((v) => ({ ...v, rateEditHour: e.target.value.replace(/[^\d.]/g, '') }))}
+                  placeholder="0.00"
+                  disabled={crewReadOnly}
+                  className="w-full rounded-md border border-zinc-700 bg-zinc-900 pl-7 pr-3 py-2 text-sm text-zinc-100 disabled:opacity-50"
+                />
               </div>
             </label>
           </div>
@@ -279,6 +356,7 @@ const AdminCrew: React.FC = () => {
                 <button
                   key={option.value}
                   type="button"
+                  disabled={crewReadOnly}
                   onClick={() => toggleDay(option.value)}
                   className={`rounded-full border px-2.5 py-1 text-xs ${
                     draft.availableDays.includes(option.value)
@@ -291,42 +369,94 @@ const AdminCrew: React.FC = () => {
               ))}
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <input value={draft.timezone} onChange={(e) => setDraft((v) => ({ ...v, timezone: e.target.value }))} placeholder="Timezone" className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
-              <input type="time" value={draft.weekdayStart} onChange={(e) => setDraft((v) => ({ ...v, weekdayStart: e.target.value }))} className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
-              <input type="time" value={draft.weekdayEnd} onChange={(e) => setDraft((v) => ({ ...v, weekdayEnd: e.target.value }))} className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+              <input
+                value={draft.timezone}
+                onChange={(e) => setDraft((v) => ({ ...v, timezone: e.target.value }))}
+                placeholder="Timezone"
+                disabled={crewReadOnly}
+                className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 disabled:opacity-50"
+              />
+              <input
+                type="time"
+                value={draft.weekdayStart}
+                onChange={(e) => setDraft((v) => ({ ...v, weekdayStart: e.target.value }))}
+                disabled={crewReadOnly}
+                className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 disabled:opacity-50"
+              />
+              <input
+                type="time"
+                value={draft.weekdayEnd}
+                onChange={(e) => setDraft((v) => ({ ...v, weekdayEnd: e.target.value }))}
+                disabled={crewReadOnly}
+                className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 disabled:opacity-50"
+              />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <input type="date" value={draft.exceptionStart} onChange={(e) => setDraft((v) => ({ ...v, exceptionStart: e.target.value }))} className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
-              <input type="date" value={draft.exceptionEnd} onChange={(e) => setDraft((v) => ({ ...v, exceptionEnd: e.target.value }))} className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+              <input
+                type="date"
+                value={draft.exceptionStart}
+                onChange={(e) => setDraft((v) => ({ ...v, exceptionStart: e.target.value }))}
+                disabled={crewReadOnly}
+                className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 disabled:opacity-50"
+              />
+              <input
+                type="date"
+                value={draft.exceptionEnd}
+                onChange={(e) => setDraft((v) => ({ ...v, exceptionEnd: e.target.value }))}
+                disabled={crewReadOnly}
+                className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 disabled:opacity-50"
+              />
             </div>
-            <textarea value={draft.availabilityNotes} onChange={(e) => setDraft((v) => ({ ...v, availabilityNotes: e.target.value }))} rows={2} placeholder="Availability notes" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+            <textarea
+              value={draft.availabilityNotes}
+              onChange={(e) => setDraft((v) => ({ ...v, availabilityNotes: e.target.value }))}
+              rows={2}
+              placeholder="Availability notes"
+              disabled={crewReadOnly}
+              className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 disabled:opacity-50"
+            />
           </div>
           <label className="flex items-center gap-2 text-xs text-zinc-300">
-            <input type="checkbox" checked={draft.active} onChange={(e) => setDraft((v) => ({ ...v, active: e.target.checked }))} />
+            <input
+              type="checkbox"
+              checked={draft.active}
+              onChange={(e) => setDraft((v) => ({ ...v, active: e.target.checked }))}
+              disabled={crewReadOnly}
+            />
             Active crew member
           </label>
           {editingCrew && (
             <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3">
               <p className="text-xs uppercase tracking-wide text-zinc-500 mb-2">Account</p>
-              <button type="button" onClick={sendResetLink} className="rounded-md border border-zinc-700 px-2.5 py-1.5 text-xs font-bold uppercase tracking-wide text-zinc-200">
-                Send Password Reset Link
-              </button>
-              <div className="mt-3 flex flex-col sm:flex-row gap-2">
-                <input
-                  type="password"
-                  value={draft.tempPassword}
-                  onChange={(e) => setDraft((v) => ({ ...v, tempPassword: e.target.value }))}
-                  placeholder="Set temporary password"
-                  className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
-                />
-                <button
-                  type="button"
-                  onClick={saveTempPassword}
-                  className="rounded-md border border-zinc-700 px-3 py-2 text-xs font-bold uppercase tracking-wide text-zinc-200"
-                >
-                  Set Password
-                </button>
-              </div>
+              {!crewReadOnly ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={sendResetLink}
+                    className="rounded-md border border-zinc-700 px-2.5 py-1.5 text-xs font-bold uppercase tracking-wide text-zinc-200"
+                  >
+                    Send Password Reset Link
+                  </button>
+                  <div className="mt-3 flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="password"
+                      value={draft.tempPassword}
+                      onChange={(e) => setDraft((v) => ({ ...v, tempPassword: e.target.value }))}
+                      placeholder="Set temporary password"
+                      className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+                    />
+                    <button
+                      type="button"
+                      onClick={saveTempPassword}
+                      className="rounded-md border border-zinc-700 px-3 py-2 text-xs font-bold uppercase tracking-wide text-zinc-200"
+                    >
+                      Set Password
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <p className="text-xs text-zinc-500">Account actions are admin-only.</p>
+              )}
               {editingCrew.lastResetRequestedAt && (
                 <p className="mt-2 text-xs text-zinc-500">
                   Last reset: {new Date(editingCrew.lastResetRequestedAt).toLocaleString()}

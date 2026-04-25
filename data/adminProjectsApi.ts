@@ -180,6 +180,7 @@ export interface CreateCrewRequest {
   rateShootHour: number;
   rateEditHour: number;
   active?: boolean;
+  systemRole?: CrewProfile['systemRole'];
 }
 
 export interface UpdateCrewRequest extends Partial<CreateCrewRequest> {

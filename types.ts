@@ -120,10 +120,14 @@ export interface CrewAvailability {
   notes?: string;
 }
 
+/** HQ login tier on a people record; distinct from on-set craft `role`. Never CLIENT. */
+export type CrewHqSystemRole = UserRole.ADMIN | UserRole.PROJECT_MANAGER | UserRole.STAFF;
+
 export interface CrewProfile {
   id: string;
   displayName: string;
   role: 'director' | 'dp' | 'editor' | 'producer' | 'audio' | 'other';
+  systemRole: CrewHqSystemRole;
   email: string;
   phone?: string;
   rateShootHour: number;

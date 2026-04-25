@@ -21,6 +21,7 @@ import type {
   ProjectStageTransition,
   RiskItem,
 } from '../types';
+import { UserRole } from '../types';
 import { getProjectAssetStorageAdapter } from '../lib/projectAssetStorage';
 
 export const MOCK_CLIENTS: ClientProfile[] = [
@@ -86,11 +87,18 @@ export const MOCK_CLIENTS: ClientProfile[] = [
   },
 ];
 
+function nextCrewId(): string {
+  const nums = MOCK_CREW.map((c) => Number.parseInt(String(c.id).replace(/^cr-/, ''), 10)).filter((n) => Number.isFinite(n));
+  const max = nums.length ? Math.max(...nums) : 0;
+  return `cr-${max + 1}`;
+}
+
 export const MOCK_CREW: CrewProfile[] = [
   {
     id: 'cr-1',
     displayName: 'A. Vance',
     role: 'director',
+    systemRole: UserRole.STAFF,
     email: 'a@torp.life',
     phone: '(312) 555-0100',
     rateShootHour: 175,
@@ -115,6 +123,7 @@ export const MOCK_CREW: CrewProfile[] = [
     id: 'cr-2',
     displayName: 'M. Reyes',
     role: 'dp',
+    systemRole: UserRole.STAFF,
     email: 'm@torp.life',
     phone: '(312) 555-0102',
     rateShootHour: 100,
@@ -138,6 +147,7 @@ export const MOCK_CREW: CrewProfile[] = [
     id: 'cr-3',
     displayName: 'J. Park',
     role: 'editor',
+    systemRole: UserRole.STAFF,
     email: 'j@torp.life',
     phone: '(312) 555-0103',
     rateShootHour: 100,
@@ -156,6 +166,69 @@ export const MOCK_CREW: CrewProfile[] = [
       ],
       exceptions: [],
       notes: 'Primary post workflow window.',
+    },
+  },
+  {
+    id: 'cr-4',
+    displayName: 'ROB R',
+    role: 'other',
+    systemRole: UserRole.ADMIN,
+    email: 'info@torp.life',
+    phone: '',
+    rateShootHour: 0,
+    rateEditHour: 0,
+    active: true,
+    assignedProjectIds: [],
+    availability: 'Org admin',
+    availabilityDetail: {
+      timezone: 'America/Chicago',
+      windows: [{ id: 'av-r1', dayOfWeek: 1, startTime: '09:00', endTime: '17:00' }],
+      exceptions: [],
+      notes: 'HQ admin',
+    },
+  },
+  {
+    id: 'cr-5',
+    displayName: 'William Fairbanks',
+    role: 'other',
+    systemRole: UserRole.ADMIN,
+    email: 'william@torp.life',
+    phone: '',
+    rateShootHour: 0,
+    rateEditHour: 0,
+    active: true,
+    assignedProjectIds: [],
+    availability: 'Org admin',
+    availabilityDetail: {
+      timezone: 'America/New_York',
+      windows: [{ id: 'av-w1', dayOfWeek: 1, startTime: '09:00', endTime: '17:00' }],
+      exceptions: [],
+      notes: 'HQ admin',
+    },
+  },
+  {
+    id: 'cr-6',
+    displayName: 'Jayden Price',
+    role: 'producer',
+    systemRole: UserRole.PROJECT_MANAGER,
+    email: 'jp@torp.life',
+    phone: '',
+    rateShootHour: 0,
+    rateEditHour: 0,
+    active: true,
+    assignedProjectIds: ['p1', 'p2'],
+    availability: 'PM coverage',
+    availabilityDetail: {
+      timezone: 'America/Chicago',
+      windows: [
+        { id: 'av-j1', dayOfWeek: 1, startTime: '08:00', endTime: '18:00' },
+        { id: 'av-j2', dayOfWeek: 2, startTime: '08:00', endTime: '18:00' },
+        { id: 'av-j3', dayOfWeek: 3, startTime: '08:00', endTime: '18:00' },
+        { id: 'av-j4', dayOfWeek: 4, startTime: '08:00', endTime: '18:00' },
+        { id: 'av-j5', dayOfWeek: 5, startTime: '09:00', endTime: '15:00' },
+      ],
+      exceptions: [],
+      notes: 'Project coordination',
     },
   },
 ];
@@ -1088,6 +1161,7 @@ export function createCrewMemberProfile(input: {
   rateShootHour: number;
   rateEditHour: number;
   active?: boolean;
+  systemRole?: CrewProfile['systemRole'];
 }): { ok: true; crew: CrewProfile } | { ok: false; error: string } {
   const displayName = input.displayName.trim();
   const email = normalizeEmail(input.email);
@@ -1101,9 +1175,10 @@ export function createCrewMemberProfile(input: {
   }
   const availabilityDetail = defaultAvailability();
   const crew: CrewProfile = {
-    id: `cr-${MOCK_CREW.length + 1}`,
+    id: nextCrewId(),
     displayName,
     role: input.role,
+    systemRole: input.systemRole ?? UserRole.STAFF,
     email,
     phone: input.phone?.trim() || '',
     rateShootHour: input.rateShootHour,
@@ -1122,6 +1197,7 @@ export function updateCrewMemberProfile(
   patch: Partial<{
     displayName: string;
     role: CrewProfile['role'];
+    systemRole: CrewProfile['systemRole'];
     email: string;
     phone?: string;
     rateShootHour: number;
@@ -1146,6 +1222,7 @@ export function updateCrewMemberProfile(
     crew.displayName = next;
   }
   if (patch.role) crew.role = patch.role;
+  if (patch.systemRole !== undefined) crew.systemRole = patch.systemRole;
   if (patch.phone !== undefined) crew.phone = patch.phone.trim();
   if (patch.rateShootHour !== undefined) {
     if (patch.rateShootHour < 0) return { ok: false, error: 'Shoot rate must be non-negative.' };

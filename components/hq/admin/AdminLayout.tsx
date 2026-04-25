@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import React, { useMemo, useState } from 'react';
+import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   Building2,
   LayoutDashboard,
@@ -16,11 +16,28 @@ import {
   Sun,
   X,
 } from 'lucide-react';
-import { useAuth } from '../../../lib/auth';
+import { useAuth, type AuthUser } from '../../../lib/auth';
 import { useAdminTheme } from '../../../lib/adminTheme';
+import { canHqAdminAccessPath, hqAdminNavIdsForRole } from '../../../lib/hqAccess';
 import { UserRole } from '../../../types';
 
-type NavItem = { id: string; to: string; label: string; icon: React.ReactNode; match: (p: string) => boolean };
+type NavItem = {
+  id: string;
+  to: string;
+  label: string;
+  icon: React.ReactNode;
+  match: (p: string) => boolean;
+};
+
+function hqUserBadge(user: AuthUser | null): string {
+  if (!user) return '…';
+  if (user.role === UserRole.PROJECT_MANAGER) return 'PM';
+  const name = user.displayName?.trim() || user.email || '';
+  if (!name) return 'HQ';
+  const parts = name.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
 
 const nav: NavItem[] = [
   {
@@ -96,9 +113,15 @@ const AdminLayout: React.FC = () => {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const title = pageTitle(pathname);
   const isDark = theme === 'dark';
+  const allowedNavIds = useMemo(() => new Set(hqAdminNavIdsForRole(user?.role)), [user?.role]);
+  const filteredNav = useMemo(() => nav.filter((item) => allowedNavIds.has(item.id)), [allowedNavIds]);
   const middleDockIds = new Set(['crew', 'clients']);
-  const primaryNav = nav.filter((item) => !middleDockIds.has(item.id));
-  const middleDockNav = nav.filter((item) => middleDockIds.has(item.id));
+  const primaryNav = filteredNav.filter((item) => !middleDockIds.has(item.id));
+  const middleDockNav = filteredNav.filter((item) => middleDockIds.has(item.id));
+
+  if (user && !canHqAdminAccessPath(pathname, user.role)) {
+    return <Navigate to="/hq/admin" replace />;
+  }
 
   const onLogout = () => {
     logout();
@@ -238,7 +261,7 @@ const AdminLayout: React.FC = () => {
               }`}
               title={user?.displayName || 'HQ'}
             >
-              {user?.role === UserRole.PROJECT_MANAGER ? 'PM' : 'A'}
+              {hqUserBadge(user)}
             </div>
           </div>
         </header>

@@ -9,11 +9,16 @@ import { useAuth } from '../../lib/auth';
 const HQIndexRedirect: React.FC = () => {
   const { user } = useAuth();
 
-  if (!user || (user.role !== UserRole.ADMIN && user.role !== UserRole.STAFF)) {
+  if (
+    !user ||
+    (user.role !== UserRole.ADMIN &&
+      user.role !== UserRole.PROJECT_MANAGER &&
+      user.role !== UserRole.STAFF)
+  ) {
     return <Navigate to="/hq/login" replace />;
   }
 
-  if (user.role === UserRole.ADMIN) {
+  if (user.role === UserRole.ADMIN || user.role === UserRole.PROJECT_MANAGER) {
     return <Navigate to="/hq/admin" replace />;
   }
 

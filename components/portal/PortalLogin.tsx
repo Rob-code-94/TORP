@@ -10,7 +10,7 @@ const PortalLogin: React.FC = () => {
   const navigate = useNavigate();
 
   const goClient = () => {
-    loginAs(UserRole.CLIENT, 'Client');
+    loginAs({ role: UserRole.CLIENT, displayName: 'Client' });
     navigate('/portal', { replace: true });
   };
 
