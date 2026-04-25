@@ -73,7 +73,6 @@ import {
   formatStage,
   invoiceStatusClassForTheme,
   proposalStatusClassForTheme,
-  stageClassForTheme,
 } from './adminFormat';
 import AdminFormDrawer from './AdminFormDrawer';
 
@@ -152,6 +151,8 @@ const AdminProjectDetail: React.FC = () => {
     mediaType: 'video' as ProjectAssetType,
     sourceType: 'upload' as ProjectAssetSourceType,
     uploadFilename: '',
+    /** Optional preview/reference link when source is upload. */
+    uploadReferenceUrl: '',
     externalUrl: '',
     version: 'v0.1',
     status: 'internal' as ProjectAssetStatus,
@@ -169,6 +170,7 @@ const AdminProjectDetail: React.FC = () => {
     step: 'post_production' as DeliverableStep,
     status: 'not_started' as DeliverableStatus,
     linkedAssetIds: [] as string[],
+    referenceLink: '',
     acceptanceCriteria: '',
     notes: '',
   });
@@ -349,6 +351,7 @@ const AdminProjectDetail: React.FC = () => {
         mediaType: 'video',
         sourceType: 'upload',
         uploadFilename: '',
+        uploadReferenceUrl: '',
         externalUrl: '',
         version: 'v0.1',
         status: 'internal',
@@ -364,7 +367,8 @@ const AdminProjectDetail: React.FC = () => {
         mediaType: asset.type,
         sourceType: asset.sourceType ?? 'upload',
         uploadFilename: asset.storage?.filename || '',
-        externalUrl: asset.sourceUrl || '',
+        uploadReferenceUrl: (asset.sourceType === 'upload' || !asset.sourceType) && asset.sourceUrl ? asset.sourceUrl : '',
+        externalUrl: asset.sourceType === 'external_link' ? (asset.sourceUrl || '') : '',
         version: asset.version,
         status: asset.status,
         clientVisible: asset.clientVisible,
@@ -395,6 +399,7 @@ const AdminProjectDetail: React.FC = () => {
         step: 'post_production',
         status: 'not_started',
         linkedAssetIds: [],
+        referenceLink: '',
         acceptanceCriteria: '',
         notes: '',
       });
@@ -410,6 +415,7 @@ const AdminProjectDetail: React.FC = () => {
         step: deliverable.step ?? 'post_production',
         status: deliverable.status,
         linkedAssetIds: deliverable.linkedAssetIds || [],
+        referenceLink: deliverable.referenceLink || '',
         acceptanceCriteria: deliverable.acceptanceCriteria || '',
         notes: deliverable.notes || '',
       });
@@ -441,8 +447,19 @@ const AdminProjectDetail: React.FC = () => {
   };
 
   return (
-    <div className="max-w-6xl min-w-0 space-y-6">
-      <div className="sticky top-0 z-20 rounded-xl border border-zinc-800 bg-zinc-950/95 backdrop-blur px-3 py-3 sm:px-4">
+    <div className="max-w-6xl min-w-0">
+      <div
+        className={[
+          'sticky top-0 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 pb-3 space-y-3 backdrop-blur border-b',
+          isDark ? 'bg-zinc-950/90 border-zinc-800' : 'bg-zinc-50/95 border-zinc-200',
+        ].join(' ')}
+      >
+        <div
+          className={[
+            'rounded-xl border px-3 py-3 sm:px-4',
+            isDark ? 'border-zinc-800 bg-zinc-900/40' : 'border-zinc-200 bg-white/80',
+          ].join(' ')}
+        >
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <Link
@@ -458,9 +475,6 @@ const AdminProjectDetail: React.FC = () => {
           </p>
         </div>
         <div className="flex flex-col sm:items-end gap-2 sm:text-right text-xs text-zinc-500 min-w-0">
-          <span className={`self-end text-[10px] uppercase font-bold tracking-wide px-2 py-0.5 rounded ${stageClassForTheme(project.stage, theme)}`}>
-            {formatStage(project.stage)}
-          </span>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <select
               value={project.stage}
@@ -489,9 +503,9 @@ const AdminProjectDetail: React.FC = () => {
           {stageMessage && <p className="text-xs text-zinc-400">{stageMessage}</p>}
         </div>
         </div>
-      </div>
+        </div>
 
-      <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 min-w-0">
         {tabBtn('overview', 'Overview')}
         {tabBtn('brief', 'Brief')}
         {tabBtn('planner', 'Planner')}
@@ -501,8 +515,10 @@ const AdminProjectDetail: React.FC = () => {
         {tabBtn('controls', 'Controls')}
         {tabBtn('financials', 'Financials')}
         {tabBtn('activity', 'Activity')}
+        </div>
       </div>
 
+      <div className="space-y-6 mt-6 min-w-0">
       {feedback && (
         <div
           className={`rounded-xl border px-3 py-2 text-xs ${
@@ -1220,6 +1236,9 @@ const AdminProjectDetail: React.FC = () => {
                     {a.sourceType === 'external_link'
                       ? (a.sourceUrl || 'External link not set')
                       : (a.storage?.path || 'Upload path not set')}
+                    {a.sourceType !== 'external_link' && a.sourceUrl ? (
+                      <span className="block text-zinc-500 mt-0.5">Link: {a.sourceUrl}</span>
+                    ) : null}
                   </p>
                 </div>
                 <span
@@ -1295,12 +1314,16 @@ const AdminProjectDetail: React.FC = () => {
                       }
                       setAssetDrawerBusy(true);
                       if (openAssetId === '__new__') {
+                        const uploadRef = assetDraft.uploadReferenceUrl.trim();
                         createProjectAsset({
                           projectId: project.id,
                           label: assetDraft.label.trim(),
                           type: assetDraft.mediaType,
                           sourceType: assetDraft.sourceType,
-                          sourceUrl: assetDraft.sourceType === 'external_link' ? assetDraft.externalUrl.trim() : undefined,
+                          sourceUrl:
+                            assetDraft.sourceType === 'external_link'
+                              ? assetDraft.externalUrl.trim()
+                              : uploadRef || undefined,
                           storage: assetDraft.sourceType === 'upload' ? { filename: assetDraft.uploadFilename.trim() } : undefined,
                           status: assetDraft.status,
                           clientVisible: assetDraft.clientVisible,
@@ -1308,11 +1331,15 @@ const AdminProjectDetail: React.FC = () => {
                           notes: assetDraft.notes.trim(),
                         }, actorName);
                       } else if (openAssetId) {
+                        const uploadRef = assetDraft.uploadReferenceUrl.trim();
                         updateProjectAsset(openAssetId, {
                           label: assetDraft.label.trim(),
                           type: assetDraft.mediaType,
                           sourceType: assetDraft.sourceType,
-                          sourceUrl: assetDraft.sourceType === 'external_link' ? assetDraft.externalUrl.trim() : '',
+                          sourceUrl:
+                            assetDraft.sourceType === 'external_link'
+                              ? assetDraft.externalUrl.trim()
+                              : uploadRef,
                           storage: assetDraft.sourceType === 'upload' ? { filename: assetDraft.uploadFilename.trim() } : undefined,
                           status: assetDraft.status,
                           clientVisible: assetDraft.clientVisible,
@@ -1357,9 +1384,32 @@ const AdminProjectDetail: React.FC = () => {
                 </select>
               </div>
               {assetDraft.sourceType === 'upload' ? (
-                <input value={assetDraft.uploadFilename} onChange={(e) => setAssetDraft((current) => ({ ...current, uploadFilename: e.target.value }))} placeholder="Upload filename (e.g. hero-cut-v3.mp4)" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+                <div className="space-y-2">
+                  <input value={assetDraft.uploadFilename} onChange={(e) => setAssetDraft((current) => ({ ...current, uploadFilename: e.target.value }))} placeholder="Upload filename (e.g. hero-cut-v3.mp4)" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wide text-zinc-500 mb-1">Link / URL (optional)</p>
+                    <input
+                      value={assetDraft.uploadReferenceUrl}
+                      onChange={(e) => setAssetDraft((current) => ({ ...current, uploadReferenceUrl: e.target.value }))}
+                      type="url"
+                      inputMode="url"
+                      placeholder="https://… (Frame.io, review link, or hosted file)"
+                      className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+                    />
+                  </div>
+                </div>
               ) : (
-                <input value={assetDraft.externalUrl} onChange={(e) => setAssetDraft((current) => ({ ...current, externalUrl: e.target.value }))} placeholder="External URL" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+                <div>
+                  <p className="text-[11px] uppercase tracking-wide text-zinc-500 mb-1">Link / URL</p>
+                  <input
+                    value={assetDraft.externalUrl}
+                    onChange={(e) => setAssetDraft((current) => ({ ...current, externalUrl: e.target.value }))}
+                    type="url"
+                    inputMode="url"
+                    placeholder="https://…"
+                    className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+                  />
+                </div>
               )}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <input value={assetDraft.version} onChange={(e) => setAssetDraft((current) => ({ ...current, version: e.target.value }))} placeholder="Version" className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
@@ -1402,9 +1452,20 @@ const AdminProjectDetail: React.FC = () => {
                   <p className="text-xs text-zinc-600 mt-1">
                     Step {d.step?.replaceAll('_', ' ') || 'post production'} · {d.linkedAssetIds.length} linked asset(s)
                   </p>
+                  {d.referenceLink && (
+                    <p className="text-xs text-zinc-500 mt-1 min-w-0 break-all">
+                      <span className="text-zinc-600">Link </span>
+                      {/^https?:\/\//i.test(d.referenceLink) ? (
+                        <a href={d.referenceLink} className="text-zinc-300 underline" target="_blank" rel="noreferrer">
+                          {d.referenceLink}
+                        </a>
+                      ) : (
+                        d.referenceLink
+                      )}
+                    </p>
+                  )}
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[10px] uppercase rounded border border-zinc-700 px-2 py-0.5 text-zinc-200 self-start">{d.status.replaceAll('_', ' ')}</span>
+                <div className="flex flex-wrap items-center gap-2 min-w-0">
                   <select
                     value={d.status}
                     onChange={(e) => {
@@ -1503,6 +1564,7 @@ const AdminProjectDetail: React.FC = () => {
                         step: deliverableDraft.step,
                         status: deliverableDraft.status,
                         linkedAssetIds: deliverableDraft.linkedAssetIds,
+                        referenceLink: deliverableDraft.referenceLink.trim() || undefined,
                         acceptanceCriteria: deliverableDraft.acceptanceCriteria.trim(),
                         notes: deliverableDraft.notes.trim(),
                       };
@@ -1577,6 +1639,17 @@ const AdminProjectDetail: React.FC = () => {
                   ))}
                   {assets.length === 0 && <span className="text-xs text-zinc-500">No assets yet.</span>}
                 </div>
+              </div>
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-zinc-500 mb-1">Link / URL (optional)</p>
+                <input
+                  value={deliverableDraft.referenceLink}
+                  onChange={(e) => setDeliverableDraft((current) => ({ ...current, referenceLink: e.target.value }))}
+                  type="url"
+                  inputMode="url"
+                  placeholder="https://… (review, delivery, or reference)"
+                  className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+                />
               </div>
               <textarea value={deliverableDraft.acceptanceCriteria} onChange={(e) => setDeliverableDraft((current) => ({ ...current, acceptanceCriteria: e.target.value }))} rows={2} placeholder="Acceptance criteria" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
               <textarea value={deliverableDraft.notes} onChange={(e) => setDeliverableDraft((current) => ({ ...current, notes: e.target.value }))} rows={2} placeholder="Notes" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
@@ -1943,6 +2016,7 @@ const AdminProjectDetail: React.FC = () => {
         </div>
       ))}
 
+      </div>
     </div>
   );
 };

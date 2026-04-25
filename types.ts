@@ -300,6 +300,8 @@ export interface ProjectDeliverable {
   step?: DeliverableStep;
   status: DeliverableStatus;
   linkedAssetIds: string[];
+  /** Optional review, Frame.io, or delivery link. */
+  referenceLink?: string;
   acceptanceCriteria?: string;
   notes?: string;
 }

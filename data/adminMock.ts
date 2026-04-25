@@ -1118,11 +1118,12 @@ export function createProjectAsset(input: Omit<ProjectAsset, 'id' | 'updatedAt' 
       filename: normalizedFile,
     }
     : undefined;
+  const trimmedRef = input.sourceUrl?.trim();
   const item: ProjectAsset = {
     ...input,
     id,
     sourceType,
-    sourceUrl: sourceType === 'external_link' ? input.sourceUrl?.trim() || '' : undefined,
+    sourceUrl: sourceType === 'external_link' ? trimmedRef || '' : (trimmedRef || undefined),
     storage,
     notes: input.notes ?? '',
     updatedAt: new Date().toISOString(),
@@ -1157,9 +1158,13 @@ export function updateProjectAsset(assetId: string, patch: Partial<ProjectAsset>
       filename: nextStorageFilename,
     }
     : undefined;
+  const nextSourceUrl =
+    nextSourceType === 'external_link'
+      ? (patch.sourceUrl !== undefined ? patch.sourceUrl : item.sourceUrl) ?? ''
+      : (patch.sourceUrl !== undefined ? (patch.sourceUrl || undefined) : (item.sourceUrl || undefined));
   Object.assign(item, patch, {
     sourceType: nextSourceType,
-    sourceUrl: nextSourceType === 'external_link' ? (patch.sourceUrl ?? item.sourceUrl ?? '') : undefined,
+    sourceUrl: nextSourceUrl,
     storage: nextStorage,
     notes: patch.notes ?? item.notes ?? '',
     updatedAt: new Date().toISOString(),
@@ -1196,6 +1201,7 @@ export function createDeliverable(input: Omit<ProjectDeliverable, 'id'>, actorNa
     step: input.step ?? 'post_production',
     acceptanceCriteria: input.acceptanceCriteria ?? '',
     notes: input.notes ?? '',
+    referenceLink: input.referenceLink?.trim() || undefined,
   };
   MOCK_PROJECT_DELIVERABLES.unshift(item);
   pushActivity({
@@ -1215,6 +1221,8 @@ export function updateDeliverable(id: string, patch: Partial<ProjectDeliverable>
     step: patch.step ?? item.step ?? 'post_production',
     acceptanceCriteria: patch.acceptanceCriteria ?? item.acceptanceCriteria ?? '',
     notes: patch.notes ?? item.notes ?? '',
+    referenceLink:
+      patch.referenceLink !== undefined ? (patch.referenceLink.trim() || undefined) : item.referenceLink,
   });
   pushActivity({
     projectId: item.projectId,
