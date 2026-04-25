@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { CalendarPlus, Share2 } from 'lucide-react';
 import { getProjectById, MOCK_ADMIN_PROJECTS, MOCK_PLANNER, PLANNER_COLUMN_LABEL } from '../../../data/adminMock';
 import { openGoogleCalendarInNewTab, payloadFromPlannerItem } from '../../../lib/calendarEvent';
@@ -15,9 +15,16 @@ const COLUMNS: PlannerBoardColumn[] = ['queue', 'active', 'post', 'client_review
 type View = 'list' | 'board' | 'calendar';
 
 const AdminPlanner: React.FC = () => {
+  const { search } = useLocation();
   const { theme } = useAdminTheme();
   const isDark = theme === 'dark';
-  const [view, setView] = useState<View>('list');
+  const initialParams = useMemo(() => new URLSearchParams(search), [search]);
+  const initialView = initialParams.get('view');
+  const initialMode = initialParams.get('mode');
+  const initialDate = initialParams.get('date');
+  const [view, setView] = useState<View>(
+    initialView === 'list' || initialView === 'board' || initialView === 'calendar' ? initialView : 'calendar'
+  );
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [calendarContext, setCalendarContext] = useState<CalendarProjectOption | undefined>();
   const [calendarInitial, setCalendarInitial] = useState<{
@@ -114,7 +121,7 @@ const AdminPlanner: React.FC = () => {
             Quick add to calendar
           </button>
           <div className="flex rounded-lg border border-zinc-800 p-0.5 bg-zinc-950/80 w-full sm:w-fit min-w-0 overflow-x-auto">
-            {(['list', 'board', 'calendar'] as const).map((v) => (
+            {(['calendar', 'list', 'board'] as const).map((v) => (
               <button
                 key={v}
                 type="button"
@@ -238,6 +245,8 @@ const AdminPlanner: React.FC = () => {
           items={items}
           onAddToGoogle={onAddPlannerToGoogle}
           onOpenCalendarSheet={openCalendarForItem}
+          initialMode={initialMode === 'month' || initialMode === 'week' || initialMode === 'day' ? initialMode : undefined}
+          initialCursorYmd={initialDate || undefined}
         />
       )}
 

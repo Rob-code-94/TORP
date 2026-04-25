@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CalendarPlus, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { PlannerItem } from '../../../types';
@@ -67,11 +67,20 @@ interface PlannerCalendarProps {
   items: PlannerItem[];
   onAddToGoogle?: (item: PlannerItem) => void;
   onOpenCalendarSheet?: (item: PlannerItem) => void;
+  initialMode?: CalMode;
+  initialCursorYmd?: string;
 }
 
-const PlannerCalendar: React.FC<PlannerCalendarProps> = ({ items, onAddToGoogle, onOpenCalendarSheet }) => {
-  const [mode, setMode] = useState<CalMode>('month');
+const PlannerCalendar: React.FC<PlannerCalendarProps> = ({
+  items,
+  onAddToGoogle,
+  onOpenCalendarSheet,
+  initialMode,
+  initialCursorYmd,
+}) => {
+  const [mode, setMode] = useState<CalMode>(initialMode || 'month');
   const [cursor, setCursor] = useState(() => {
+    if (initialCursorYmd) return startOfDay(parseYMD(initialCursorYmd));
     if (items.length) return startOfDay(parseYMD(items[0].dueDate));
     return startOfDay(new Date());
   });
@@ -86,6 +95,15 @@ const PlannerCalendar: React.FC<PlannerCalendarProps> = ({ items, onAddToGoogle,
     x.setHours(0, 0, 0, 0);
     return x;
   }
+
+  useEffect(() => {
+    if (initialMode) setMode(initialMode);
+  }, [initialMode]);
+
+  useEffect(() => {
+    if (!initialCursorYmd) return;
+    setCursor(startOfDay(parseYMD(initialCursorYmd)));
+  }, [initialCursorYmd]);
 
   const byKey = useMemo(() => {
     const m = new Map<string, PlannerItem[]>();
@@ -144,11 +162,31 @@ const PlannerCalendar: React.FC<PlannerCalendarProps> = ({ items, onAddToGoogle,
 
   return (
     <div className="space-y-4 w-full min-w-0 max-w-6xl overflow-x-hidden">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-zinc-500">
-          Month, week, and day grids — items placed on their due date (mock; times optional later).
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
+      <p className="text-sm text-zinc-500">
+        Month, week, and day grids — items placed on their due date (mock; times optional later).
+      </p>
+
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 pb-3 min-w-0">
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            type="button"
+            onClick={navPrev}
+            className="p-1.5 rounded-md border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-600"
+            aria-label="Previous"
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <button
+            type="button"
+            onClick={navNext}
+            className="p-1.5 rounded-md border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-600"
+            aria-label="Next"
+          >
+            <ChevronRight size={18} />
+          </button>
+        </div>
+        <h3 className="text-sm font-semibold text-white text-center flex-1 min-w-[180px] truncate px-2">{dayRangeTitle}</h3>
+        <div className="flex items-center gap-2 shrink-0">
           <div className="flex rounded-lg border border-zinc-800 p-0.5 bg-zinc-950/80">
             {(['month', 'week', 'day'] as const).map((m) => (
               <button
@@ -171,29 +209,6 @@ const PlannerCalendar: React.FC<PlannerCalendarProps> = ({ items, onAddToGoogle,
             Today
           </button>
         </div>
-      </div>
-
-      <div className="flex items-center justify-between gap-2 border-b border-zinc-800 pb-3">
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={navPrev}
-            className="p-1.5 rounded-md border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-600"
-            aria-label="Previous"
-          >
-            <ChevronLeft size={18} />
-          </button>
-          <button
-            type="button"
-            onClick={navNext}
-            className="p-1.5 rounded-md border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-600"
-            aria-label="Next"
-          >
-            <ChevronRight size={18} />
-          </button>
-        </div>
-        <h3 className="text-sm font-semibold text-white text-center flex-1 truncate px-2">{dayRangeTitle}</h3>
-        <div className="w-[72px]" aria-hidden />
       </div>
 
       {mode === 'month' && (
