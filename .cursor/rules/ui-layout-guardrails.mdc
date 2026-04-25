@@ -1,0 +1,36 @@
+---
+description: Enforce no horizontal page scroll and complete mobile UX behavior
+alwaysApply: true
+---
+
+# UI Layout Guardrails
+
+## Core requirement
+
+- Treat horizontal page scroll as a bug. Vertical scroll is allowed.
+- All new or changed UI must be usable on mobile and desktop.
+
+## Horizontal overflow policy
+
+- Do not rely on page-level horizontal scrolling (`body`, root app shell, or page wrappers).
+- Before adding width, prefer stacking/wrapping (`flex-col`, `grid-cols-1`) and truncation.
+- If content is inherently wide (large table/calendar/timeline), confine overflow to a local panel with `overflow-x-auto` and clear visual boundaries.
+- Keep root shells constrained with `min-w-0` on flex children.
+
+## Mobile-complete behavior
+
+- Every feature/action available on desktop must remain reachable on mobile.
+- Desktop sidebars must have a mobile equivalent (drawer/sheet/menu), not hidden-only nav.
+- Interactive targets should be touch-friendly and visible without horizontal panning.
+
+## Implementation defaults
+
+- Favor viewport-aware layouts: sticky headers/actions, collapsible sections, tabs/segmented controls.
+- Avoid fixed widths that exceed mobile viewport unless inside a scoped overflow container.
+
+## Validation checklist for UI changes
+
+- [ ] No horizontal page scroll at 320, 375, and 390 widths.
+- [ ] Primary actions and navigation are reachable on mobile.
+- [ ] Any necessary horizontal overflow is scoped to a component-level container.
+- [ ] Desktop and mobile navigation paths are equivalent for key routes.

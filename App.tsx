@@ -9,9 +9,17 @@ import PortalLogin from './components/portal/PortalLogin';
 import HQShell from './components/hq/HQShell';
 import PortalShell from './components/portal/PortalShell';
 import RequireAuth from './components/common/RequireAuth';
-import AdminView from './components/dashboard/AdminView';
 import StaffView from './components/dashboard/StaffView';
 import ClientView from './components/dashboard/ClientView';
+import AdminLayout from './components/hq/admin/AdminLayout';
+import AdminCommand from './components/hq/admin/AdminCommand';
+import AdminProjects from './components/hq/admin/AdminProjects';
+import AdminProjectDetail from './components/hq/admin/AdminProjectDetail';
+import AdminPlanner from './components/hq/admin/AdminPlanner';
+import AdminFinancials from './components/hq/admin/AdminFinancials';
+import AdminCrew from './components/hq/admin/AdminCrew';
+import AdminClients from './components/hq/admin/AdminClients';
+import AdminSettings from './components/hq/admin/AdminSettings';
 
 /**
  * Router shell: `/` = public marketing; `/hq/*` = internal HQ; `/portal/*` = client.
@@ -28,12 +36,19 @@ const App: React.FC = () => {
             path="/hq/admin"
             element={
               <RequireAuth role={UserRole.ADMIN} redirectTo="/hq/login">
-                <HQShell role={UserRole.ADMIN}>
-                  <AdminView />
-                </HQShell>
+                <AdminLayout />
               </RequireAuth>
             }
-          />
+          >
+            <Route index element={<AdminCommand />} />
+            <Route path="projects" element={<AdminProjects />} />
+            <Route path="projects/:projectId" element={<AdminProjectDetail />} />
+            <Route path="planner" element={<AdminPlanner />} />
+            <Route path="financials" element={<AdminFinancials />} />
+            <Route path="crew" element={<AdminCrew />} />
+            <Route path="clients" element={<AdminClients />} />
+            <Route path="settings" element={<AdminSettings />} />
+          </Route>
           <Route
             path="/hq/staff"
             element={
