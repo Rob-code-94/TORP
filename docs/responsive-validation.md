@@ -42,3 +42,25 @@ These are allowed, local scroll regions (not page-level):
 
 - Build: `npm run build` (pass)
 - Overflow audit: searched admin files for `min-w-*` and `overflow-x-*` to confirm overflow is scoped.
+
+## PRJ-003 / PRJ-005 implementation notes
+
+### Component task map
+
+- `AdminProjects`
+  - Added list/board/calendar mode toggles.
+  - Added mobile card view with equivalent open/select actions.
+  - Added saved views, stage filter, and bulk-action controls with role gates.
+- `AdminProjectDetail`
+  - Added sticky context bar with stage transition control.
+  - Added explicit tabs for `Deliverables` and `Controls`.
+  - Added per-tab state harness (loading/empty/error/success) for UI state QA.
+- `AdminLayout`
+  - Added PM-aware shell labels/avatar badges.
+
+### Responsive QA checklist (completed)
+
+- [x] At `320`, projects list is card-first and bulk controls wrap without page overflow.
+- [x] At `375`, board overflow is confined to local panel (`overflow-x-auto`), not page root.
+- [x] At `390`, detail sticky actions remain reachable and tab controls wrap.
+- [x] Desktop and mobile both expose project open, filtering, and stage visibility.

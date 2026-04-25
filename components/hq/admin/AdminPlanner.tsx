@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { MOCK_PLANNER, PLANNER_COLUMN_LABEL } from '../../../data/adminMock';
-import { columnLabel, typeLabel } from './adminFormat';
+import { columnLabel, formatAdminDate, typeLabel } from './adminFormat';
 import PlannerCalendar from './PlannerCalendar';
 import type { PlannerBoardColumn, PlannerItem } from '../../../types';
 
@@ -83,7 +83,7 @@ const AdminPlanner: React.FC = () => {
                   <td className="px-3 py-2.5 text-zinc-500">{typeLabel(t.type)}</td>
                   <td className="px-3 py-2.5 text-zinc-500">{columnLabel(t.column)}</td>
                   <td className="px-3 py-2.5 text-zinc-300">{t.assigneeName}</td>
-                  <td className="px-3 py-2.5 text-zinc-500 font-mono text-xs">{t.dueDate}</td>
+                  <td className="px-3 py-2.5 text-zinc-500 font-mono text-xs">{formatAdminDate(t.dueDate)}</td>
                   <td className="px-3 py-2.5 text-zinc-500 text-xs uppercase">{t.priority}</td>
                 </tr>
               ))}
@@ -108,7 +108,7 @@ const AdminPlanner: React.FC = () => {
                   >
                     <p className="text-white font-medium leading-snug">{t.title}</p>
                     <p className="text-[10px] text-zinc-500 mt-1">{t.projectTitle}</p>
-                    <p className="text-[10px] text-zinc-600 mt-0.5 font-mono">{t.dueDate}</p>
+                    <p className="text-[10px] text-zinc-600 mt-0.5 font-mono">{formatAdminDate(t.dueDate)}</p>
                   </div>
                 ))}
                 {board[col].length === 0 && <p className="text-xs text-zinc-600 p-1">—</p>}

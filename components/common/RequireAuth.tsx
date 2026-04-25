@@ -3,7 +3,7 @@ import { Navigate } from 'react-router-dom';
 import { AuthRole, useAuth } from '../../lib/auth';
 
 interface RequireAuthProps {
-  role: AuthRole;
+  roles: AuthRole[];
   redirectTo: string;
   children: React.ReactNode;
 }
@@ -12,10 +12,10 @@ interface RequireAuthProps {
  * Route guard: renders children only when the mock session matches `role`.
  * Phase 2: swap to Firebase custom claims while keeping the same API.
  */
-const RequireAuth: React.FC<RequireAuthProps> = ({ role, redirectTo, children }) => {
+const RequireAuth: React.FC<RequireAuthProps> = ({ roles, redirectTo, children }) => {
   const { user } = useAuth();
 
-  if (!user || user.role !== role) {
+  if (!user || !roles.includes(user.role)) {
     return <Navigate to={redirectTo} replace />;
   }
 

@@ -20,6 +20,7 @@ import AdminFinancials from './components/hq/admin/AdminFinancials';
 import AdminCrew from './components/hq/admin/AdminCrew';
 import AdminClients from './components/hq/admin/AdminClients';
 import AdminSettings from './components/hq/admin/AdminSettings';
+import { AdminThemeProvider } from './lib/adminTheme';
 
 /**
  * Router shell: `/` = public marketing; `/hq/*` = internal HQ; `/portal/*` = client.
@@ -35,8 +36,10 @@ const App: React.FC = () => {
           <Route
             path="/hq/admin"
             element={
-              <RequireAuth role={UserRole.ADMIN} redirectTo="/hq/login">
-                <AdminLayout />
+              <RequireAuth roles={[UserRole.ADMIN, UserRole.PROJECT_MANAGER]} redirectTo="/hq/login">
+                <AdminThemeProvider>
+                  <AdminLayout />
+                </AdminThemeProvider>
               </RequireAuth>
             }
           >
@@ -52,7 +55,7 @@ const App: React.FC = () => {
           <Route
             path="/hq/staff"
             element={
-              <RequireAuth role={UserRole.STAFF} redirectTo="/hq/login">
+              <RequireAuth roles={[UserRole.STAFF]} redirectTo="/hq/login">
                 <HQShell role={UserRole.STAFF}>
                   <StaffView />
                 </HQShell>
@@ -63,7 +66,7 @@ const App: React.FC = () => {
           <Route
             path="/portal"
             element={
-              <RequireAuth role={UserRole.CLIENT} redirectTo="/portal/login">
+              <RequireAuth roles={[UserRole.CLIENT]} redirectTo="/portal/login">
                 <PortalShell>
                   <ClientView />
                 </PortalShell>

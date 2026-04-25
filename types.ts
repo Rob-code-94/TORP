@@ -1,6 +1,7 @@
 export enum UserRole {
   PUBLIC = 'PUBLIC',
   ADMIN = 'ADMIN', // Owner
+  PROJECT_MANAGER = 'PROJECT_MANAGER',
   STAFF = 'STAFF', // Crew
   CLIENT = 'CLIENT',
 }
@@ -66,14 +67,12 @@ export interface Shoot {
 
 /** High-level project pipeline (HoneyBook/ClickUp-style). */
 export type ProjectStage =
-  | 'intake'
-  | 'proposal'
-  | 'scheduled'
-  | 'in_production'
-  | 'editing'
-  | 'client_review'
-  | 'revision'
-  | 'approved'
+  | 'inquiry'
+  | 'scope'
+  | 'estimate'
+  | 'pre_production'
+  | 'production'
+  | 'post'
   | 'delivered'
   | 'archived';
 
@@ -105,6 +104,7 @@ export interface CrewProfile {
 
 export interface AdminProject {
   id: string;
+  projectCode?: string;
   title: string;
   clientId: string;
   clientName: string;
@@ -113,7 +113,11 @@ export interface AdminProject {
   stage: ProjectStage;
   status: AdminProjectStatus;
   budget: number;
+  startDate?: string;
   dueDate: string; // ISO date
+  priority?: PlannerItemPriority;
+  riskLevel?: 'low' | 'medium' | 'high' | 'critical';
+  sourceChannel?: 'referral' | 'inbound' | 'outbound' | 'repeat';
   ownerCrewId: string;
   ownerName: string;
   summary: string;
@@ -233,3 +237,79 @@ export interface ProjectExpense {
   category: ExpenseCategory;
   date: string;
 }
+
+export interface ProjectStageTransition {
+  id: string;
+  projectId: string;
+  fromStage: ProjectStage;
+  toStage: ProjectStage;
+  changedBy: string;
+  changedAt: string;
+}
+
+export type DeliverableStatus =
+  | 'not_started'
+  | 'in_progress'
+  | 'ready_for_approval'
+  | 'approved'
+  | 'delivered';
+
+export interface ProjectDeliverable {
+  id: string;
+  projectId: string;
+  label: string;
+  ownerCrewId: string;
+  ownerName: string;
+  dueDate: string;
+  required: boolean;
+  status: DeliverableStatus;
+  linkedAssetIds: string[];
+}
+
+export interface RiskItem {
+  id: string;
+  projectId: string;
+  label: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  status: 'open' | 'monitoring' | 'resolved';
+  ownerName: string;
+  dueDate?: string;
+}
+
+export interface BlockerItem {
+  id: string;
+  projectId: string;
+  label: string;
+  status: 'open' | 'resolved';
+  ownerName: string;
+  dueDate?: string;
+}
+
+export interface DependencyItem {
+  id: string;
+  projectId: string;
+  label: string;
+  dependsOnProjectId?: string;
+  status: 'waiting' | 'active' | 'cleared';
+}
+
+export interface ChangeOrder {
+  id: string;
+  projectId: string;
+  title: string;
+  amount: number;
+  status: 'requested' | 'approved' | 'rejected';
+  requestedBy: string;
+  requestedAt: string;
+}
+
+export type ProjectCapability =
+  | 'project.create'
+  | 'project.edit'
+  | 'project.archive'
+  | 'project.bulk.archive'
+  | 'project.bulk.assign'
+  | 'project.stage.move'
+  | 'project.financial.approve'
+  | 'project.changeOrder.request'
+  | 'project.changeOrder.approve';

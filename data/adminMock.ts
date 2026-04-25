@@ -4,11 +4,19 @@ import type {
   AdminProject,
   AdminProposal,
   AdminShoot,
+  BlockerItem,
+  ChangeOrder,
   ClientProfile,
   CrewProfile,
+  DependencyItem,
   PlannerItem,
+  ProjectCapability,
+  ProjectDeliverable,
   ProjectAsset,
   ProjectExpense,
+  ProjectStage,
+  ProjectStageTransition,
+  RiskItem,
 } from '../types';
 
 export const MOCK_CLIENTS: ClientProfile[] = [
@@ -87,7 +95,7 @@ export const MOCK_ADMIN_PROJECTS: AdminProject[] = [
     clientId: 'cl-1',
     clientName: 'Jordan Brand',
     packageLabel: 'Essentials (5h / 5 deliverables)',
-    stage: 'editing',
+    stage: 'post',
     status: 'active',
     budget: 42000,
     dueDate: '2025-04-12',
@@ -107,7 +115,7 @@ export const MOCK_ADMIN_PROJECTS: AdminProject[] = [
     clientId: 'cl-2',
     clientName: 'Franklin County',
     packageLabel: 'Custom doc + 30s cutdowns',
-    stage: 'in_production',
+    stage: 'production',
     status: 'active',
     budget: 28000,
     dueDate: '2025-05-01',
@@ -127,7 +135,7 @@ export const MOCK_ADMIN_PROJECTS: AdminProject[] = [
     clientId: 'cl-3',
     clientName: 'Sole Classics',
     packageLabel: 'Product + lookbook (custom)',
-    stage: 'client_review',
+    stage: 'post',
     status: 'active',
     budget: 12500,
     dueDate: '2025-03-28',
@@ -147,7 +155,7 @@ export const MOCK_ADMIN_PROJECTS: AdminProject[] = [
     clientId: 'cl-3',
     clientName: 'Sole Classics',
     packageLabel: 'Podcast pack (1 ep)',
-    stage: 'intake',
+    stage: 'inquiry',
     status: 'active',
     budget: 800,
     dueDate: '2025-04-20',
@@ -481,6 +489,20 @@ export const MOCK_ACTIVITY: ActivityEntry[] = [
   },
 ];
 
+function pushActivity(entry: Omit<ActivityEntry, 'id' | 'createdAt' | 'projectTitle'> & { projectTitle?: string }) {
+  const project = getProjectById(entry.projectId);
+  MOCK_ACTIVITY.unshift({
+    id: `ac${MOCK_ACTIVITY.length + 1}`,
+    projectId: entry.projectId,
+    projectTitle: entry.projectTitle || project?.title || 'Unknown project',
+    entityType: entry.entityType,
+    entityLabel: entry.entityLabel,
+    actorName: entry.actorName,
+    action: entry.action,
+    createdAt: new Date().toISOString(),
+  });
+}
+
 function sumOutstandingInvoices(): number {
   return MOCK_INVOICES_ADMIN.filter((i) => i.status !== 'paid' && i.status !== 'void').reduce(
     (s, i) => s + (i.amount - i.amountPaid),
@@ -538,3 +560,183 @@ export const PLANNER_COLUMN_LABEL: Record<PlannerItem['column'], string> = {
   client_review: 'Client',
   complete: 'Complete',
 };
+
+export const PROJECT_STAGE_ORDER: ProjectStage[] = [
+  'inquiry',
+  'scope',
+  'estimate',
+  'pre_production',
+  'production',
+  'post',
+  'delivered',
+  'archived',
+];
+
+export const MOCK_PROJECT_DELIVERABLES: ProjectDeliverable[] = [
+  {
+    id: 'd1',
+    projectId: 'p1',
+    label: '60s master',
+    ownerCrewId: 'cr-3',
+    ownerName: 'J. Park',
+    dueDate: '2025-04-10',
+    required: true,
+    status: 'in_progress',
+    linkedAssetIds: ['a1'],
+  },
+  {
+    id: 'd2',
+    projectId: 'p2',
+    label: '3 min anthem',
+    ownerCrewId: 'cr-2',
+    ownerName: 'M. Reyes',
+    dueDate: '2025-04-28',
+    required: true,
+    status: 'ready_for_approval',
+    linkedAssetIds: ['a3'],
+  },
+];
+
+export const MOCK_RISKS: RiskItem[] = [
+  { id: 'r1', projectId: 'p1', label: 'Weather volatility for exterior shoots', severity: 'high', status: 'monitoring', ownerName: 'A. Vance', dueDate: '2025-04-18' },
+  { id: 'r2', projectId: 'p3', label: 'Client review turnaround risk', severity: 'medium', status: 'open', ownerName: 'A. Vance' },
+];
+
+export const MOCK_BLOCKERS: BlockerItem[] = [
+  { id: 'b1', projectId: 'p2', label: 'Drone permit pending', status: 'open', ownerName: 'M. Reyes', dueDate: '2025-04-09' },
+];
+
+export const MOCK_DEPENDENCIES: DependencyItem[] = [
+  { id: 'dep1', projectId: 'p1', label: 'Final logo pack from client', status: 'waiting' },
+  { id: 'dep2', projectId: 'p4', label: 'Studio date confirmation', status: 'active' },
+];
+
+export const MOCK_CHANGE_ORDERS: ChangeOrder[] = [
+  {
+    id: 'co1',
+    projectId: 'p1',
+    title: 'Add extended social cutdown set',
+    amount: 2400,
+    status: 'requested',
+    requestedBy: 'A. Vance',
+    requestedAt: '2025-03-29T13:00:00Z',
+  },
+];
+
+export const MOCK_STAGE_TRANSITIONS: ProjectStageTransition[] = [];
+
+const CAPABILITY_BY_ROLE: Record<'ADMIN' | 'PROJECT_MANAGER', ProjectCapability[]> = {
+  ADMIN: [
+    'project.create',
+    'project.edit',
+    'project.archive',
+    'project.bulk.archive',
+    'project.bulk.assign',
+    'project.stage.move',
+    'project.financial.approve',
+    'project.changeOrder.request',
+    'project.changeOrder.approve',
+  ],
+  PROJECT_MANAGER: [
+    'project.create',
+    'project.edit',
+    'project.bulk.assign',
+    'project.stage.move',
+    'project.changeOrder.request',
+  ],
+};
+
+export function capabilitiesForRole(role: 'ADMIN' | 'PROJECT_MANAGER'): ProjectCapability[] {
+  return CAPABILITY_BY_ROLE[role];
+}
+
+export function canTransitionStage(fromStage: ProjectStage, toStage: ProjectStage): boolean {
+  const fromIdx = PROJECT_STAGE_ORDER.indexOf(fromStage);
+  const toIdx = PROJECT_STAGE_ORDER.indexOf(toStage);
+  if (fromIdx < 0 || toIdx < 0) return false;
+  if (fromStage === toStage) return true;
+  return toIdx === fromIdx + 1 || (fromStage === 'delivered' && toStage === 'archived');
+}
+
+export function transitionProjectStage(projectId: string, toStage: ProjectStage, actorName: string): { ok: boolean; error?: string } {
+  const project = MOCK_ADMIN_PROJECTS.find((item) => item.id === projectId);
+  if (!project) return { ok: false, error: 'Project not found.' };
+
+  if (toStage === 'delivered') {
+    const pendingRequired = MOCK_PROJECT_DELIVERABLES.some(
+      (item) => item.projectId === projectId && item.required && item.status !== 'delivered' && item.status !== 'approved'
+    );
+    if (pendingRequired) return { ok: false, error: 'Required deliverables must be approved before delivery.' };
+  }
+
+  if (!canTransitionStage(project.stage, toStage)) {
+    return { ok: false, error: `Invalid stage transition from ${project.stage} to ${toStage}.` };
+  }
+
+  MOCK_STAGE_TRANSITIONS.push({
+    id: `st-${MOCK_STAGE_TRANSITIONS.length + 1}`,
+    projectId,
+    fromStage: project.stage,
+    toStage,
+    changedBy: actorName,
+    changedAt: new Date().toISOString(),
+  });
+  project.stage = toStage;
+  pushActivity({
+    projectId,
+    entityType: 'project',
+    entityLabel: 'Stage',
+    actorName,
+    action: `moved to ${formatStageLabel(toStage)}`,
+    projectTitle: project.title,
+  });
+  return { ok: true };
+}
+
+export function getDeliverablesByProject(id: string): ProjectDeliverable[] {
+  return MOCK_PROJECT_DELIVERABLES.filter((item) => item.projectId === id);
+}
+
+export function getRisksByProject(id: string): RiskItem[] {
+  return MOCK_RISKS.filter((item) => item.projectId === id);
+}
+
+export function getBlockersByProject(id: string): BlockerItem[] {
+  return MOCK_BLOCKERS.filter((item) => item.projectId === id);
+}
+
+export function getDependenciesByProject(id: string): DependencyItem[] {
+  return MOCK_DEPENDENCIES.filter((item) => item.projectId === id);
+}
+
+export function getChangeOrdersByProject(id: string): ChangeOrder[] {
+  return MOCK_CHANGE_ORDERS.filter((item) => item.projectId === id);
+}
+
+export function requestChangeOrder(projectId: string, title: string, amount: number, actorName: string): ChangeOrder {
+  const item: ChangeOrder = {
+    id: `co${MOCK_CHANGE_ORDERS.length + 1}`,
+    projectId,
+    title,
+    amount,
+    status: 'requested',
+    requestedBy: actorName,
+    requestedAt: new Date().toISOString(),
+  };
+  MOCK_CHANGE_ORDERS.unshift(item);
+  pushActivity({
+    projectId,
+    entityType: 'proposal',
+    entityLabel: item.id,
+    actorName,
+    action: `requested change order: ${title}`,
+  });
+  return item;
+}
+
+function formatStageLabel(stage: ProjectStage): string {
+  return stage
+    .split('_')
+    .map((item) => item.charAt(0).toUpperCase() + item.slice(1))
+    .join(' ');
+}

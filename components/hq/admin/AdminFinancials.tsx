@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { MOCK_INVOICES_ADMIN, MOCK_ADMIN_PROJECTS, MOCK_PROPOSALS } from '../../../data/adminMock';
-import { invoiceStatusClass, proposalStatusClass } from './adminFormat';
+import { formatAdminDate, invoiceStatusClass, proposalStatusClass } from './adminFormat';
 
 const chart = [
   { name: 'Jan', revenue: 40000 },
@@ -135,7 +135,7 @@ const AdminFinancials: React.FC = () => {
                   <td className="px-3 py-2.5 text-right text-zinc-200">
                     ${(i.amount - i.amountPaid).toLocaleString()}
                   </td>
-                  <td className="px-3 py-2.5 text-zinc-500 font-mono text-xs">{i.dueDate}</td>
+                  <td className="px-3 py-2.5 text-zinc-500 font-mono text-xs">{formatAdminDate(i.dueDate)}</td>
                   <td className="px-3 py-2.5">
                     <span
                       className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${invoiceStatusClass(

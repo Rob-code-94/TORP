@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { PlannerItem } from '../../../types';
-import { columnLabel, typeLabel } from './adminFormat';
+import { columnLabel, formatAdminDate, typeLabel } from './adminFormat';
 
 type CalMode = 'month' | 'week' | 'day';
 
@@ -56,15 +56,11 @@ function buildWeek(anchor: Date): Date[] {
 }
 
 function longTitle(d: Date) {
-  return d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  return `${d.toLocaleDateString(undefined, { weekday: 'long' })}, ${formatAdminDate(toYMD(d))}`;
 }
 
 function monthTitle(d: Date) {
   return d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-}
-
-function shortDate(d: Date) {
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 interface PlannerCalendarProps {
@@ -135,7 +131,7 @@ const PlannerCalendar: React.FC<PlannerCalendarProps> = ({ items }) => {
         ? (() => {
             const a = weekDays[0];
             const b = weekDays[6];
-            return `${a.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${b.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+            return `${formatAdminDate(toYMD(a))} – ${formatAdminDate(toYMD(b))}`;
           })()
         : longTitle(cursor);
 
@@ -290,9 +286,7 @@ const PlannerCalendar: React.FC<PlannerCalendarProps> = ({ items }) => {
                     <div className="text-[10px] font-bold uppercase text-zinc-500">
                       {d.toLocaleDateString(undefined, { weekday: 'short' })}
                     </div>
-                    <div className="text-sm font-mono text-white">
-                      {d.getMonth() + 1}/{d.getDate()}
-                    </div>
+                    <div className="text-sm font-mono text-white">{formatAdminDate(ymd)}</div>
                   </div>
                   <div className="p-1.5 space-y-1.5 flex-1">
                     {list.length === 0 && <p className="text-[10px] text-zinc-600 text-center py-2">—</p>}
@@ -326,7 +320,7 @@ const PlannerCalendar: React.FC<PlannerCalendarProps> = ({ items }) => {
         return (
           <div className="border border-zinc-800 rounded-xl overflow-hidden">
             <div className="px-4 py-2 border-b border-zinc-800/80 text-sm font-mono text-zinc-300 bg-zinc-900/30">
-              {ymd} · {getItemsForYmd(ymd).length} item(s)
+              {formatAdminDate(ymd)} · {getItemsForYmd(ymd).length} item(s)
             </div>
             <div className="grid grid-cols-1 md:grid-cols-[1fr,120px]">
               <div className="border-b md:border-b-0 md:border-r border-zinc-800/80">

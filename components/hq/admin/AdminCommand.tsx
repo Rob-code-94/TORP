@@ -10,7 +10,7 @@ import {
   MOCK_PLANNER,
   MOCK_SHOOTS_ADMIN,
 } from '../../../data/adminMock';
-import { columnLabel } from './adminFormat';
+import { columnLabel, formatAdminDate, formatAdminDateTime } from './adminFormat';
 
 const revenueData = [
   { name: 'Jan', revenue: 40000 },
@@ -202,7 +202,7 @@ const AdminCommand: React.FC = () => {
                 <div>
                   <p className="text-white font-medium">{s.projectTitle}</p>
                   <p className="text-zinc-500 text-xs">
-                    {s.date} @ {s.callTime} — {s.location}
+                    {formatAdminDate(s.date)} @ {s.callTime} — {s.location}
                   </p>
                 </div>
                 <Link
@@ -243,7 +243,7 @@ const AdminCommand: React.FC = () => {
           {MOCK_ACTIVITY.map((a) => (
             <div key={a.id} className="px-4 py-2.5 text-sm flex flex-wrap items-baseline gap-2">
               <span className="text-zinc-500 text-xs">
-                {new Date(a.createdAt).toLocaleString()}
+                {formatAdminDateTime(a.createdAt)}
               </span>
               <span className="text-zinc-300">
                 {a.actorName} — {a.action}

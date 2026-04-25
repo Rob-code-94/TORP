@@ -19,6 +19,11 @@ const HQLogin: React.FC = () => {
     navigate('/hq/staff', { replace: true });
   };
 
+  const goProjectManager = () => {
+    loginAs(UserRole.PROJECT_MANAGER, 'Project Manager');
+    navigate('/hq/admin/projects', { replace: true });
+  };
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center p-6 font-sans">
       <div className="w-full max-w-md">
@@ -36,7 +41,7 @@ const HQLogin: React.FC = () => {
             Demo access — replace with Firebase Auth. Choose a role to preview the dashboard.
           </p>
 
-          {user && (user.role === UserRole.ADMIN || user.role === UserRole.STAFF) && (
+          {user && (user.role === UserRole.ADMIN || user.role === UserRole.PROJECT_MANAGER || user.role === UserRole.STAFF) && (
             <p className="text-xs text-amber-200/90 bg-amber-950/40 border border-amber-900/50 rounded-lg px-3 py-2 mb-4">
               Signed in as {user.role}.{' '}
               <button type="button" onClick={() => logout()} className="underline font-semibold">
@@ -59,6 +64,13 @@ const HQLogin: React.FC = () => {
               className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-4 rounded-xl transition-all hover:scale-[1.02]"
             >
               Continue as Crew
+            </button>
+            <button
+              type="button"
+              onClick={goProjectManager}
+              className="w-full bg-zinc-900 hover:bg-zinc-800 text-zinc-100 font-bold py-4 rounded-xl border border-zinc-700 transition-all hover:scale-[1.02]"
+            >
+              Continue as Project Manager
             </button>
           </div>
 

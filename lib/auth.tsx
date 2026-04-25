@@ -2,7 +2,7 @@ import React, { createContext, useCallback, useContext, useMemo, useState } from
 import { UserRole } from '../types';
 
 /** Logged-in roles only (PUBLIC is represented by `user === null`). */
-export type AuthRole = UserRole.ADMIN | UserRole.STAFF | UserRole.CLIENT;
+export type AuthRole = UserRole.ADMIN | UserRole.PROJECT_MANAGER | UserRole.STAFF | UserRole.CLIENT;
 
 export interface AuthUser {
   role: AuthRole;
