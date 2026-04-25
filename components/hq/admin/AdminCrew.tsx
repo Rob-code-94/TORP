@@ -1,10 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { MOCK_CREW } from '../../../data/adminMock';
-import { createCrew, sendCrewResetLink, setCrewPassword, updateCrew } from '../../../data/adminProjectsApi';
+import { createCrew, deleteCrew, sendCrewResetLink, setCrewPassword, updateCrew } from '../../../data/adminProjectsApi';
 import { useAuth } from '../../../lib/auth';
 import AdminFormDrawer from './AdminFormDrawer';
-import type { CrewProfile } from '../../../types';
+import type { CrewFeatureKey, CrewProfile } from '../../../types';
 import { UserRole } from '../../../types';
 
 const WEEKDAY_OPTIONS = [
@@ -17,10 +17,20 @@ const WEEKDAY_OPTIONS = [
   { value: 6, label: 'Sat' },
 ] as const;
 
+const FEATURE_ACCESS_FIELDS = [
+  { key: 'quick.addClient', label: 'Quick action: Add client' },
+  { key: 'page.clients', label: 'Clients page access' },
+  { key: 'quick.addProject', label: 'Quick action: Add project' },
+  { key: 'page.financials', label: 'Financials page access' },
+  { key: 'quick.addTaskShoot', label: 'Quick actions: Add task / shoot' },
+  { key: 'page.settings', label: 'Settings page access' },
+] as const;
+
 type CrewDraft = {
   displayName: string;
   role: CrewProfile['role'];
   systemRole: CrewProfile['systemRole'];
+  featureAccess: CrewProfile['featureAccess'];
   email: string;
   phone: string;
   rateShootHour: string;
@@ -40,6 +50,7 @@ const EMPTY_CREW_DRAFT: CrewDraft = {
   displayName: '',
   role: 'other',
   systemRole: UserRole.STAFF,
+  featureAccess: {},
   email: '',
   phone: '',
   rateShootHour: '0',
@@ -67,6 +78,7 @@ const AdminCrew: React.FC = () => {
   const [draft, setDraft] = useState<CrewDraft>(EMPTY_CREW_DRAFT);
   const [status, setStatus] = useState<string | null>(null);
   const [statusTone, setStatusTone] = useState<'ok' | 'error'>('ok');
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const editingCrew = useMemo(() => MOCK_CREW.find((crew) => crew.id === editingCrewId), [editingCrewId]);
 
   const openCreate = () => {
@@ -84,6 +96,7 @@ const AdminCrew: React.FC = () => {
       displayName: crew.displayName,
       role: crew.role,
       systemRole: crew.systemRole,
+      featureAccess: { ...(crew.featureAccess || {}) },
       email: crew.email,
       phone: crew.phone || '',
       rateShootHour: String(crew.rateShootHour),
@@ -108,6 +121,7 @@ const AdminCrew: React.FC = () => {
     setDrawerOpen(false);
     setEditingCrewId(null);
     setDraft(EMPTY_CREW_DRAFT);
+    setConfirmDeleteOpen(false);
     setStatus(null);
   };
 
@@ -137,6 +151,7 @@ const AdminCrew: React.FC = () => {
       displayName: draft.displayName,
       role: draft.role,
       systemRole: draft.systemRole,
+      featureAccess: draft.featureAccess,
       email: draft.email,
       phone: draft.phone,
       rateShootHour: Number(draft.rateShootHour || 0),
@@ -186,6 +201,42 @@ const AdminCrew: React.FC = () => {
     setDraft((current) => ({ ...current, tempPassword: '' }));
     setStatus(`Temporary password set at ${new Date(result.crew.lastTempPasswordSetAt || '').toLocaleString()}.`);
     setStatusTone('ok');
+  };
+
+  const confirmDeleteCrew = () => {
+    if (!editingCrewId || !editingCrew || !isAdmin) return;
+    const selfByCrewId = user?.crewId && user.crewId === editingCrewId;
+    const selfByEmail = user?.email && editingCrew.email.trim().toLowerCase() === user.email.trim().toLowerCase();
+    if (selfByCrewId || selfByEmail) {
+      setStatus('You cannot delete your own crew profile while signed in.');
+      setStatusTone('error');
+      setConfirmDeleteOpen(false);
+      return;
+    }
+    const result = deleteCrew(editingCrewId);
+    if (!result.ok) {
+      setStatus('error' in result ? result.error : 'Could not delete crew member.');
+      setStatusTone('error');
+      setConfirmDeleteOpen(false);
+      return;
+    }
+    setDrawerOpen(false);
+    setEditingCrewId(null);
+    setDraft(EMPTY_CREW_DRAFT);
+    setConfirmDeleteOpen(false);
+    setStatus('Crew member deleted.');
+    setStatusTone('ok');
+  };
+
+  const toggleFeatureAccess = (key: CrewFeatureKey) => {
+    if (crewReadOnly || !isAdmin) return;
+    setDraft((current) => ({
+      ...current,
+      featureAccess: {
+        ...(current.featureAccess || {}),
+        [key]: !(current.featureAccess?.[key] ?? false),
+      },
+    }));
   };
 
   return (
@@ -304,6 +355,26 @@ const AdminCrew: React.FC = () => {
             {!isAdmin && !crewReadOnly && (
               <p className="text-[11px] text-zinc-500 mt-1">Only admins can change system role.</p>
             )}
+          </div>
+          <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3 space-y-2">
+            <p className="text-xs uppercase tracking-wide text-zinc-500">Feature access (HQ)</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {FEATURE_ACCESS_FIELDS.map((item) => {
+                const checked = Boolean(draft.featureAccess?.[item.key]);
+                return (
+                  <label key={item.key} className="flex items-start gap-2 text-xs text-zinc-300">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleFeatureAccess(item.key)}
+                      disabled={crewReadOnly || !isAdmin}
+                    />
+                    <span>{item.label}</span>
+                  </label>
+                );
+              })}
+            </div>
+            {!isAdmin && <p className="text-[11px] text-zinc-500">Only admins can change feature access.</p>}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <input
@@ -453,6 +524,40 @@ const AdminCrew: React.FC = () => {
                       Set Password
                     </button>
                   </div>
+                  {isAdmin && editingCrew && (
+                    <div className="mt-3 border-t border-zinc-800 pt-3">
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteOpen((v) => !v)}
+                        className="rounded-md border border-red-800/70 px-2.5 py-1.5 text-xs font-bold uppercase tracking-wide text-red-300"
+                      >
+                        Delete Crew Member
+                      </button>
+                      {confirmDeleteOpen && (
+                        <div className="mt-2 rounded-md border border-red-900/60 bg-red-950/30 p-3">
+                          <p className="text-xs text-red-200">
+                            Delete {editingCrew.displayName}? This cannot be undone. Assigned crew cannot be deleted.
+                          </p>
+                          <div className="mt-2 flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteOpen(false)}
+                              className="rounded-md border border-zinc-700 px-2.5 py-1.5 text-xs text-zinc-300"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              onClick={confirmDeleteCrew}
+                              className="rounded-md border border-red-700 bg-red-900/40 px-2.5 py-1.5 text-xs font-bold text-red-200"
+                            >
+                              Confirm Delete
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </>
               ) : (
                 <p className="text-xs text-zinc-500">Account actions are admin-only.</p>

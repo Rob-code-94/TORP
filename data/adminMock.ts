@@ -1162,6 +1162,7 @@ export function createCrewMemberProfile(input: {
   rateEditHour: number;
   active?: boolean;
   systemRole?: CrewProfile['systemRole'];
+  featureAccess?: CrewProfile['featureAccess'];
 }): { ok: true; crew: CrewProfile } | { ok: false; error: string } {
   const displayName = input.displayName.trim();
   const email = normalizeEmail(input.email);
@@ -1179,6 +1180,7 @@ export function createCrewMemberProfile(input: {
     displayName,
     role: input.role,
     systemRole: input.systemRole ?? UserRole.STAFF,
+    featureAccess: input.featureAccess,
     email,
     phone: input.phone?.trim() || '',
     rateShootHour: input.rateShootHour,
@@ -1198,6 +1200,7 @@ export function updateCrewMemberProfile(
     displayName: string;
     role: CrewProfile['role'];
     systemRole: CrewProfile['systemRole'];
+    featureAccess: CrewProfile['featureAccess'];
     email: string;
     phone?: string;
     rateShootHour: number;
@@ -1223,6 +1226,7 @@ export function updateCrewMemberProfile(
   }
   if (patch.role) crew.role = patch.role;
   if (patch.systemRole !== undefined) crew.systemRole = patch.systemRole;
+  if (patch.featureAccess !== undefined) crew.featureAccess = patch.featureAccess;
   if (patch.phone !== undefined) crew.phone = patch.phone.trim();
   if (patch.rateShootHour !== undefined) {
     if (patch.rateShootHour < 0) return { ok: false, error: 'Shoot rate must be non-negative.' };
@@ -1240,6 +1244,26 @@ export function updateCrewMemberProfile(
     crew.availability = summarizeAvailability(patch.availabilityDetail);
   }
   return { ok: true, crew };
+}
+
+export function deleteCrewMemberProfile(
+  crewId: string
+): { ok: true } | { ok: false; error: string } {
+  const crew = MOCK_CREW.find((item) => item.id === crewId);
+  if (!crew) return { ok: false, error: 'Crew member not found.' };
+  if (crew.assignedProjectIds.length > 0) {
+    return { ok: false, error: 'Cannot delete a crew member assigned to projects. Unassign first.' };
+  }
+  const assignedInProjects = MOCK_ADMIN_PROJECTS.some(
+    (project) => project.ownerCrewId === crewId || (project.assignedCrewIds || []).includes(crewId)
+  );
+  if (assignedInProjects) {
+    return { ok: false, error: 'Cannot delete a crew member assigned to projects. Unassign first.' };
+  }
+  const idx = MOCK_CREW.findIndex((item) => item.id === crewId);
+  if (idx < 0) return { ok: false, error: 'Crew member not found.' };
+  MOCK_CREW.splice(idx, 1);
+  return { ok: true };
 }
 
 export function requestCrewPasswordReset(

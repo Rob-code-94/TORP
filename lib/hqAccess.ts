@@ -1,4 +1,6 @@
-import { UserRole } from '../types';
+import type { AuthUser } from './auth';
+import { MOCK_CREW } from '../data/adminMock';
+import { UserRole, type CrewFeatureKey, type CrewProfile } from '../types';
 
 /**
  * Org-level HQ admin shell visibility (not project-scoped capabilities).
@@ -30,6 +32,41 @@ const PROJECT_MANAGER_NAV: ReadonlySet<HqAdminNavId> = new Set([
   'planner',
 ]);
 
+const NAV_FEATURE_REQUIREMENT: Partial<Record<HqAdminNavId, CrewFeatureKey>> = {
+  clients: 'page.clients',
+  financials: 'page.financials',
+  settings: 'page.settings',
+};
+
+const ROLE_DEFAULT_FEATURES: Record<UserRole, Partial<Record<CrewFeatureKey, boolean>>> = {
+  [UserRole.PUBLIC]: {},
+  [UserRole.CLIENT]: {},
+  [UserRole.STAFF]: {
+    'quick.addClient': false,
+    'page.clients': false,
+    'quick.addProject': false,
+    'page.financials': false,
+    'quick.addTaskShoot': false,
+    'page.settings': false,
+  },
+  [UserRole.PROJECT_MANAGER]: {
+    'quick.addClient': false,
+    'page.clients': false,
+    'quick.addProject': true,
+    'page.financials': false,
+    'quick.addTaskShoot': true,
+    'page.settings': false,
+  },
+  [UserRole.ADMIN]: {
+    'quick.addClient': true,
+    'page.clients': true,
+    'quick.addProject': true,
+    'page.financials': true,
+    'quick.addTaskShoot': true,
+    'page.settings': true,
+  },
+};
+
 export function hqAdminNavIdsForRole(role: UserRole | null | undefined): HqAdminNavId[] {
   if (role === UserRole.PROJECT_MANAGER) {
     return ALL_HQ_ADMIN_NAV.filter((id) => PROJECT_MANAGER_NAV.has(id));
@@ -38,6 +75,28 @@ export function hqAdminNavIdsForRole(role: UserRole | null | undefined): HqAdmin
     return [...ALL_HQ_ADMIN_NAV];
   }
   return [];
+}
+
+export function getCrewByAuthUser(user: AuthUser | null | undefined): CrewProfile | undefined {
+  if (!user) return undefined;
+  if (user.crewId) {
+    const byId = MOCK_CREW.find((crew) => crew.id === user.crewId);
+    if (byId) return byId;
+  }
+  const email = user.email?.trim().toLowerCase();
+  if (!email) return undefined;
+  return MOCK_CREW.find((crew) => crew.email.trim().toLowerCase() === email);
+}
+
+export function hasHqFeatureAccess(
+  user: AuthUser | null | undefined,
+  feature: CrewFeatureKey
+): boolean {
+  if (!user) return false;
+  const roleDefault = Boolean(ROLE_DEFAULT_FEATURES[user.role]?.[feature]);
+  const crew = getCrewByAuthUser(user);
+  const override = crew?.featureAccess?.[feature];
+  return override === undefined ? roleDefault : override;
 }
 
 export function resolveHqAdminNavId(pathname: string): HqAdminNavId | null {
@@ -56,4 +115,35 @@ export function canHqAdminAccessPath(pathname: string, role: UserRole | null | u
   const navId = resolveHqAdminNavId(pathname);
   if (!navId) return true;
   return PROJECT_MANAGER_NAV.has(navId);
+}
+
+export function hqAdminNavIdsForUser(user: AuthUser | null | undefined): HqAdminNavId[] {
+  if (!user) return [];
+  const candidateNav =
+    user.role === UserRole.ADMIN
+      ? [...ALL_HQ_ADMIN_NAV]
+      : user.role === UserRole.PROJECT_MANAGER
+        ? [...ALL_HQ_ADMIN_NAV]
+        : [];
+  return candidateNav.filter((navId) => {
+    const feature = NAV_FEATURE_REQUIREMENT[navId];
+    if (!feature) {
+      if (user.role === UserRole.ADMIN) return true;
+      if (user.role === UserRole.PROJECT_MANAGER) return PROJECT_MANAGER_NAV.has(navId);
+      return false;
+    }
+    return hasHqFeatureAccess(user, feature);
+  });
+}
+
+export function canHqAdminAccessPathForUser(
+  pathname: string,
+  user: AuthUser | null | undefined
+): boolean {
+  if (!user) return false;
+  const navId = resolveHqAdminNavId(pathname);
+  if (!navId) return true;
+  const feature = NAV_FEATURE_REQUIREMENT[navId];
+  if (!feature) return canHqAdminAccessPath(pathname, user.role);
+  return hasHqFeatureAccess(user, feature);
 }

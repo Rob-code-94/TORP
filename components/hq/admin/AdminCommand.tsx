@@ -31,8 +31,8 @@ import {
 import { createClient } from '../../../data/adminProjectsApi';
 import { useAdminTheme } from '../../../lib/adminTheme';
 import { useAuth } from '../../../lib/auth';
+import { hasHqFeatureAccess } from '../../../lib/hqAccess';
 import { hqUserGreetingName } from '../../../lib/hqUserDisplay';
-import { hasProjectCapability } from '../../../lib/projectPermissions';
 import type { AdminProject, PlannerItemPriority } from '../../../types';
 import { columnLabel, formatAdminDate, formatAdminDateTime } from './adminFormat';
 import AdminProjectWizard from './AdminProjectWizard';
@@ -89,9 +89,10 @@ const AdminCommand: React.FC = () => {
     [refreshTick]
   );
   const defaultProject = activeProjects[0];
-  const canCreateProject = hasProjectCapability(user?.role, 'project.create');
-  const canQuickClient = user?.role === 'ADMIN';
-  const canQuickTaskShoot = hasProjectCapability(user?.role, 'project.create');
+  const canCreateProject = hasHqFeatureAccess(user, 'quick.addProject');
+  const canQuickClient = hasHqFeatureAccess(user, 'quick.addClient');
+  const canQuickTaskShoot = hasHqFeatureAccess(user, 'quick.addTaskShoot');
+  const canFinancialsPage = hasHqFeatureAccess(user, 'page.financials');
 
   const [clientDraft, setClientDraft] = useState<ClientProfileDraft>(EMPTY_CLIENT_PROFILE_DRAFT);
   const [taskDraft, setTaskDraft] = useState(() => {
@@ -313,8 +314,8 @@ const AdminCommand: React.FC = () => {
       <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-4 sm:p-5 min-w-0">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-white">Quick actions</h3>
-          {!canQuickTaskShoot && (
-            <p className="text-xs text-zinc-500">Project manager permissions are limited for quick create actions.</p>
+          {(!canQuickTaskShoot || !canQuickClient || !canCreateProject) && (
+            <p className="text-xs text-zinc-500">Some quick actions are disabled by your crew feature access.</p>
           )}
         </div>
         {loading ? (
@@ -369,20 +370,35 @@ const AdminCommand: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <Link to="/hq/admin/financials" className="bg-zinc-900/50 border border-zinc-800 p-5 rounded-xl hover:border-zinc-700 transition-colors">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-xs text-zinc-500 mb-1">Revenue (YTD, demo)</p>
-              <p className="text-2xl font-bold text-white">${(stats.revenueYtd / 1000).toFixed(0)}k</p>
+        {canFinancialsPage ? (
+          <Link to="/hq/admin/financials" className="bg-zinc-900/50 border border-zinc-800 p-5 rounded-xl hover:border-zinc-700 transition-colors">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs text-zinc-500 mb-1">Revenue (YTD, demo)</p>
+                <p className="text-2xl font-bold text-white">${(stats.revenueYtd / 1000).toFixed(0)}k</p>
+              </div>
+              <div className="p-2 bg-zinc-800/80 rounded-lg text-zinc-300">
+                <DollarSign size={20} />
+              </div>
             </div>
-            <div className="p-2 bg-zinc-800/80 rounded-lg text-zinc-300">
-              <DollarSign size={20} />
+            <div className="mt-3 flex items-center text-xs text-zinc-500">
+              <TrendingUp size={12} className="mr-1 text-zinc-400" /> Demo aggregate
             </div>
+          </Link>
+        ) : (
+          <div className="bg-zinc-900/50 border border-zinc-800 p-5 rounded-xl opacity-60">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs text-zinc-500 mb-1">Revenue (YTD, demo)</p>
+                <p className="text-2xl font-bold text-white">${(stats.revenueYtd / 1000).toFixed(0)}k</p>
+              </div>
+              <div className="p-2 bg-zinc-800/80 rounded-lg text-zinc-300">
+                <DollarSign size={20} />
+              </div>
+            </div>
+            <p className="mt-3 text-xs text-zinc-500">Financials access disabled by admin.</p>
           </div>
-          <div className="mt-3 flex items-center text-xs text-zinc-500">
-            <TrendingUp size={12} className="mr-1 text-zinc-400" /> Demo aggregate
-          </div>
-        </Link>
+        )}
 
         <Link to="/hq/admin/projects" className="bg-zinc-900/50 border border-zinc-800 p-5 rounded-xl hover:border-zinc-700 transition-colors">
           <div className="flex items-start justify-between">

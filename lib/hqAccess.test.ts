@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { UserRole } from '../types';
-import { canHqAdminAccessPath, hqAdminNavIdsForRole, resolveHqAdminNavId } from './hqAccess';
+import { MOCK_CREW } from '../data/adminMock';
+import type { AuthUser } from './auth';
+import {
+  canHqAdminAccessPath,
+  canHqAdminAccessPathForUser,
+  getCrewByAuthUser,
+  hasHqFeatureAccess,
+  hqAdminNavIdsForRole,
+  hqAdminNavIdsForUser,
+  resolveHqAdminNavId,
+} from './hqAccess';
 
 describe('hqAdminNavIdsForRole', () => {
   it('gives PM a subset', () => {
@@ -32,5 +42,49 @@ describe('canHqAdminAccessPath', () => {
 describe('resolveHqAdminNavId', () => {
   it('maps command root', () => {
     expect(resolveHqAdminNavId('/hq/admin')).toBe('command');
+  });
+});
+
+describe('crew access overrides', () => {
+  const pmUser: AuthUser = {
+    role: UserRole.PROJECT_MANAGER,
+    displayName: 'Jayden Price',
+    email: 'jp@torp.life',
+    crewId: 'cr-6',
+  };
+
+  it('finds crew by crewId first', () => {
+    const crew = getCrewByAuthUser(pmUser);
+    expect(crew?.id).toBe('cr-6');
+  });
+
+  it('uses role baseline when override missing', () => {
+    expect(hasHqFeatureAccess(pmUser, 'quick.addProject')).toBe(true);
+    expect(hasHqFeatureAccess(pmUser, 'page.clients')).toBe(false);
+  });
+
+  it('allows explicit grant override over role default', () => {
+    const crew = MOCK_CREW.find((c) => c.id === 'cr-6');
+    const previous = crew?.featureAccess;
+    if (crew) crew.featureAccess = { ...(crew.featureAccess || {}), 'page.clients': true };
+    expect(hasHqFeatureAccess(pmUser, 'page.clients')).toBe(true);
+    if (crew) crew.featureAccess = previous;
+  });
+
+  it('allows explicit deny override over role default', () => {
+    const crew = MOCK_CREW.find((c) => c.id === 'cr-6');
+    const previous = crew?.featureAccess;
+    if (crew) crew.featureAccess = { ...(crew.featureAccess || {}), 'quick.addProject': false };
+    expect(hasHqFeatureAccess(pmUser, 'quick.addProject')).toBe(false);
+    if (crew) crew.featureAccess = previous;
+  });
+
+  it('filters nav and routes with user-level feature checks', () => {
+    const crew = MOCK_CREW.find((c) => c.id === 'cr-6');
+    const previous = crew?.featureAccess;
+    if (crew) crew.featureAccess = { ...(crew.featureAccess || {}), 'page.clients': true };
+    expect(hqAdminNavIdsForUser(pmUser)).toContain('clients');
+    expect(canHqAdminAccessPathForUser('/hq/admin/clients', pmUser)).toBe(true);
+    if (crew) crew.featureAccess = previous;
   });
 });

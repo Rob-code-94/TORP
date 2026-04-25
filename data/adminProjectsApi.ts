@@ -20,6 +20,7 @@ import {
   createClientProfile,
   requestCrewPasswordReset,
   setCrewTemporaryPassword,
+  deleteCrewMemberProfile,
   updateClientProfile,
   updateCrewMemberProfile,
   updateProjectNarrative,
@@ -181,6 +182,7 @@ export interface CreateCrewRequest {
   rateEditHour: number;
   active?: boolean;
   systemRole?: CrewProfile['systemRole'];
+  featureAccess?: CrewProfile['featureAccess'];
 }
 
 export interface UpdateCrewRequest extends Partial<CreateCrewRequest> {
@@ -205,6 +207,10 @@ export function sendCrewResetLink(crewId: string, actorName: string) {
 
 export function setCrewPassword(crewId: string, actorName: string, temporaryPassword: string) {
   return setCrewTemporaryPassword(crewId, actorName, temporaryPassword);
+}
+
+export function deleteCrew(crewId: string) {
+  return deleteCrewMemberProfile(crewId);
 }
 
 export interface UpdateProjectNarrativeRequest {

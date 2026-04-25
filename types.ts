@@ -123,11 +123,23 @@ export interface CrewAvailability {
 /** HQ login tier on a people record; distinct from on-set craft `role`. Never CLIENT. */
 export type CrewHqSystemRole = UserRole.ADMIN | UserRole.PROJECT_MANAGER | UserRole.STAFF;
 
+export type CrewFeatureKey =
+  | 'quick.addClient'
+  | 'page.clients'
+  | 'quick.addProject'
+  | 'page.financials'
+  | 'quick.addTaskShoot'
+  | 'page.settings';
+
+export type CrewFeatureAccess = Partial<Record<CrewFeatureKey, boolean>>;
+
 export interface CrewProfile {
   id: string;
   displayName: string;
   role: 'director' | 'dp' | 'editor' | 'producer' | 'audio' | 'other';
   systemRole: CrewHqSystemRole;
+  /** Optional per-user HQ feature toggles; explicit values override role defaults. */
+  featureAccess?: CrewFeatureAccess;
   email: string;
   phone?: string;
   rateShootHour: number;

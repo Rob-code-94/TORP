@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../../lib/auth';
 import { useAdminTheme } from '../../../lib/adminTheme';
-import { canHqAdminAccessPath, hqAdminNavIdsForRole } from '../../../lib/hqAccess';
+import { canHqAdminAccessPathForUser, hqAdminNavIdsForUser } from '../../../lib/hqAccess';
 import { hqUserInitials } from '../../../lib/hqUserDisplay';
 import HqProfileMenuCluster from '../HqProfileMenu';
 
@@ -104,13 +104,13 @@ const AdminLayout: React.FC = () => {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const title = pageTitle(pathname);
   const isDark = theme === 'dark';
-  const allowedNavIds = useMemo(() => new Set(hqAdminNavIdsForRole(user?.role)), [user?.role]);
+  const allowedNavIds = useMemo(() => new Set(hqAdminNavIdsForUser(user)), [user]);
   const filteredNav = useMemo(() => nav.filter((item) => allowedNavIds.has(item.id)), [allowedNavIds]);
   const middleDockIds = new Set(['crew', 'clients']);
   const primaryNav = filteredNav.filter((item) => !middleDockIds.has(item.id));
   const middleDockNav = filteredNav.filter((item) => middleDockIds.has(item.id));
 
-  if (user && !canHqAdminAccessPath(pathname, user.role)) {
+  if (user && !canHqAdminAccessPathForUser(pathname, user)) {
     return <Navigate to="/hq/admin" replace />;
   }
 
