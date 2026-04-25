@@ -19,6 +19,8 @@ interface AuthContextValue {
   user: AuthUser | null;
   /** Full session (role + optional identity fields). */
   loginAs: (session: AuthUser) => void;
+  /** Demo: merge display name / email into session and persist to sessionStorage. */
+  updateSessionProfile: (patch: Partial<Pick<AuthUser, 'displayName' | 'email'>>) => void;
   logout: () => void;
 }
 
@@ -60,6 +62,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(session);
   }, []);
 
+  const updateSessionProfile = useCallback((patch: Partial<Pick<AuthUser, 'displayName' | 'email'>>) => {
+    setUser((prev) => (prev ? { ...prev, ...patch } : null));
+  }, []);
+
   const logout = useCallback(() => {
     setUser(null);
     if (typeof window !== 'undefined') sessionStorage.removeItem(HQ_SESSION_KEY);
@@ -69,9 +75,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     () => ({
       user,
       loginAs,
+      updateSessionProfile,
       logout,
     }),
-    [user, loginAs, logout]
+    [user, loginAs, updateSessionProfile, logout]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

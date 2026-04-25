@@ -1,6 +1,10 @@
 import React from 'react';
+import { useLocation } from 'react-router-dom';
 import { UserRole } from '../../types';
 import { LayoutDashboard, Calendar, Users, FileText, Settings, LogOut, Video } from 'lucide-react';
+import { useAuth } from '../../lib/auth';
+import { hqUserInitials } from '../../lib/hqUserDisplay';
+import HqProfileMenuCluster from '../hq/HqProfileMenu';
 
 interface DashboardLayoutProps {
   role: UserRole;
@@ -9,6 +13,10 @@ interface DashboardLayoutProps {
 }
 
 const DashboardLayout: React.FC<DashboardLayoutProps> = ({ role, children, onLogout }) => {
+  const { user, updateSessionProfile } = useAuth();
+  const { pathname } = useLocation();
+  const initials = hqUserInitials(user);
+
   const getNavItems = () => {
     switch (role) {
       case UserRole.ADMIN:
@@ -65,10 +73,23 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ role, children, onLog
       <main className="flex-1 overflow-y-auto no-scrollbar relative">
         <header className="h-16 flex items-center justify-between px-8 border-b border-zinc-800 bg-zinc-950 sticky top-0 z-30">
             <h2 className="font-semibold text-lg text-white">Dashboard</h2>
-            <div className="flex items-center gap-4">
-                <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-xs font-bold">
-                    {role.charAt(0)}
+            <div className="flex items-center gap-4 shrink-0">
+              {role === UserRole.STAFF ? (
+                <HqProfileMenuCluster
+                  variant="staff"
+                  user={user}
+                  isDark
+                  pathname={pathname}
+                  updateSessionProfile={updateSessionProfile}
+                />
+              ) : (
+                <div
+                  className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs font-bold text-zinc-300"
+                  title={user?.displayName || user?.email || 'Account'}
+                >
+                  {initials}
                 </div>
+              )}
             </div>
         </header>
         <div className="p-8">

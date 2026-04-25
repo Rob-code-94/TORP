@@ -16,10 +16,11 @@ import {
   Sun,
   X,
 } from 'lucide-react';
-import { useAuth, type AuthUser } from '../../../lib/auth';
+import { useAuth } from '../../../lib/auth';
 import { useAdminTheme } from '../../../lib/adminTheme';
 import { canHqAdminAccessPath, hqAdminNavIdsForRole } from '../../../lib/hqAccess';
-import { UserRole } from '../../../types';
+import { hqUserInitials } from '../../../lib/hqUserDisplay';
+import HqProfileMenuCluster from '../HqProfileMenu';
 
 type NavItem = {
   id: string;
@@ -28,16 +29,6 @@ type NavItem = {
   icon: React.ReactNode;
   match: (p: string) => boolean;
 };
-
-function hqUserBadge(user: AuthUser | null): string {
-  if (!user) return '…';
-  if (user.role === UserRole.PROJECT_MANAGER) return 'PM';
-  const name = user.displayName?.trim() || user.email || '';
-  if (!name) return 'HQ';
-  const parts = name.split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  return name.slice(0, 2).toUpperCase();
-}
 
 const nav: NavItem[] = [
   {
@@ -103,13 +94,13 @@ function pageTitle(pathname: string): string {
   return 'Admin';
 }
 
-/** Route-aware HQ shell for `UserRole.ADMIN` only. */
+/** Route-aware HQ admin shell (ADMIN + PROJECT_MANAGER). */
 const AdminLayout: React.FC = () => {
-  const { logout, user } = useAuth();
+  const { logout, user, updateSessionProfile } = useAuth();
   const { theme, toggleTheme } = useAdminTheme();
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const title = pageTitle(pathname);
   const isDark = theme === 'dark';
@@ -170,16 +161,21 @@ const AdminLayout: React.FC = () => {
       >
         <div
           className={[
-            `h-16 flex items-center border-b ${isDark ? 'border-zinc-800' : 'border-zinc-200'}`,
-            sidebarCollapsed ? 'px-3 justify-center' : 'px-6',
+            `h-16 flex border-b min-w-0 ${isDark ? 'border-zinc-800' : 'border-zinc-200'}`,
+            sidebarCollapsed
+              ? 'flex-col items-center justify-center gap-1 px-2'
+              : 'flex-row items-center px-6',
           ].join(' ')}
         >
-          <span className="font-black text-xl tracking-tighter">{sidebarCollapsed ? 'T' : 'TORP'}</span>
-          {!sidebarCollapsed && (
-            <span className={`ml-2 text-[10px] font-mono px-2 py-0.5 border rounded uppercase ${isDark ? 'text-zinc-500 border-zinc-800' : 'text-zinc-600 border-zinc-200'}`}>
-              {user?.role === UserRole.PROJECT_MANAGER ? 'PM' : 'Admin'}
-            </span>
-          )}
+          <span className="font-black text-xl tracking-tighter shrink-0">{sidebarCollapsed ? 'T' : 'TORP'}</span>
+          <span
+            className={`text-[10px] font-mono px-2 py-0.5 border rounded shrink-0 max-w-full truncate ${
+              sidebarCollapsed ? '' : 'ml-2'
+            } ${isDark ? 'text-zinc-500 border-zinc-800' : 'text-zinc-600 border-zinc-200'}`}
+            title={user?.displayName || user?.email || 'Account'}
+          >
+            {hqUserInitials(user)}
+          </span>
         </div>
         <nav
           className={[
@@ -255,14 +251,13 @@ const AdminLayout: React.FC = () => {
               {isDark ? <Sun size={14} /> : <Moon size={14} />}
               {isDark ? 'Light' : 'Dark'}
             </button>
-            <div
-              className={`w-8 h-8 rounded-full border flex items-center justify-center text-xs font-bold ${
-                isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-300' : 'bg-zinc-100 border-zinc-200 text-zinc-800'
-              }`}
-              title={user?.displayName || 'HQ'}
-            >
-              {hqUserBadge(user)}
-            </div>
+            <HqProfileMenuCluster
+              variant="admin"
+              user={user}
+              isDark={isDark}
+              pathname={pathname}
+              updateSessionProfile={updateSessionProfile}
+            />
           </div>
         </header>
         <div className="flex-1 overflow-y-auto no-scrollbar p-4 sm:p-6">
@@ -282,8 +277,8 @@ const AdminLayout: React.FC = () => {
             <div className={`h-14 px-4 border-b flex items-center justify-between ${isDark ? 'border-zinc-800' : 'border-zinc-200'}`}>
               <div className="flex items-center gap-2">
                 <span className="font-black tracking-tighter">TORP</span>
-                <span className={`text-[10px] font-mono px-2 py-0.5 border rounded uppercase ${isDark ? 'text-zinc-500 border-zinc-800' : 'text-zinc-600 border-zinc-200'}`}>
-                  {user?.role === UserRole.PROJECT_MANAGER ? 'PM' : 'Admin'}
+                <span className={`text-[10px] font-mono px-2 py-0.5 border rounded ${isDark ? 'text-zinc-500 border-zinc-800' : 'text-zinc-600 border-zinc-200'}`}>
+                  {hqUserInitials(user)}
                 </span>
               </div>
               <div className="flex items-center gap-2">

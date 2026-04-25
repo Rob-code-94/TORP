@@ -31,6 +31,7 @@ import {
 import { createClient } from '../../../data/adminProjectsApi';
 import { useAdminTheme } from '../../../lib/adminTheme';
 import { useAuth } from '../../../lib/auth';
+import { hqUserGreetingName } from '../../../lib/hqUserDisplay';
 import { hasProjectCapability } from '../../../lib/projectPermissions';
 import type { AdminProject, PlannerItemPriority } from '../../../types';
 import { columnLabel, formatAdminDate, formatAdminDateTime } from './adminFormat';
@@ -285,6 +286,9 @@ const AdminCommand: React.FC = () => {
 
   return (
     <div className="space-y-8 max-w-7xl min-w-0">
+      <p className={`text-sm min-w-0 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+        Hello, {hqUserGreetingName(user ?? null)}
+      </p>
       <div>
         <p className="text-xs font-mono uppercase tracking-widest text-zinc-500 mb-1">Command center</p>
         <h2 className={`text-2xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-zinc-900'}`}>What needs attention</h2>
