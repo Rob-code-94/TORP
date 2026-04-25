@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, CalendarPlus, Share2 } from 'lucide-react';
 import {
   MOCK_CREW,
   PROJECT_STAGE_ORDER,
@@ -51,11 +51,14 @@ import {
   updateMeeting,
 } from '../../../data/adminMock';
 import { saveProjectNarrative } from '../../../data/adminProjectsApi';
+import { openGoogleCalendarInNewTab, payloadFromAdminMeeting, payloadFromAdminShoot } from '../../../lib/calendarEvent';
 import { useAuth } from '../../../lib/auth';
 import { adminDateTimeInputProps, useAdminTheme } from '../../../lib/adminTheme';
 import { hasProjectCapability, isProjectRole } from '../../../lib/projectPermissions';
 import type {
   AdminInvoiceStatus,
+  AdminMeeting,
+  AdminShoot,
   DeliverableStep,
   DeliverableStatus,
   PlannerItemPriority,
@@ -75,6 +78,7 @@ import {
   proposalStatusClassForTheme,
 } from './adminFormat';
 import AdminFormDrawer from './AdminFormDrawer';
+import CalendarEventSheet from './CalendarEventSheet';
 
 type Tab = 'overview' | 'brief' | 'planner' | 'schedule' | 'assets' | 'deliverables' | 'controls' | 'financials' | 'activity';
 type LoadState = 'loading' | 'empty' | 'error' | 'success';
@@ -183,6 +187,15 @@ const AdminProjectDetail: React.FC = () => {
     description: '',
     participants: [] as string[],
   });
+  const [calendarEventOpen, setCalendarEventOpen] = useState(false);
+  const [calendarEventInitial, setCalendarEventInitial] = useState<{
+    title?: string;
+    dateYmd?: string;
+    timeHm?: string;
+    allDay?: boolean;
+    location?: string;
+    description?: string;
+  }>({});
 
   const project = projectId ? getProjectById(projectId) : undefined;
 
@@ -225,6 +238,43 @@ const AdminProjectDetail: React.FC = () => {
   const canEditAssetDeliverables = isProjectRole(user?.role);
   const actorName = user?.displayName || 'System';
   const dateTimeInput = adminDateTimeInputProps(theme);
+  const appOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+  const projectCalendarContext = {
+    id: project.id,
+    title: project.title,
+    clientName: project.clientName,
+    contactEmail: project.contactEmail,
+  };
+  const addShootToGoogle = (s: AdminShoot) => {
+    if (!appOrigin) return;
+    openGoogleCalendarInNewTab(payloadFromAdminShoot(s, appOrigin));
+  };
+  const addMeetingToGoogle = (m: AdminMeeting) => {
+    if (!appOrigin) return;
+    openGoogleCalendarInNewTab(payloadFromAdminMeeting(m, appOrigin));
+  };
+  const openCalendarForShoot = (s: AdminShoot) => {
+    setCalendarEventInitial({
+      title: s.title,
+      dateYmd: s.date,
+      timeHm: s.callTime,
+      allDay: false,
+      location: s.location,
+      description: [s.description, s.gearSummary].filter(Boolean).join('\n'),
+    });
+    setCalendarEventOpen(true);
+  };
+  const openCalendarForMeeting = (m: AdminMeeting) => {
+    setCalendarEventInitial({
+      title: m.title,
+      dateYmd: m.date,
+      timeHm: m.startTime,
+      allDay: false,
+      location: m.location,
+      description: [m.description, m.participants.length ? `Participants: ${m.participants.join(', ')}` : ''].filter(Boolean).join('\n'),
+    });
+    setCalendarEventOpen(true);
+  };
 
   const setMessage = (message: string, tone: 'ok' | 'error' = 'ok') => {
     setFeedback(message);
@@ -1019,7 +1069,25 @@ const AdminProjectDetail: React.FC = () => {
                   {s.description && <p className="text-xs text-zinc-500 mt-1">{s.description}</p>}
                 </div>
                 <p className="text-xs text-zinc-500 max-w-xs">{s.gearSummary}</p>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <button
+                    type="button"
+                    onClick={() => addShootToGoogle(s)}
+                    className="inline-flex items-center gap-0.5 text-[10px] font-bold uppercase text-zinc-300 border border-zinc-700 rounded px-1.5 py-0.5 hover:bg-zinc-800"
+                    title="Add to Google Calendar"
+                  >
+                    <CalendarPlus size={10} />
+                    Google
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openCalendarForShoot(s)}
+                    className="inline-flex items-center gap-0.5 text-[10px] font-bold uppercase text-zinc-500 hover:text-zinc-200"
+                    title="Compose invite and export"
+                  >
+                    <Share2 size={10} />
+                    Invite
+                  </button>
                   <button
                     type="button"
                     onClick={() => {
@@ -1050,7 +1118,25 @@ const AdminProjectDetail: React.FC = () => {
                   <p className="text-xs text-zinc-600 mt-1">Participants: {m.participants.join(', ')}</p>
                   {m.description && <p className="text-xs text-zinc-500 mt-1">{m.description}</p>}
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <button
+                    type="button"
+                    onClick={() => addMeetingToGoogle(m)}
+                    className="inline-flex items-center gap-0.5 text-[10px] font-bold uppercase text-zinc-300 border border-zinc-700 rounded px-1.5 py-0.5 hover:bg-zinc-800"
+                    title="Add to Google Calendar"
+                  >
+                    <CalendarPlus size={10} />
+                    Google
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openCalendarForMeeting(m)}
+                    className="inline-flex items-center gap-0.5 text-[10px] font-bold uppercase text-zinc-500 hover:text-zinc-200"
+                    title="Compose invite and export"
+                  >
+                    <Share2 size={10} />
+                    Invite
+                  </button>
                   <button type="button" onClick={() => openScheduleEditor('meeting', m.id)} className="text-[11px] underline text-zinc-400">Open</button>
                   <button
                     type="button"
@@ -2017,6 +2103,13 @@ const AdminProjectDetail: React.FC = () => {
       ))}
 
       </div>
+
+      <CalendarEventSheet
+        open={calendarEventOpen}
+        onClose={() => setCalendarEventOpen(false)}
+        projectContext={projectCalendarContext}
+        initial={calendarEventInitial}
+      />
     </div>
   );
 };

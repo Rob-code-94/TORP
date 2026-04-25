@@ -353,3 +353,17 @@ export type ProjectCapability =
   | 'project.financial.approve'
   | 'project.changeOrder.request'
   | 'project.changeOrder.approve';
+
+/** Input for Google Calendar (TEMPLATE) links and .ics export (client-only; no server IDs). */
+export interface CalendarEventPayload {
+  title: string;
+  /** When `allDay` is true, time-of-day on `start` is ignored. */
+  start: Date;
+  /** If omitted, defaults to +1h (timed) or end of all-day block (date-only). */
+  end?: Date;
+  allDay?: boolean;
+  location?: string;
+  description?: string;
+  /** Maps to GCal `add` query param; comma-separated in URL. */
+  attendeeEmails?: string[];
+}

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { CalendarPlus, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { PlannerItem } from '../../../types';
 import { columnLabel, formatAdminDate, typeLabel } from './adminFormat';
 
@@ -65,9 +65,11 @@ function monthTitle(d: Date) {
 
 interface PlannerCalendarProps {
   items: PlannerItem[];
+  onAddToGoogle?: (item: PlannerItem) => void;
+  onOpenCalendarSheet?: (item: PlannerItem) => void;
 }
 
-const PlannerCalendar: React.FC<PlannerCalendarProps> = ({ items }) => {
+const PlannerCalendar: React.FC<PlannerCalendarProps> = ({ items, onAddToGoogle, onOpenCalendarSheet }) => {
   const [mode, setMode] = useState<CalMode>('month');
   const [cursor, setCursor] = useState(() => {
     if (items.length) return startOfDay(parseYMD(items[0].dueDate));
@@ -250,9 +252,38 @@ const PlannerCalendar: React.FC<PlannerCalendarProps> = ({ items }) => {
                       <div
                         key={t.id}
                         title={t.title}
-                        className="truncate rounded border border-zinc-700/60 bg-zinc-900/80 px-0.5 py-0.5 text-zinc-200 leading-tight"
+                        className="flex items-start gap-0.5 rounded border border-zinc-700/60 bg-zinc-900/80 px-0.5 py-0.5 text-zinc-200 leading-tight min-w-0"
                       >
-                        <span className="text-zinc-500">{t.projectTitle.split(':')[0]}</span> · {t.title}
+                        <span className="truncate min-w-0">
+                          <span className="text-zinc-500">{t.projectTitle.split(':')[0]}</span> · {t.title}
+                        </span>
+                        {onAddToGoogle && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onAddToGoogle(t);
+                            }}
+                            className="shrink-0 p-0.5 rounded text-zinc-500 hover:text-white hover:bg-zinc-800"
+                            title="Add to Google Calendar"
+                            aria-label="Add to Google Calendar"
+                          >
+                            <CalendarPlus size={10} />
+                          </button>
+                        )}
+                        {onOpenCalendarSheet && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onOpenCalendarSheet(t);
+                            }}
+                            className="shrink-0 p-0.5 text-[9px] font-bold text-zinc-500 hover:text-zinc-200"
+                            title="Invite / compose"
+                          >
+                            +
+                          </button>
+                        )}
                       </div>
                     ))}
                     {list.length > 3 && <div className="text-[9px] text-zinc-500">+{list.length - 3} more</div>}
@@ -295,7 +326,32 @@ const PlannerCalendar: React.FC<PlannerCalendarProps> = ({ items }) => {
                         key={t.id}
                         className="rounded-lg border border-zinc-800 bg-zinc-900/70 p-2 text-left"
                       >
-                        <p className="text-xs font-medium text-white leading-snug">{t.title}</p>
+                        <div className="flex items-start justify-between gap-1">
+                          <p className="text-xs font-medium text-white leading-snug min-w-0">{t.title}</p>
+                          <div className="flex shrink-0 items-center gap-0.5">
+                            {onAddToGoogle && (
+                              <button
+                                type="button"
+                                onClick={() => onAddToGoogle(t)}
+                                className="p-0.5 rounded text-zinc-500 hover:text-white hover:bg-zinc-800"
+                                title="Add to Google Calendar"
+                                aria-label="Add to Google Calendar"
+                              >
+                                <CalendarPlus size={12} />
+                              </button>
+                            )}
+                            {onOpenCalendarSheet && (
+                              <button
+                                type="button"
+                                onClick={() => onOpenCalendarSheet(t)}
+                                className="text-[9px] font-bold text-zinc-500 px-0.5 hover:text-zinc-200"
+                                title="Invite / compose"
+                              >
+                                +
+                              </button>
+                            )}
+                          </div>
+                        </div>
                         <p className="text-[10px] text-zinc-500 mt-0.5">
                           <Link to={`/hq/admin/projects/${t.projectId}`} className="hover:underline text-zinc-400">
                             {t.projectTitle}
@@ -329,8 +385,8 @@ const PlannerCalendar: React.FC<PlannerCalendarProps> = ({ items }) => {
                 )}
                 <ul className="divide-y divide-zinc-800/80">
                   {list.map((t) => (
-                    <li key={t.id} className="p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                      <div>
+                    <li key={t.id} className="p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 min-w-0">
+                      <div className="min-w-0">
                         <p className="text-sm font-medium text-white">{t.title}</p>
                         <p className="text-xs text-zinc-500">
                           <Link to={`/hq/admin/projects/${t.projectId}`} className="hover:underline text-zinc-300">
@@ -341,10 +397,33 @@ const PlannerCalendar: React.FC<PlannerCalendarProps> = ({ items }) => {
                           {t.assigneeName} · {t.priority}
                         </p>
                       </div>
-                      <div className="text-[10px] text-zinc-500 text-right">
-                        {typeLabel(t.type)}
-                        <br />
-                        {columnLabel(t.column)}
+                      <div className="flex flex-col items-end gap-1 shrink-0 text-right">
+                        <div className="text-[10px] text-zinc-500">
+                          {typeLabel(t.type)}
+                          <br />
+                          {columnLabel(t.column)}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {onAddToGoogle && (
+                            <button
+                              type="button"
+                              onClick={() => onAddToGoogle(t)}
+                              className="inline-flex items-center gap-0.5 rounded border border-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-300 hover:bg-zinc-800"
+                            >
+                              <CalendarPlus size={10} />
+                              GCal
+                            </button>
+                          )}
+                          {onOpenCalendarSheet && (
+                            <button
+                              type="button"
+                              onClick={() => onOpenCalendarSheet(t)}
+                              className="rounded border border-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-300 hover:bg-zinc-800"
+                            >
+                              Invite
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </li>
                   ))}
