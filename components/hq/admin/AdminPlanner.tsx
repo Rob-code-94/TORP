@@ -1,23 +1,41 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { CalendarPlus, Share2 } from 'lucide-react';
-import { getProjectById, MOCK_ADMIN_PROJECTS, MOCK_PLANNER, PLANNER_COLUMN_LABEL } from '../../../data/adminMock';
+import {
+  getProjectById,
+  MOCK_ADMIN_PROJECTS,
+  MOCK_PLANNER,
+  PLANNER_COLUMN_LABEL,
+  plannerStatusFromItem,
+  updatePlannerTask,
+} from '../../../data/adminMock';
 import { openGoogleCalendarInNewTab, payloadFromPlannerItem } from '../../../lib/calendarEvent';
+import { useAuth } from '../../../lib/auth';
 import { useAdminTheme } from '../../../lib/adminTheme';
 import { columnLabel, formatAdminDate, typeLabel } from './adminFormat';
 import CalendarEventSheet from './CalendarEventSheet';
 import type { CalendarProjectOption } from './CalendarEventSheet';
 import PlannerCalendar from './PlannerCalendar';
-import type { PlannerBoardColumn, PlannerItem } from '../../../types';
+import type { PlannerBoardColumn, PlannerItem, PlannerTaskStatus } from '../../../types';
 
 const COLUMNS: PlannerBoardColumn[] = ['queue', 'active', 'post', 'client_review', 'complete'];
+
+const BOARD_STATUS_OPTIONS: { value: PlannerTaskStatus; label: string }[] = [
+  { value: 'todo', label: 'To do' },
+  { value: 'in_progress', label: 'In progress' },
+  { value: 'client_review', label: 'Client review' },
+  { value: 'done', label: 'Done' },
+];
 
 type View = 'list' | 'board' | 'calendar';
 
 const AdminPlanner: React.FC = () => {
   const { search } = useLocation();
+  const { user } = useAuth();
   const { theme } = useAdminTheme();
   const isDark = theme === 'dark';
+  const actorName = user?.displayName?.trim() || user?.email || 'HQ';
+  const [plannerVersion, setPlannerVersion] = useState(0);
   const initialParams = useMemo(() => new URLSearchParams(search), [search]);
   const initialView = initialParams.get('view');
   const initialMode = initialParams.get('mode');
@@ -36,7 +54,6 @@ const AdminPlanner: React.FC = () => {
     description?: string;
     projectId?: string;
   }>({});
-  const items = MOCK_PLANNER;
   const appOrigin = typeof window !== 'undefined' ? window.location.origin : '';
   const projectOptions: CalendarProjectOption[] = useMemo(
     () =>
@@ -86,6 +103,8 @@ const AdminPlanner: React.FC = () => {
     setCalendarOpen(true);
   }, []);
 
+  const items = MOCK_PLANNER;
+
   const board = useMemo(() => {
     const out: Record<PlannerBoardColumn, PlannerItem[]> = {
       queue: [],
@@ -102,7 +121,16 @@ const AdminPlanner: React.FC = () => {
       }
     }
     return out;
-  }, [items]);
+  }, [plannerVersion]);
+
+  const onBoardStatus = useCallback(
+    (task: PlannerItem, next: PlannerTaskStatus) => {
+      if (updatePlannerTask(task.id, { status: next }, actorName)) {
+        setPlannerVersion((n) => n + 1);
+      }
+    },
+    [actorName]
+  );
 
   return (
     <div className="max-w-[1200px] min-w-0 space-y-5">
@@ -205,34 +233,51 @@ const AdminPlanner: React.FC = () => {
                 <span className="ml-1 text-zinc-600">({board[col].length})</span>
               </div>
               <div className="p-2 space-y-2 flex-1">
-                {board[col].map((t) => (
-                  <div
-                    key={t.id}
-                    className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-2.5 text-sm min-w-0"
-                  >
-                    <p className="text-white font-medium leading-snug">{t.title}</p>
-                    <p className="text-[10px] text-zinc-500 mt-1 truncate">{t.projectTitle}</p>
-                    <p className="text-[10px] text-zinc-600 mt-0.5 font-mono">{formatAdminDate(t.dueDate)}</p>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => onAddPlannerToGoogle(t)}
-                        className="inline-flex items-center gap-0.5 text-[9px] font-bold uppercase text-zinc-300 border border-zinc-700 rounded px-1 py-0.5 hover:bg-zinc-800"
-                        title="Add to Google Calendar"
-                      >
-                        <CalendarPlus size={10} />
-                        GCal
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openCalendarForItem(t)}
-                        className="text-[9px] font-bold uppercase text-zinc-500 hover:text-zinc-200"
-                      >
-                        Invite
-                      </button>
+                {board[col].map((t) => {
+                  const st = plannerStatusFromItem(t);
+                  return (
+                    <div
+                      key={t.id}
+                      className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-2.5 text-sm min-w-0"
+                    >
+                      <p className="text-white font-medium leading-snug">{t.title}</p>
+                      <p className="text-[10px] text-zinc-500 mt-1 truncate">{t.projectTitle}</p>
+                      <p className="text-[10px] text-zinc-600 mt-0.5 font-mono">{formatAdminDate(t.dueDate)}</p>
+                      <label className="mt-1.5 flex items-center gap-1.5 min-w-0">
+                        <span className="text-[9px] uppercase text-zinc-500 shrink-0">Status</span>
+                        <select
+                          value={st}
+                          onChange={(e) => onBoardStatus(t, e.target.value as PlannerTaskStatus)}
+                          className="min-w-0 flex-1 rounded border border-zinc-700 bg-zinc-900 px-1 py-0.5 text-[10px] text-zinc-200"
+                        >
+                          {BOARD_STATUS_OPTIONS.map((o) => (
+                            <option key={o.value} value={o.value}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => onAddPlannerToGoogle(t)}
+                          className="inline-flex items-center gap-0.5 text-[9px] font-bold uppercase text-zinc-300 border border-zinc-700 rounded px-1 py-0.5 hover:bg-zinc-800"
+                          title="Add to Google Calendar"
+                        >
+                          <CalendarPlus size={10} />
+                          GCal
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openCalendarForItem(t)}
+                          className="text-[9px] font-bold uppercase text-zinc-500 hover:text-zinc-200"
+                        >
+                          Invite
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 {board[col].length === 0 && <p className="text-xs text-zinc-600 p-1">—</p>}
               </div>
             </div>

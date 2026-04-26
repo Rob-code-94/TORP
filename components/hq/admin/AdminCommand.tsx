@@ -374,7 +374,7 @@ const AdminCommand: React.FC = () => {
           <Link to="/hq/admin/financials" className="bg-zinc-900/50 border border-zinc-800 p-5 rounded-xl hover:border-zinc-700 transition-colors">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs text-zinc-500 mb-1">Revenue (YTD, demo)</p>
+                <p className="text-xs text-zinc-500 mb-1">Revenue (YTD, sample)</p>
                 <p className="text-2xl font-bold text-white">${(stats.revenueYtd / 1000).toFixed(0)}k</p>
               </div>
               <div className="p-2 bg-zinc-800/80 rounded-lg text-zinc-300">
@@ -382,14 +382,14 @@ const AdminCommand: React.FC = () => {
               </div>
             </div>
             <div className="mt-3 flex items-center text-xs text-zinc-500">
-              <TrendingUp size={12} className="mr-1 text-zinc-400" /> Demo aggregate
+              <TrendingUp size={12} className="mr-1 text-zinc-400" /> Live aggregate
             </div>
           </Link>
         ) : (
           <div className="bg-zinc-900/50 border border-zinc-800 p-5 rounded-xl opacity-60">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs text-zinc-500 mb-1">Revenue (YTD, demo)</p>
+                <p className="text-xs text-zinc-500 mb-1">Revenue (YTD, sample)</p>
                 <p className="text-2xl font-bold text-white">${(stats.revenueYtd / 1000).toFixed(0)}k</p>
               </div>
               <div className="p-2 bg-zinc-800/80 rounded-lg text-zinc-300">
@@ -493,7 +493,7 @@ const AdminCommand: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-5 h-72">
-          <h3 className="text-sm font-semibold text-white mb-4">Revenue trajectory (demo)</h3>
+          <h3 className="text-sm font-semibold text-white mb-4">Revenue trajectory (sample)</h3>
           <ResponsiveContainer width="100%" height="85%">
             <AreaChart data={revenueData}>
               <defs>

@@ -163,7 +163,7 @@ const PlannerCalendar: React.FC<PlannerCalendarProps> = ({
   return (
     <div className="space-y-4 w-full min-w-0 max-w-6xl overflow-x-hidden">
       <p className="text-sm text-zinc-500">
-        Month, week, and day grids — items placed on their due date (mock; times optional later).
+        Month, week, and day grids — items are placed on their due date. Task times can be added in a later phase.
       </p>
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 pb-3 min-w-0">
@@ -445,7 +445,7 @@ const PlannerCalendar: React.FC<PlannerCalendarProps> = ({
                 </ul>
               </div>
               <div className="bg-zinc-950/40 p-2">
-                <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest mb-1 px-1">Time (demo)</p>
+                <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest mb-1 px-1">Time (preview)</p>
                 <div className="space-y-0">
                   {HOURS.map((h) => (
                     <div
@@ -460,7 +460,7 @@ const PlannerCalendar: React.FC<PlannerCalendarProps> = ({
                   ))}
                 </div>
                 <p className="text-[9px] text-zinc-600 mt-2 px-1">
-                  Tasks are date-only in mock data; time blocks are for layout. Wire time-of-day on tasks in a later phase.
+                  Tasks are date-only for now; time blocks are for layout until time-of-day is stored on each task.
                 </p>
               </div>
             </div>

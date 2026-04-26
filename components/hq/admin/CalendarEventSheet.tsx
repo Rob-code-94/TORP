@@ -1,12 +1,14 @@
 import React, { useEffect, useId, useState } from 'react';
 import { X } from 'lucide-react';
 import type { CalendarEventPayload } from '../../../types';
+import { createMeeting, createShoot, getProjectById } from '../../../data/adminMock';
 import {
   buildGoogleCalendarTemplateUrl,
   buildIcsFileContent,
   downloadIcsFile,
   openGoogleCalendarInNewTab,
 } from '../../../lib/calendarEvent';
+import { useAuth } from '../../../lib/auth';
 import { adminDateTimeInputProps, useAdminTheme } from '../../../lib/adminTheme';
 
 function parseDateInput(ymd: string): Date {
@@ -56,6 +58,8 @@ const CalendarEventSheet: React.FC<CalendarEventSheetProps> = ({
   appOrigin = typeof window !== 'undefined' ? window.location.origin : '',
 }) => {
   const { theme } = useAdminTheme();
+  const { user } = useAuth();
+  const actorName = user?.displayName?.trim() || user?.email || 'HQ';
   const isDark = theme === 'dark';
   const dateTimeInput = adminDateTimeInputProps(theme);
   const allDayId = useId();
@@ -70,6 +74,7 @@ const CalendarEventSheet: React.FC<CalendarEventSheetProps> = ({
   const [includeClient, setIncludeClient] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
+  const [saveKind, setSaveKind] = useState<'meeting' | 'shoot'>('meeting');
 
   const allowPicker = !projectContext && projectOptions.length > 0;
   const selectedProject = projectContext ?? projectOptions.find((p) => p.id === selectedProjectId);
@@ -195,6 +200,58 @@ const CalendarEventSheet: React.FC<CalendarEventSheetProps> = ({
     window.location.href = href;
   };
 
+  const onSaveToProjectSchedule = () => {
+    const p = buildPayload();
+    if (!p) return;
+    const projectId = projectContext?.id || selectedProjectId;
+    if (!projectId) {
+      setFormError('Select a project to save to the production schedule.');
+      return;
+    }
+    const project = getProjectById(projectId);
+    if (!project) {
+      setFormError('That project was not found.');
+      return;
+    }
+    setFormError(null);
+    try {
+      if (saveKind === 'meeting') {
+        const startTime = p.allDay ? '10:00' : (timeHm || '10:00');
+        createMeeting(
+          {
+            projectId: project.id,
+            projectTitle: project.title,
+            title: p.title,
+            date: dateYmd,
+            startTime,
+            location: p.location || 'TBD',
+            participants: [],
+            description: p.description,
+          },
+          actorName
+        );
+      } else {
+        const callTime = p.allDay ? '09:00' : (timeHm || '09:00');
+        createShoot(
+          {
+            projectId: project.id,
+            projectTitle: project.title,
+            title: p.title,
+            date: dateYmd,
+            callTime,
+            location: p.location || 'TBD',
+            crew: [],
+            gearSummary: 'Details TBD',
+          },
+          actorName
+        );
+      }
+      setBanner('Saved to the project schedule. Open the project to review or adjust crew.');
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : 'Could not save to the project schedule.');
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50">
       <button type="button" onClick={onClose} className="absolute inset-0 bg-black/70" aria-label="Close" />
@@ -308,6 +365,30 @@ const CalendarEventSheet: React.FC<CalendarEventSheetProps> = ({
                 </span>
               </label>
             )}
+
+            <div className="border border-zinc-800 rounded-md p-2.5 space-y-2">
+              <p className="text-[11px] uppercase tracking-wide text-zinc-500">Save to project</p>
+              <div className="flex flex-wrap gap-2 text-xs text-zinc-300">
+                <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="saveKind"
+                    checked={saveKind === 'meeting'}
+                    onChange={() => setSaveKind('meeting')}
+                  />
+                  Meeting
+                </label>
+                <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="saveKind"
+                    checked={saveKind === 'shoot'}
+                    onChange={() => setSaveKind('shoot')}
+                  />
+                  Shoot day
+                </label>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -316,6 +397,13 @@ const CalendarEventSheet: React.FC<CalendarEventSheetProps> = ({
             isDark ? 'border-zinc-800 bg-zinc-950/95' : 'border-zinc-300 bg-white/95'
           }`}
         >
+          <button
+            type="button"
+            onClick={onSaveToProjectSchedule}
+            className="w-full rounded-md border border-zinc-600 bg-zinc-100 text-zinc-900 px-3 py-2 text-xs font-semibold"
+          >
+            Save to project schedule
+          </button>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <button
               type="button"
