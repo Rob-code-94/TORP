@@ -4,6 +4,8 @@ import { MOCK_CREW } from '../../../data/adminMock';
 import { createCrew, deleteCrew, sendCrewResetLink, setCrewPassword, updateCrew } from '../../../data/adminProjectsApi';
 import { useAuth } from '../../../lib/auth';
 import { isFirebaseConfigured } from '../../../lib/firebase';
+import { useAdminTheme } from '../../../lib/adminTheme';
+import { appInputClass, appLinkMutedClass, appPanelClass } from '../../../lib/appThemeClasses';
 import { sendCrewAuthPasswordReset, setCrewAuthTempPassword } from '../../../lib/crewAuthAdmin';
 import AdminFormDrawer from './AdminFormDrawer';
 import type { CrewFeatureKey, CrewProfile } from '../../../types';
@@ -69,6 +71,8 @@ const EMPTY_CREW_DRAFT: CrewDraft = {
 };
 
 const AdminCrew: React.FC = () => {
+  const { theme } = useAdminTheme();
+  const isDark = theme === 'dark';
   const { user, isFirebase } = useAuth();
   const isAdmin = user?.role === UserRole.ADMIN;
   const isProjectManager = user?.role === UserRole.PROJECT_MANAGER;
@@ -346,7 +350,7 @@ const AdminCrew: React.FC = () => {
           value={directoryQuery}
           onChange={(e) => setDirectoryQuery(e.target.value)}
           placeholder="Search name, email, craft"
-          className="w-full sm:flex-1 sm:min-w-[200px] rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-100"
+          className={appInputClass(isDark)}
           aria-label="Search crew"
         />
         <label className="text-xs text-zinc-500 flex flex-col gap-0.5 sm:min-w-[130px]">
@@ -354,7 +358,11 @@ const AdminCrew: React.FC = () => {
           <select
             value={roleFilter}
             onChange={(e) => setRoleFilter(e.target.value as typeof roleFilter)}
-            className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
+            className={
+              isDark
+                ? 'rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200'
+                : 'rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900'
+            }
           >
             <option value="all">All</option>
             <option value="director">Director</option>
@@ -370,7 +378,11 @@ const AdminCrew: React.FC = () => {
           <select
             value={activeFilter}
             onChange={(e) => setActiveFilter(e.target.value as typeof activeFilter)}
-            className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
+            className={
+              isDark
+                ? 'rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200'
+                : 'rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900'
+            }
           >
             <option value="all">All</option>
             <option value="active">Active</option>
@@ -385,15 +397,19 @@ const AdminCrew: React.FC = () => {
               setRoleFilter('all');
               setActiveFilter('all');
             }}
-            className="text-xs text-zinc-500 hover:text-zinc-200 underline self-start sm:mb-1"
+            className={`text-xs underline self-start sm:mb-1 ${appLinkMutedClass(isDark)}`}
           >
             Clear
           </button>
         )}
       </div>
-      <div className="bg-zinc-900/30 border border-zinc-800 rounded-xl overflow-x-auto">
+      <div className={`rounded-xl overflow-x-auto min-w-0 ${appPanelClass(isDark)}`}>
         <table className="w-full text-sm min-w-[720px]">
-          <thead className="text-xs text-zinc-500 uppercase border-b border-zinc-800 bg-zinc-950/60">
+          <thead
+            className={`text-xs uppercase border-b ${
+              isDark ? 'text-zinc-500 border-zinc-800 bg-zinc-950/60' : 'text-zinc-600 border-zinc-200 bg-zinc-100'
+            }`}
+          >
             <tr>
               <th className="text-left px-3 py-2">Name</th>
               <th className="text-left px-3 py-2">Craft</th>
@@ -404,7 +420,7 @@ const AdminCrew: React.FC = () => {
               <th className="text-left px-3 py-2">Projects</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-800/80">
+          <tbody className={isDark ? 'divide-y divide-zinc-800/80' : 'divide-y divide-zinc-200'}>
             {filteredCrew.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-3 py-4 text-sm text-zinc-500">
@@ -413,9 +429,24 @@ const AdminCrew: React.FC = () => {
               </tr>
             ) : (
               filteredCrew.map((c) => (
-              <tr key={c.id} className="text-zinc-200">
-                <td className="px-3 py-2.5 font-medium text-white">
-                  <button type="button" onClick={() => openEdit(c.id)} className="underline decoration-zinc-700 underline-offset-2">
+              <tr
+                key={c.id}
+                className={isDark ? 'text-zinc-200' : 'text-zinc-800'}
+              >
+                <td
+                  className={`px-3 py-2.5 font-medium ${
+                    isDark ? 'text-white' : 'text-zinc-900'
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => openEdit(c.id)}
+                    className={
+                      isDark
+                        ? 'underline decoration-zinc-700 underline-offset-2'
+                        : 'underline decoration-zinc-300 underline-offset-2'
+                    }
+                  >
                     {c.displayName}
                   </button>
                 </td>
@@ -429,7 +460,7 @@ const AdminCrew: React.FC = () => {
                     <Link
                       key={pid}
                       to={`/hq/admin/projects/${pid}`}
-                      className="mr-2 text-zinc-500 hover:text-white"
+                      className={`mr-2 ${appLinkMutedClass(isDark)}`}
                     >
                       {pid}
                     </Link>
@@ -476,13 +507,13 @@ const AdminCrew: React.FC = () => {
               onChange={(e) => setDraft((v) => ({ ...v, displayName: e.target.value }))}
               placeholder="Full name"
               disabled={crewReadOnly}
-              className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 disabled:opacity-50"
+              className={`${appInputClass(isDark)} disabled:opacity-50`}
             />
             <select
               value={draft.role}
               onChange={(e) => setDraft((v) => ({ ...v, role: e.target.value as CrewProfile['role'] }))}
               disabled={crewReadOnly}
-              className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 disabled:opacity-50"
+              className={`${appInputClass(isDark)} disabled:opacity-50`}
             >
               <option value="director">Director</option>
               <option value="dp">DP</option>
@@ -498,7 +529,7 @@ const AdminCrew: React.FC = () => {
               value={draft.systemRole}
               onChange={(e) => setDraft((v) => ({ ...v, systemRole: e.target.value as CrewProfile['systemRole'] }))}
               disabled={crewReadOnly || !isAdmin}
-              className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 disabled:opacity-50"
+              className={`${appInputClass(isDark)} disabled:opacity-50`}
             >
               <option value={UserRole.STAFF}>Staff</option>
               <option value={UserRole.PROJECT_MANAGER}>Project manager</option>
@@ -508,7 +539,7 @@ const AdminCrew: React.FC = () => {
               <p className="text-[11px] text-zinc-500 mt-1">Only admins can change system role.</p>
             )}
           </div>
-          <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3 space-y-2">
+          <div className={`rounded-lg p-3 space-y-2 min-w-0 ${appPanelClass(isDark)}`}>
             <p className="text-xs uppercase tracking-wide text-zinc-500">Feature access (HQ)</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {FEATURE_ACCESS_FIELDS.map((item) => {
@@ -534,14 +565,14 @@ const AdminCrew: React.FC = () => {
               onChange={(e) => setDraft((v) => ({ ...v, email: e.target.value }))}
               placeholder="Email"
               disabled={crewReadOnly}
-              className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 disabled:opacity-50"
+              className={`${appInputClass(isDark)} disabled:opacity-50`}
             />
             <input
               value={draft.phone}
               onChange={(e) => setDraft((v) => ({ ...v, phone: e.target.value }))}
               placeholder="Phone"
               disabled={crewReadOnly}
-              className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 disabled:opacity-50"
+              className={`${appInputClass(isDark)} disabled:opacity-50`}
             />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -554,7 +585,7 @@ const AdminCrew: React.FC = () => {
                   onChange={(e) => setDraft((v) => ({ ...v, rateShootHour: e.target.value.replace(/[^\d.]/g, '') }))}
                   placeholder="0.00"
                   disabled={crewReadOnly}
-                  className="w-full rounded-md border border-zinc-700 bg-zinc-900 pl-7 pr-3 py-2 text-sm text-zinc-100 disabled:opacity-50"
+                  className={`w-full pl-7 pr-3 ${appInputClass(isDark)} disabled:opacity-50`}
                 />
               </div>
             </label>
@@ -567,12 +598,12 @@ const AdminCrew: React.FC = () => {
                   onChange={(e) => setDraft((v) => ({ ...v, rateEditHour: e.target.value.replace(/[^\d.]/g, '') }))}
                   placeholder="0.00"
                   disabled={crewReadOnly}
-                  className="w-full rounded-md border border-zinc-700 bg-zinc-900 pl-7 pr-3 py-2 text-sm text-zinc-100 disabled:opacity-50"
+                  className={`w-full pl-7 pr-3 ${appInputClass(isDark)} disabled:opacity-50`}
                 />
               </div>
             </label>
           </div>
-          <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3 space-y-2">
+          <div className={`rounded-lg p-3 space-y-2 min-w-0 ${appPanelClass(isDark)}`}>
             <p className="text-xs uppercase tracking-wide text-zinc-500">Availability</p>
             {availabilityBlocked && (
               <div className="rounded-md border border-amber-700/60 bg-amber-950/40 p-2 text-[11px] leading-snug text-amber-200">
@@ -613,21 +644,21 @@ const AdminCrew: React.FC = () => {
                 onChange={(e) => setDraft((v) => ({ ...v, timezone: e.target.value }))}
                 placeholder="Timezone"
                 disabled={crewReadOnly || availabilityBlocked}
-                className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 disabled:opacity-50"
+                className={`${appInputClass(isDark)} disabled:opacity-50`}
               />
               <input
                 type="time"
                 value={draft.weekdayStart}
                 onChange={(e) => setDraft((v) => ({ ...v, weekdayStart: e.target.value }))}
                 disabled={crewReadOnly || availabilityBlocked}
-                className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 disabled:opacity-50"
+                className={`${appInputClass(isDark)} disabled:opacity-50`}
               />
               <input
                 type="time"
                 value={draft.weekdayEnd}
                 onChange={(e) => setDraft((v) => ({ ...v, weekdayEnd: e.target.value }))}
                 disabled={crewReadOnly || availabilityBlocked}
-                className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 disabled:opacity-50"
+                className={`${appInputClass(isDark)} disabled:opacity-50`}
               />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -636,14 +667,14 @@ const AdminCrew: React.FC = () => {
                 value={draft.exceptionStart}
                 onChange={(e) => setDraft((v) => ({ ...v, exceptionStart: e.target.value }))}
                 disabled={crewReadOnly || availabilityBlocked}
-                className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 disabled:opacity-50"
+                className={`${appInputClass(isDark)} disabled:opacity-50`}
               />
               <input
                 type="date"
                 value={draft.exceptionEnd}
                 onChange={(e) => setDraft((v) => ({ ...v, exceptionEnd: e.target.value }))}
                 disabled={crewReadOnly || availabilityBlocked}
-                className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 disabled:opacity-50"
+                className={`${appInputClass(isDark)} disabled:opacity-50`}
               />
             </div>
             <textarea
@@ -652,7 +683,7 @@ const AdminCrew: React.FC = () => {
               rows={2}
               placeholder="Availability notes"
               disabled={crewReadOnly || availabilityBlocked}
-              className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 disabled:opacity-50"
+              className={`${appInputClass(isDark)} disabled:opacity-50`}
             />
           </div>
           <label className="flex items-center gap-2 text-xs text-zinc-300">
@@ -665,7 +696,7 @@ const AdminCrew: React.FC = () => {
             Active crew member
           </label>
           {editingCrew && (
-            <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3">
+            <div className={`rounded-lg p-3 min-w-0 ${appPanelClass(isDark)}`}>
               <p className="text-xs uppercase tracking-wide text-zinc-500 mb-2">Account</p>
               {!crewReadOnly ? (
                 <>
@@ -682,7 +713,7 @@ const AdminCrew: React.FC = () => {
                       value={draft.tempPassword}
                       onChange={(e) => setDraft((v) => ({ ...v, tempPassword: e.target.value }))}
                       placeholder="Set temporary password"
-                      className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+                      className={appInputClass(isDark)}
                     />
                     <button
                       type="button"

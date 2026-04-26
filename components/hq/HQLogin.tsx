@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getIdTokenResult, sendPasswordResetEmail, signInWithEmailAndPassword } from 'firebase/auth';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Moon, Sun } from 'lucide-react';
 import { UserRole } from '../../types';
 import { useAuth, type AuthUser } from '../../lib/auth';
 import { authenticateHqUser } from '../../lib/demoHqUsers';
 import { getFirebaseAuthInstance, isFirebaseConfigured } from '../../lib/firebase';
 import { authUserFromFirebase } from '../../lib/firebaseAuthUser';
 import { messageForFirebaseSignInError, messageForPasswordResetError } from '../../lib/firebaseAuthError';
+import { useAdminTheme } from '../../lib/adminTheme';
+import { appInputClass, appPanelClass } from '../../lib/appThemeClasses';
 
 function postLoginPathForUser(u: AuthUser): string {
   if (u.role === UserRole.STAFF) return '/hq/staff';
@@ -19,6 +21,8 @@ function postLoginPathForUser(u: AuthUser): string {
 /** Sign-in: Firebase when configured; otherwise local demo session. */
 const HQLogin: React.FC = () => {
   const { user, loginAs, logout, loading: authLoading, isFirebase } = useAuth();
+  const { theme, toggleTheme } = useAdminTheme();
+  const isDark = theme === 'dark';
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -125,26 +129,50 @@ const HQLogin: React.FC = () => {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-zinc-950 text-zinc-400 flex items-center justify-center p-6 text-sm">
+      <div
+        className={`min-h-screen flex items-center justify-center p-6 text-sm ${
+          isDark ? 'bg-zinc-950 text-zinc-400' : 'bg-zinc-50 text-zinc-600'
+        }`}
+      >
         Loading…
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center p-6 font-sans min-w-0">
+    <div
+      className={`relative min-h-screen flex flex-col items-center justify-center p-6 font-sans min-w-0 ${
+        isDark ? 'bg-zinc-950 text-zinc-100' : 'bg-zinc-50 text-zinc-900'
+      }`}
+    >
+      <button
+        type="button"
+        onClick={toggleTheme}
+        className={`fixed right-4 top-4 z-10 inline-flex h-10 w-10 items-center justify-center rounded-lg border transition-colors ${
+          isDark
+            ? 'border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800'
+            : 'border-zinc-200 bg-white text-zinc-800 shadow-sm hover:bg-zinc-100'
+        }`}
+        aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+      >
+        {isDark ? <Sun size={18} /> : <Moon size={18} />}
+      </button>
       <div className="w-full max-w-md min-w-0">
         <Link
           to="/"
-          className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-zinc-500 hover:text-zinc-300 transition-colors mb-10"
+          className={`inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest transition-colors mb-10 ${
+            isDark ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-600 hover:text-zinc-900'
+          }`}
         >
           <ArrowLeft size={14} /> Back to site
         </Link>
 
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-8 shadow-2xl min-w-0">
+        <div className={`rounded-2xl p-8 shadow-2xl min-w-0 ${appPanelClass(isDark)}`}>
           <p className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-2">TORP HQ</p>
-          <h1 className="text-2xl font-black tracking-tight text-white mb-2">Staff sign-in</h1>
-          <p className="text-sm text-zinc-400 mb-6">
+          <h1 className={`text-2xl font-black tracking-tight mb-2 ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+            Staff sign-in
+          </h1>
+          <p className={`text-sm mb-6 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
             {useFirebase
               ? 'Use your organizational email and password. If this is a local setup, add accounts in Firebase and set custom claims for roles.'
               : 'Local sign-in mode: email is normalized to lowercase for lookup.'}
@@ -154,7 +182,13 @@ const HQLogin: React.FC = () => {
             (user.role === UserRole.ADMIN ||
               user.role === UserRole.PROJECT_MANAGER ||
               user.role === UserRole.STAFF) && (
-              <p className="text-xs text-amber-200/90 bg-amber-950/40 border border-amber-900/50 rounded-lg px-3 py-2 mb-4 break-words">
+              <p
+                className={`text-xs rounded-lg px-3 py-2 mb-4 break-words ${
+                  isDark
+                    ? 'text-amber-200/90 bg-amber-950/40 border border-amber-900/50'
+                    : 'text-amber-900 bg-amber-50 border border-amber-200'
+                }`}
+              >
                 Signed in as {user.displayName || user.email || user.role}.{' '}
                 <button type="button" onClick={() => logout()} className="underline font-semibold">
                   Sign out
@@ -170,7 +204,7 @@ const HQLogin: React.FC = () => {
                 autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 w-full min-w-0 rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-3 text-sm text-zinc-100"
+                className={`mt-1 rounded-xl ${appInputClass(isDark)}`}
                 placeholder="you@torp.life"
               />
             </label>
@@ -181,15 +215,21 @@ const HQLogin: React.FC = () => {
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 w-full min-w-0 rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-3 text-sm text-zinc-100"
+                className={`mt-1 rounded-xl ${appInputClass(isDark)}`}
                 placeholder="••••••••"
               />
             </label>
-            {error && <p className="text-xs text-red-300">{error}</p>}
+            {error && (
+              <p className={isDark ? 'text-xs text-red-300' : 'text-xs text-red-600'}>{error}</p>
+            )}
             <button
               type="submit"
               disabled={busy}
-              className="w-full bg-white hover:bg-zinc-200 disabled:opacity-60 text-black font-bold py-4 rounded-xl transition-all hover:scale-[1.01]"
+              className={`w-full font-bold py-4 rounded-xl transition-all hover:scale-[1.01] disabled:opacity-60 ${
+                isDark
+                  ? 'bg-white text-black hover:bg-zinc-200'
+                  : 'bg-zinc-900 text-white hover:bg-zinc-800'
+              }`}
             >
               {busy ? 'Signing in…' : 'Sign in'}
             </button>
@@ -204,12 +244,21 @@ const HQLogin: React.FC = () => {
                 setForgotStatus('idle');
                 setForgotError(null);
               }}
-              className="text-xs text-zinc-500 hover:text-zinc-300 underline underline-offset-2"
+              className={
+                isDark
+                  ? 'text-xs text-zinc-500 hover:text-zinc-300 underline underline-offset-2'
+                  : 'text-xs text-zinc-600 hover:text-zinc-900 underline underline-offset-2'
+              }
             >
               Forgot password?
             </button>
             {forgotOpen && (
-              <form onSubmit={sendForgot} className="mt-3 space-y-2 rounded-lg border border-zinc-800 bg-zinc-950/50 p-3">
+              <form
+                onSubmit={sendForgot}
+                className={`mt-3 space-y-2 rounded-lg border p-3 ${
+                  isDark ? 'border-zinc-800 bg-zinc-950/50' : 'border-zinc-200 bg-zinc-100/80'
+                }`}
+              >
                 <p className="text-[11px] text-zinc-500">
                   {useFirebase
                     ? "We'll email a link if the address is registered. For privacy we show the same message either way."
@@ -219,12 +268,16 @@ const HQLogin: React.FC = () => {
                   type="email"
                   value={forgotEmail}
                   onChange={(e) => setForgotEmail(e.target.value)}
-                  className="w-full min-w-0 rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-2 text-sm"
+                  className={`w-full min-w-0 rounded-lg ${appInputClass(isDark)}`}
                   placeholder="email@org.com"
                 />
-                {forgotError && <p className="text-xs text-red-300">{forgotError}</p>}
+                {forgotError && (
+                  <p className={isDark ? 'text-xs text-red-300' : 'text-xs text-red-600'}>
+                    {forgotError}
+                  </p>
+                )}
                 {forgotStatus === 'sent' && (
-                  <p className="text-xs text-emerald-300">
+                  <p className={isDark ? 'text-xs text-emerald-300' : 'text-xs text-emerald-700'}>
                     {useFirebase
                       ? 'If that address is registered, a reset link was sent. Check your inbox and spam folder.'
                       : 'If that address is registered, a reset link can be sent once Firebase email auth is enabled.'}
@@ -233,7 +286,11 @@ const HQLogin: React.FC = () => {
                 <button
                   type="submit"
                   disabled={forgotStatus === 'sending'}
-                  className="w-full rounded-lg bg-zinc-800 py-2 text-xs font-bold text-white hover:bg-zinc-700"
+                  className={
+                    isDark
+                      ? 'w-full rounded-lg bg-zinc-800 py-2 text-xs font-bold text-white hover:bg-zinc-700'
+                      : 'w-full rounded-lg bg-zinc-200 py-2 text-xs font-bold text-zinc-900 hover:bg-zinc-300'
+                  }
                 >
                   {forgotStatus === 'sending' ? 'Sending…' : 'Send reset link'}
                 </button>
@@ -249,7 +306,11 @@ const HQLogin: React.FC = () => {
                   type="button"
                   onClick={goAdminQuick}
                   disabled={busy}
-                  className="w-full bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white font-semibold py-3 rounded-xl text-sm transition-colors"
+                  className={
+                    isDark
+                      ? 'w-full bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white font-semibold py-3 rounded-xl text-sm transition-colors'
+                      : 'w-full bg-zinc-200 hover:bg-zinc-300 disabled:opacity-50 text-zinc-900 font-semibold py-3 rounded-xl text-sm transition-colors'
+                  }
                 >
                   Continue as Admin{useFirebase ? ' (Firebase: info@torp.life)' : ' (no password)'}
                 </button>
@@ -257,7 +318,11 @@ const HQLogin: React.FC = () => {
                   type="button"
                   onClick={goStaffQuick}
                   disabled={busy}
-                  className="w-full bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white font-semibold py-3 rounded-xl text-sm transition-colors"
+                  className={
+                    isDark
+                      ? 'w-full bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white font-semibold py-3 rounded-xl text-sm transition-colors'
+                      : 'w-full bg-zinc-200 hover:bg-zinc-300 disabled:opacity-50 text-zinc-900 font-semibold py-3 rounded-xl text-sm transition-colors'
+                  }
                 >
                   Continue as Crew{useFirebase ? ' (Firebase: staff@torp.life)' : ' (local crew profile)'}
                 </button>
@@ -267,7 +332,14 @@ const HQLogin: React.FC = () => {
 
           <p className="mt-8 text-center text-[11px] text-zinc-600">
             Need the client portal?{' '}
-            <Link to="/portal/login" className="text-zinc-400 hover:text-white underline underline-offset-2">
+            <Link
+              to="/portal/login"
+              className={
+                isDark
+                  ? 'text-zinc-400 hover:text-white underline underline-offset-2'
+                  : 'text-zinc-600 hover:text-zinc-900 underline underline-offset-2'
+              }
+            >
               Client sign-in
             </Link>
           </p>

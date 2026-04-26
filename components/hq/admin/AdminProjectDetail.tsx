@@ -54,6 +54,7 @@ import { saveProjectNarrative } from '../../../data/adminProjectsApi';
 import { openGoogleCalendarInNewTab, payloadFromAdminMeeting, payloadFromAdminShoot } from '../../../lib/calendarEvent';
 import { useAuth } from '../../../lib/auth';
 import { adminDateTimeInputProps, useAdminTheme } from '../../../lib/adminTheme';
+import { appInputClass, appPanelClass } from '../../../lib/appThemeClasses';
 import { staffCanViewProject } from '../../../lib/hqAccess';
 import { hasProjectCapability, isProjectRole } from '../../../lib/projectPermissions';
 import type {
@@ -525,9 +526,27 @@ const AdminProjectDetail: React.FC = () => {
   const withState = (id: Tab, hasData: boolean, content: React.ReactNode) => {
     const state = tabState[id];
     const tabName = id[0].toUpperCase() + id.slice(1);
-    if (state === 'loading') return <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-4 text-sm text-zinc-500">{tabName} is loading...</div>;
+    if (state === 'loading')
+      return (
+        <div
+          className={`rounded-xl p-4 text-sm ${
+            isDark ? 'border border-zinc-800 bg-zinc-900/30 text-zinc-500' : 'border border-zinc-200 bg-zinc-50 text-zinc-600'
+          }`}
+        >
+          {tabName} is loading...
+        </div>
+      );
     if (state === 'error') return <div className="rounded-xl border border-red-900/50 bg-red-950/20 p-4 text-sm text-red-200">We could not load this section right now. Please try again.</div>;
-    if (state === 'empty' || !hasData) return <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-4 text-sm text-zinc-500">Nothing here yet. Add the first item to get started.</div>;
+    if (state === 'empty' || !hasData)
+      return (
+        <div
+          className={`rounded-xl p-4 text-sm ${
+            isDark ? 'border border-zinc-800 bg-zinc-900/30 text-zinc-500' : 'border border-zinc-200 bg-zinc-50 text-zinc-600'
+          }`}
+        >
+          Nothing here yet. Add the first item to get started.
+        </div>
+      );
     return <>{content}</>;
   };
 
@@ -571,7 +590,7 @@ const AdminProjectDetail: React.FC = () => {
                 if (result.ok) setRefreshTick((value) => value + 1);
               }}
               disabled={!canMoveStage}
-              className="rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-xs text-zinc-100 disabled:opacity-50"
+              className={`${appInputClass(isDark).replace('text-sm', 'text-xs')} py-1.5 disabled:opacity-50`}
             >
               {PROJECT_STAGE_ORDER.map((item) => (
                 <option key={item} value={item}>
@@ -608,7 +627,7 @@ const AdminProjectDetail: React.FC = () => {
 
       {tab === 'overview' && withState('overview', true, (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-zinc-300 min-w-0">
-          <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-4">
+          <div className={`rounded-xl p-4 min-w-0 ${appPanelClass(isDark)}`}>
             <div className="flex items-center justify-between gap-2 mb-2">
               <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Summary</h3>
               {!isEditingNarrative && !isStaff && (
@@ -622,7 +641,7 @@ const AdminProjectDetail: React.FC = () => {
               Next: <span className="text-white">{isEditingNarrative ? milestoneDraft : project.nextMilestone}</span>
             </p>
           </div>
-          <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-4">
+          <div className={`rounded-xl p-4 min-w-0 ${appPanelClass(isDark)}`}>
             <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500 mb-2">Deliverables</h3>
             {deliverables.length === 0 ? (
               <p className="text-sm text-zinc-500">No deliverables yet. Add one in the Deliverables tab.</p>
@@ -634,7 +653,7 @@ const AdminProjectDetail: React.FC = () => {
               </ul>
             )}
           </div>
-          <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-4 md:col-span-2">
+          <div className={`rounded-xl p-4 md:col-span-2 min-w-0 ${appPanelClass(isDark)}`}>
             <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500 mb-2">Team on this project</h3>
             <p className="text-xs text-zinc-500 mb-2">
               Owner: <span className="text-zinc-300">{project.ownerName}</span>
@@ -675,15 +694,15 @@ const AdminProjectDetail: React.FC = () => {
             </div>
           </div>
           {isEditingNarrative && (
-            <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-4 md:col-span-2 space-y-3">
+            <div className={`rounded-xl p-4 md:col-span-2 space-y-3 min-w-0 ${appPanelClass(isDark)}`}>
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Narrative Draft</h3>
                 <button type="button" onClick={autoSuggestNarrative} className="text-[11px] underline text-zinc-400">
                   Auto-suggest draft
                 </button>
               </div>
-              <textarea value={summaryDraft} onChange={(e) => setSummaryDraft(e.target.value)} rows={3} className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
-              <textarea value={milestoneDraft} onChange={(e) => setMilestoneDraft(e.target.value)} rows={2} className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+              <textarea value={summaryDraft} onChange={(e) => setSummaryDraft(e.target.value)} rows={3} className={appInputClass(isDark)} />
+              <textarea value={milestoneDraft} onChange={(e) => setMilestoneDraft(e.target.value)} rows={2} className={appInputClass(isDark)} />
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -715,7 +734,11 @@ const AdminProjectDetail: React.FC = () => {
       ))}
 
       {tab === 'brief' && withState('brief', true, (
-        <div className="bg-zinc-900/30 border border-zinc-800 rounded-xl p-5 space-y-4 text-sm text-zinc-200">
+        <div
+          className={`rounded-xl p-5 space-y-4 text-sm ${
+            isDark ? 'text-zinc-200' : 'text-zinc-800'
+          } min-w-0 ${appPanelClass(isDark)}`}
+        >
           <div>
             <div className="flex items-center justify-between gap-2 mb-1">
               <h3 className="text-xs font-bold uppercase text-zinc-500">Brief</h3>
@@ -726,7 +749,7 @@ const AdminProjectDetail: React.FC = () => {
               )}
             </div>
             {isEditingNarrative ? (
-              <textarea value={briefDraft} onChange={(e) => setBriefDraft(e.target.value)} rows={4} className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+              <textarea value={briefDraft} onChange={(e) => setBriefDraft(e.target.value)} rows={4} className={appInputClass(isDark)} />
             ) : (
               <p className="leading-relaxed">{project.brief}</p>
             )}
@@ -734,7 +757,7 @@ const AdminProjectDetail: React.FC = () => {
           <div>
             <h3 className="text-xs font-bold uppercase text-zinc-500 mb-1">Goals</h3>
             {isEditingNarrative ? (
-              <textarea value={goalsDraft} onChange={(e) => setGoalsDraft(e.target.value)} rows={3} className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+              <textarea value={goalsDraft} onChange={(e) => setGoalsDraft(e.target.value)} rows={3} className={appInputClass(isDark)} />
             ) : (
               <p className="leading-relaxed">{project.goals}</p>
             )}
@@ -781,7 +804,11 @@ const AdminProjectDetail: React.FC = () => {
 
       {tab === 'planner' && withState('planner', true, (
         <div className="space-y-3">
-          <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/20 px-3 py-2">
+          <div
+            className={`flex items-center justify-between rounded-xl px-3 py-2 ${
+              isDark ? 'border border-zinc-800 bg-zinc-900/20' : 'border border-zinc-200 bg-zinc-100/80'
+            }`}
+          >
             <p className="text-xs uppercase tracking-widest text-zinc-500">Task Workstream</p>
             <div className="flex items-center gap-3">
               <p className="text-xs text-zinc-400">{plannerView.length} task(s)</p>
@@ -796,12 +823,16 @@ const AdminProjectDetail: React.FC = () => {
               )}
             </div>
           </div>
-          <div className="bg-zinc-900/30 border border-zinc-800 rounded-xl overflow-x-auto min-w-0">
+          <div className={`rounded-xl overflow-x-auto min-w-0 ${appPanelClass(isDark)}`}>
             {plannerView.length === 0 ? (
               <p className="p-4 text-sm text-zinc-500">No planner tasks yet. Add the first work item above.</p>
             ) : (
               <table className="w-full text-sm min-w-[920px]">
-              <thead className="text-xs text-zinc-500 uppercase border-b border-zinc-800 bg-zinc-950/60">
+              <thead
+                className={`text-xs uppercase border-b ${
+                  isDark ? 'text-zinc-500 border-zinc-800 bg-zinc-950/60' : 'text-zinc-600 border-zinc-200 bg-zinc-100'
+                }`}
+              >
                 <tr>
                   <th className="text-left px-3 py-2">Task</th>
                   <th className="text-left px-3 py-2">Type</th>
@@ -812,10 +843,14 @@ const AdminProjectDetail: React.FC = () => {
                   <th className="text-left px-3 py-2">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-800/80">
+              <tbody className={isDark ? 'divide-y divide-zinc-800/80' : 'divide-y divide-zinc-200'}>
                 {plannerView.map((t) => (
-                  <tr key={t.id} className="hover:bg-zinc-900/30">
-                    <td className="px-3 py-2.5 text-white">
+                  <tr key={t.id} className={isDark ? 'hover:bg-zinc-900/30' : 'hover:bg-zinc-100/80'}>
+                    <td
+                      className={`px-3 py-2.5 ${
+                        isDark ? 'text-white' : 'text-zinc-900'
+                      }`}
+                    >
                       {t.title}
                       {t.done && <span className="ml-2 text-xs text-zinc-500">(done)</span>}
                     </td>
@@ -828,7 +863,9 @@ const AdminProjectDetail: React.FC = () => {
                           updatePlannerTask(t.id, { type: next }, actorName);
                           setRefreshTick((value) => value + 1);
                         }}
-                        className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-100"
+                        className={`rounded-md border px-2 py-1 text-xs ${
+            isDark ? 'border-zinc-700 bg-zinc-900 text-zinc-100' : 'border-zinc-300 bg-white text-zinc-900'
+          }`}
                       >
                         <option value="admin">Admin</option>
                         <option value="pre_production">Pre-production</option>
@@ -851,7 +888,9 @@ const AdminProjectDetail: React.FC = () => {
                           setRefreshTick((value) => value + 1);
                           setMessage(`Task moved to ${next.replace('_', ' ')}.`);
                         }}
-                        className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-100"
+                        className={`rounded-md border px-2 py-1 text-xs ${
+            isDark ? 'border-zinc-700 bg-zinc-900 text-zinc-100' : 'border-zinc-300 bg-white text-zinc-900'
+          }`}
                       >
                         <option value="todo">To Do</option>
                         <option value="in_progress">In Progress</option>
@@ -868,7 +907,9 @@ const AdminProjectDetail: React.FC = () => {
                           updatePlannerTask(t.id, { priority: next }, actorName);
                           setRefreshTick((value) => value + 1);
                         }}
-                        className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-100"
+                        className={`rounded-md border px-2 py-1 text-xs ${
+            isDark ? 'border-zinc-700 bg-zinc-900 text-zinc-100' : 'border-zinc-300 bg-white text-zinc-900'
+          }`}
                       >
                         <option value="low">Low</option>
                         <option value="medium">Medium</option>
@@ -1005,21 +1046,21 @@ const AdminProjectDetail: React.FC = () => {
               <input
                 value={taskDraft.title}
                 onChange={(e) => setTaskDraft((current) => ({ ...current, title: e.target.value }))}
-                className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+                className={appInputClass(isDark)}
                 placeholder="Task title"
               />
               <textarea
                 value={taskDraft.description}
                 onChange={(e) => setTaskDraft((current) => ({ ...current, description: e.target.value }))}
                 rows={3}
-                className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+                className={appInputClass(isDark)}
                 placeholder="Description"
               />
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <input
                   value={taskDraft.referenceLink}
                   onChange={(e) => setTaskDraft((current) => ({ ...current, referenceLink: e.target.value }))}
-                  className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 sm:col-span-2"
+                  className={`${appInputClass(isDark)} sm:col-span-2`}
                   placeholder="Reference link"
                 />
                 <input
@@ -1027,11 +1068,11 @@ const AdminProjectDetail: React.FC = () => {
                   value={taskDraft.dueDate}
                   onChange={(e) => setTaskDraft((current) => ({ ...current, dueDate: e.target.value }))}
                   style={dateTimeInput.style}
-                  className={`rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 ${dateTimeInput.className}`}
+                  className={`${appInputClass(isDark)} ${dateTimeInput.className}`}
                 />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <select value={taskDraft.type} onChange={(e) => setTaskDraft((current) => ({ ...current, type: e.target.value as typeof current.type }))} className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100">
+                <select value={taskDraft.type} onChange={(e) => setTaskDraft((current) => ({ ...current, type: e.target.value as typeof current.type }))} className={appInputClass(isDark)}>
                   <option value="admin">Admin</option>
                   <option value="pre_production">Pre-production</option>
                   <option value="shoot">Shoot</option>
@@ -1041,7 +1082,7 @@ const AdminProjectDetail: React.FC = () => {
                   <option value="invoice">Invoice</option>
                   <option value="client_followup">Client follow-up</option>
                 </select>
-                <select value={taskDraft.priority} onChange={(e) => setTaskDraft((current) => ({ ...current, priority: e.target.value as typeof current.priority }))} className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100">
+                <select value={taskDraft.priority} onChange={(e) => setTaskDraft((current) => ({ ...current, priority: e.target.value as typeof current.priority }))} className={appInputClass(isDark)}>
                   <option value="low">Low</option>
                   <option value="medium">Medium</option>
                   <option value="high">High</option>
@@ -1067,11 +1108,15 @@ const AdminProjectDetail: React.FC = () => {
 
       {tab === 'schedule' && withState('schedule', true, (
         <div className="space-y-3">
-          <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/20 px-3 py-2">
+          <div
+            className={`flex items-center justify-between rounded-xl px-3 py-2 ${
+              isDark ? 'border border-zinc-800 bg-zinc-900/20' : 'border border-zinc-200 bg-zinc-100/80'
+            }`}
+          >
             <p className="text-xs uppercase tracking-widest text-zinc-500">Timeline + Logistics</p>
             <p className="text-xs text-zinc-400">{shoots.length + meetings.length} event(s)</p>
           </div>
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-3">
+          <div className={`rounded-xl p-3 min-w-0 ${appPanelClass(isDark)}`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-xs text-zinc-500">Choose event type, then schedule it with full details and participants.</p>
               <button
@@ -1090,7 +1135,7 @@ const AdminProjectDetail: React.FC = () => {
             {shoots.map((s) => (
               <div
                 key={s.id}
-                className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-4 flex flex-col sm:flex-row sm:justify-between gap-2"
+                className={`rounded-xl p-4 min-w-0 flex flex-col sm:flex-row sm:justify-between gap-2 ${appPanelClass(isDark)}`}
               >
                 <div>
                   <p className="text-white font-medium">{s.title}</p>
@@ -1143,7 +1188,7 @@ const AdminProjectDetail: React.FC = () => {
               </div>
             ))}
             {meetings.map((m) => (
-              <div key={m.id} className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-4 flex flex-col sm:flex-row sm:justify-between gap-2">
+              <div key={m.id} className={`rounded-xl p-4 min-w-0 flex flex-col sm:flex-row sm:justify-between gap-2 ${appPanelClass(isDark)}`}>
                 <div>
                   <p className="text-white font-medium">{m.title} <span className="text-[11px] text-zinc-400">(Meeting)</span></p>
                   <p className="text-sm text-zinc-500">{formatAdminDate(m.date)} @ {m.startTime} — {m.location}</p>
@@ -1294,19 +1339,19 @@ const AdminProjectDetail: React.FC = () => {
                     }));
                   }}
                   disabled={openSchedule.id !== '__new__'}
-                  className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-2 text-sm text-zinc-100 disabled:opacity-50"
+                  className={`${appInputClass(isDark)} disabled:opacity-50`}
                 >
                   <option value="shoot">Shoot</option>
                   <option value="meeting">Meeting</option>
                 </select>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <input value={scheduleDraft.title} onChange={(e) => setScheduleDraft((current) => ({ ...current, title: e.target.value }))} className="rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-2 text-sm text-zinc-100" placeholder="Title" />
-                <input type="date" value={scheduleDraft.date} onChange={(e) => setScheduleDraft((current) => ({ ...current, date: e.target.value }))} style={dateTimeInput.style} className={`rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-2 text-sm text-zinc-100 ${dateTimeInput.className}`} />
-                <input type="time" value={scheduleDraft.time} onChange={(e) => setScheduleDraft((current) => ({ ...current, time: e.target.value }))} style={dateTimeInput.style} className={`rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-2 text-sm text-zinc-100 ${dateTimeInput.className}`} />
-                <input value={scheduleDraft.location} onChange={(e) => setScheduleDraft((current) => ({ ...current, location: e.target.value }))} className="rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-2 text-sm text-zinc-100" placeholder="Location/Link" />
+                <input value={scheduleDraft.title} onChange={(e) => setScheduleDraft((current) => ({ ...current, title: e.target.value }))} className={appInputClass(isDark)} placeholder="Title" />
+                <input type="date" value={scheduleDraft.date} onChange={(e) => setScheduleDraft((current) => ({ ...current, date: e.target.value }))} style={dateTimeInput.style} className={`${appInputClass(isDark)} ${dateTimeInput.className}`} />
+                <input type="time" value={scheduleDraft.time} onChange={(e) => setScheduleDraft((current) => ({ ...current, time: e.target.value }))} style={dateTimeInput.style} className={`${appInputClass(isDark)} ${dateTimeInput.className}`} />
+                <input value={scheduleDraft.location} onChange={(e) => setScheduleDraft((current) => ({ ...current, location: e.target.value }))} className={appInputClass(isDark)} placeholder="Location/Link" />
               </div>
-              <textarea value={scheduleDraft.description} onChange={(e) => setScheduleDraft((current) => ({ ...current, description: e.target.value }))} rows={3} className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-2.5 py-2 text-sm text-zinc-100" placeholder="Description/context" />
+              <textarea value={scheduleDraft.description} onChange={(e) => setScheduleDraft((current) => ({ ...current, description: e.target.value }))} rows={3} className={appInputClass(isDark)} placeholder="Description/context" />
               <div className="flex flex-wrap gap-2">
                 {assignableCrew.map((crew) => (
                   <button
@@ -1326,13 +1371,21 @@ const AdminProjectDetail: React.FC = () => {
 
       {tab === 'assets' && withState('assets', true, (
         <div className="space-y-3">
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-3 flex flex-wrap items-center justify-between gap-2">
+          <div
+            className={`rounded-xl p-3 flex flex-wrap items-center justify-between gap-2 min-w-0 ${appPanelClass(
+              isDark
+            )}`}
+          >
             <p className="text-xs uppercase tracking-widest text-zinc-500">Assets</p>
             <button type="button" onClick={() => openAssetEditor('__new__')} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-zinc-100">
               Quick Add Asset
             </button>
           </div>
-          <div className="bg-zinc-900/30 border border-zinc-800 rounded-xl divide-y divide-zinc-800/80">
+          <div
+            className={`rounded-xl divide-y ${
+              isDark ? 'divide-zinc-800/80' : 'divide-zinc-200'
+            } min-w-0 ${appPanelClass(isDark)}`}
+          >
           {assets.length === 0 ? (
             <p className="p-4 text-sm text-zinc-500">No assets linked to this project yet.</p>
           ) : (
@@ -1488,22 +1541,22 @@ const AdminProjectDetail: React.FC = () => {
               {assetDrawerStatus && (
                 <p className={`text-xs ${assetDrawerStatus.tone === 'error' ? 'text-red-300' : 'text-emerald-300'}`}>{assetDrawerStatus.message}</p>
               )}
-              <input value={assetDraft.label} onChange={(e) => setAssetDraft((current) => ({ ...current, label: e.target.value }))} placeholder="Asset label" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+              <input value={assetDraft.label} onChange={(e) => setAssetDraft((current) => ({ ...current, label: e.target.value }))} placeholder="Asset label" className={appInputClass(isDark)} />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <select value={assetDraft.mediaType} onChange={(e) => setAssetDraft((current) => ({ ...current, mediaType: e.target.value as ProjectAssetType }))} className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100">
+                <select value={assetDraft.mediaType} onChange={(e) => setAssetDraft((current) => ({ ...current, mediaType: e.target.value as ProjectAssetType }))} className={appInputClass(isDark)}>
                   <option value="video">Video</option>
                   <option value="still">Still</option>
                   <option value="doc">Doc</option>
                   <option value="audio">Audio</option>
                 </select>
-                <select value={assetDraft.sourceType} onChange={(e) => setAssetDraft((current) => ({ ...current, sourceType: e.target.value as ProjectAssetSourceType }))} className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100">
+                <select value={assetDraft.sourceType} onChange={(e) => setAssetDraft((current) => ({ ...current, sourceType: e.target.value as ProjectAssetSourceType }))} className={appInputClass(isDark)}>
                   <option value="upload">Upload</option>
                   <option value="external_link">External link</option>
                 </select>
               </div>
               {assetDraft.sourceType === 'upload' ? (
                 <div className="space-y-2">
-                  <input value={assetDraft.uploadFilename} onChange={(e) => setAssetDraft((current) => ({ ...current, uploadFilename: e.target.value }))} placeholder="Upload filename (e.g. hero-cut-v3.mp4)" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+                  <input value={assetDraft.uploadFilename} onChange={(e) => setAssetDraft((current) => ({ ...current, uploadFilename: e.target.value }))} placeholder="Upload filename (e.g. hero-cut-v3.mp4)" className={appInputClass(isDark)} />
                   <div>
                     <p className="text-[11px] uppercase tracking-wide text-zinc-500 mb-1">Link / URL (optional)</p>
                     <input
@@ -1512,7 +1565,7 @@ const AdminProjectDetail: React.FC = () => {
                       type="url"
                       inputMode="url"
                       placeholder="https://… (Frame.io, review link, or hosted file)"
-                      className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+                      className={appInputClass(isDark)}
                     />
                   </div>
                 </div>
@@ -1525,24 +1578,30 @@ const AdminProjectDetail: React.FC = () => {
                     type="url"
                     inputMode="url"
                     placeholder="https://…"
-                    className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+                    className={appInputClass(isDark)}
                   />
                 </div>
               )}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <input value={assetDraft.version} onChange={(e) => setAssetDraft((current) => ({ ...current, version: e.target.value }))} placeholder="Version" className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
-                <select value={assetDraft.status} onChange={(e) => setAssetDraft((current) => ({ ...current, status: e.target.value as ProjectAssetStatus }))} className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100">
+                <input value={assetDraft.version} onChange={(e) => setAssetDraft((current) => ({ ...current, version: e.target.value }))} placeholder="Version" className={appInputClass(isDark)} />
+                <select value={assetDraft.status} onChange={(e) => setAssetDraft((current) => ({ ...current, status: e.target.value as ProjectAssetStatus }))} className={appInputClass(isDark)}>
                   <option value="internal">Internal</option>
                   <option value="client_review">Client review</option>
                   <option value="approved">Approved</option>
                   <option value="delivered">Delivered</option>
                 </select>
-                <label className="flex items-center gap-2 rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs text-zinc-200">
+                <label
+                  className={`flex items-center gap-2 rounded-md border px-3 py-2 text-xs ${
+                    isDark
+                      ? 'border-zinc-700 bg-zinc-900 text-zinc-200'
+                      : 'border-zinc-300 bg-zinc-50 text-zinc-800'
+                  }`}
+                >
                   <input type="checkbox" checked={assetDraft.clientVisible} onChange={(e) => setAssetDraft((current) => ({ ...current, clientVisible: e.target.checked }))} />
                   Client visible
                 </label>
               </div>
-              <textarea value={assetDraft.notes} onChange={(e) => setAssetDraft((current) => ({ ...current, notes: e.target.value }))} rows={2} placeholder="Notes" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+              <textarea value={assetDraft.notes} onChange={(e) => setAssetDraft((current) => ({ ...current, notes: e.target.value }))} rows={2} placeholder="Notes" className={appInputClass(isDark)} />
             </div>
           </AdminFormDrawer>
         </div>
@@ -1550,13 +1609,21 @@ const AdminProjectDetail: React.FC = () => {
 
       {tab === 'deliverables' && withState('deliverables', true, (
         <div className="space-y-3">
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-3 flex flex-wrap items-center justify-between gap-2">
+          <div
+            className={`rounded-xl p-3 flex flex-wrap items-center justify-between gap-2 min-w-0 ${appPanelClass(
+              isDark
+            )}`}
+          >
             <p className="text-xs uppercase tracking-widest text-zinc-500">Deliverables</p>
             <button type="button" onClick={() => openDeliverableEditor('__new__')} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-zinc-100">
               Quick Add Deliverable
             </button>
           </div>
-          <div className="bg-zinc-900/30 border border-zinc-800 rounded-xl divide-y divide-zinc-800/80">
+          <div
+            className={`rounded-xl divide-y ${
+              isDark ? 'divide-zinc-800/80' : 'divide-zinc-200'
+            } min-w-0 ${appPanelClass(isDark)}`}
+          >
           {deliverables.length === 0 ? (
             <p className="p-4 text-sm text-zinc-500">No deliverables yet.</p>
           ) : (
@@ -1593,7 +1660,9 @@ const AdminProjectDetail: React.FC = () => {
                       setMessage(`Deliverable status moved to ${next.replaceAll('_', ' ')}.`);
                     }}
                     disabled={!canEditAssetDeliverables}
-                    className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-100 disabled:opacity-50"
+                    className={`rounded-md border px-2 py-1 text-xs disabled:opacity-50 ${
+            isDark ? 'border-zinc-700 bg-zinc-900 text-zinc-100' : 'border-zinc-300 bg-white text-zinc-900'
+          }`}
                   >
                     <option value="not_started">Not started</option>
                     <option value="in_progress">In progress</option>
@@ -1610,7 +1679,9 @@ const AdminProjectDetail: React.FC = () => {
                       setMessage(`Deliverable step moved to ${next.replaceAll('_', ' ')}.`);
                     }}
                     disabled={!canEditAssetDeliverables}
-                    className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-100 disabled:opacity-50"
+                    className={`rounded-md border px-2 py-1 text-xs disabled:opacity-50 ${
+            isDark ? 'border-zinc-700 bg-zinc-900 text-zinc-100' : 'border-zinc-300 bg-white text-zinc-900'
+          }`}
                   >
                     <option value="pre_production">Pre-production</option>
                     <option value="production">Production</option>
@@ -1714,27 +1785,33 @@ const AdminProjectDetail: React.FC = () => {
               {deliverableDrawerStatus && (
                 <p className={`text-xs ${deliverableDrawerStatus.tone === 'error' ? 'text-red-300' : 'text-emerald-300'}`}>{deliverableDrawerStatus.message}</p>
               )}
-              <input value={deliverableDraft.label} onChange={(e) => setDeliverableDraft((current) => ({ ...current, label: e.target.value }))} placeholder="Deliverable label" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+              <input value={deliverableDraft.label} onChange={(e) => setDeliverableDraft((current) => ({ ...current, label: e.target.value }))} placeholder="Deliverable label" className={appInputClass(isDark)} />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <select value={deliverableDraft.ownerCrewId} onChange={(e) => setDeliverableDraft((current) => ({ ...current, ownerCrewId: e.target.value }))} className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100">
+                <select value={deliverableDraft.ownerCrewId} onChange={(e) => setDeliverableDraft((current) => ({ ...current, ownerCrewId: e.target.value }))} className={appInputClass(isDark)}>
                   {assignableCrew.map((crew) => (
                     <option key={crew.id} value={crew.id}>{crew.displayName}</option>
                   ))}
                 </select>
-                <input type="date" value={deliverableDraft.dueDate} onChange={(e) => setDeliverableDraft((current) => ({ ...current, dueDate: e.target.value }))} style={dateTimeInput.style} className={`rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 ${dateTimeInput.className}`} />
+                <input type="date" value={deliverableDraft.dueDate} onChange={(e) => setDeliverableDraft((current) => ({ ...current, dueDate: e.target.value }))} style={dateTimeInput.style} className={`${appInputClass(isDark)} ${dateTimeInput.className}`} />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <label className="flex items-center gap-2 rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs text-zinc-200">
+                <label
+                  className={`flex items-center gap-2 rounded-md border px-3 py-2 text-xs ${
+                    isDark
+                      ? 'border-zinc-700 bg-zinc-900 text-zinc-200'
+                      : 'border-zinc-300 bg-zinc-50 text-zinc-800'
+                  }`}
+                >
                   <input type="checkbox" checked={deliverableDraft.required} onChange={(e) => setDeliverableDraft((current) => ({ ...current, required: e.target.checked }))} />
                   Required
                 </label>
-                <select value={deliverableDraft.step} onChange={(e) => setDeliverableDraft((current) => ({ ...current, step: e.target.value as DeliverableStep }))} className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100">
+                <select value={deliverableDraft.step} onChange={(e) => setDeliverableDraft((current) => ({ ...current, step: e.target.value as DeliverableStep }))} className={appInputClass(isDark)}>
                   <option value="pre_production">Pre-production</option>
                   <option value="production">Production</option>
                   <option value="post_production">Post-production</option>
                   <option value="delivery">Delivery</option>
                 </select>
-                <select value={deliverableDraft.status} onChange={(e) => setDeliverableDraft((current) => ({ ...current, status: e.target.value as DeliverableStatus }))} className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100">
+                <select value={deliverableDraft.status} onChange={(e) => setDeliverableDraft((current) => ({ ...current, status: e.target.value as DeliverableStatus }))} className={appInputClass(isDark)}>
                   <option value="not_started">Not started</option>
                   <option value="in_progress">In progress</option>
                   <option value="ready_for_approval">Ready for approval</option>
@@ -1742,7 +1819,11 @@ const AdminProjectDetail: React.FC = () => {
                   <option value="delivered">Delivered</option>
                 </select>
               </div>
-              <div className="rounded-md border border-zinc-800 bg-zinc-950/60 p-2">
+              <div
+                className={`rounded-md border p-2 ${
+                  isDark ? 'border-zinc-800 bg-zinc-950/60' : 'border-zinc-200 bg-zinc-100'
+                }`}
+              >
                 <p className="text-[11px] uppercase tracking-wide text-zinc-500 mb-2">Linked Assets</p>
                 <div className="flex flex-wrap gap-2">
                   {assets.map((asset) => (
@@ -1766,11 +1847,11 @@ const AdminProjectDetail: React.FC = () => {
                   type="url"
                   inputMode="url"
                   placeholder="https://… (review, delivery, or reference)"
-                  className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+                  className={appInputClass(isDark)}
                 />
               </div>
-              <textarea value={deliverableDraft.acceptanceCriteria} onChange={(e) => setDeliverableDraft((current) => ({ ...current, acceptanceCriteria: e.target.value }))} rows={2} placeholder="Acceptance criteria" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
-              <textarea value={deliverableDraft.notes} onChange={(e) => setDeliverableDraft((current) => ({ ...current, notes: e.target.value }))} rows={2} placeholder="Notes" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+              <textarea value={deliverableDraft.acceptanceCriteria} onChange={(e) => setDeliverableDraft((current) => ({ ...current, acceptanceCriteria: e.target.value }))} rows={2} placeholder="Acceptance criteria" className={appInputClass(isDark)} />
+              <textarea value={deliverableDraft.notes} onChange={(e) => setDeliverableDraft((current) => ({ ...current, notes: e.target.value }))} rows={2} placeholder="Notes" className={appInputClass(isDark)} />
             </div>
           </AdminFormDrawer>
         </div>
@@ -1778,7 +1859,7 @@ const AdminProjectDetail: React.FC = () => {
 
       {tab === 'controls' && withState('controls', true, (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-4">
+          <div className={`rounded-xl p-4 min-w-0 ${appPanelClass(isDark)}`}>
             <div className="mb-3 flex items-center justify-between gap-2">
               <h3 className="text-xs uppercase tracking-widest text-zinc-500 font-bold">Risks</h3>
               <button type="button" onClick={() => setActiveDrawer('risk')} className="rounded-md border border-zinc-700 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-zinc-100">Quick Add</button>
@@ -1808,7 +1889,7 @@ const AdminProjectDetail: React.FC = () => {
               </div>
             )}
           </div>
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-4">
+          <div className={`rounded-xl p-4 min-w-0 ${appPanelClass(isDark)}`}>
             <div className="mb-3 flex items-center justify-between gap-2">
               <h3 className="text-xs uppercase tracking-widest text-zinc-500 font-bold">Blockers</h3>
               <button type="button" onClick={() => setActiveDrawer('blocker')} className="rounded-md border border-zinc-700 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-zinc-100">Quick Add</button>
@@ -1838,7 +1919,7 @@ const AdminProjectDetail: React.FC = () => {
               </ul>
             )}
           </div>
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-4">
+          <div className={`rounded-xl p-4 min-w-0 ${appPanelClass(isDark)}`}>
             <div className="mb-3 flex items-center justify-between gap-2">
               <h3 className="text-xs uppercase tracking-widest text-zinc-500 font-bold">Dependencies</h3>
               <button type="button" onClick={() => setActiveDrawer('dependency')} className="rounded-md border border-zinc-700 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-zinc-100">Quick Add</button>
@@ -1872,7 +1953,7 @@ const AdminProjectDetail: React.FC = () => {
             title="Quick Add Risk"
             footer={<div className="flex justify-end gap-2"><button type="button" onClick={() => setActiveDrawer(null)} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300">Cancel</button><button type="button" onClick={() => { if (!newRiskLabel.trim()) { setMessage('Risk label is required.', 'error'); return; } createRisk({ projectId: project.id, label: newRiskLabel.trim(), ownerName: project.ownerName, severity: 'medium', status: 'open' }, actorName); setNewRiskLabel(''); setActiveDrawer(null); setRefreshTick((value) => value + 1); }} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-100">Add Risk</button></div>}
           >
-            <input value={newRiskLabel} onChange={(e) => setNewRiskLabel(e.target.value)} placeholder="Risk label" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+            <input value={newRiskLabel} onChange={(e) => setNewRiskLabel(e.target.value)} placeholder="Risk label" className={appInputClass(isDark)} />
           </AdminFormDrawer>
           <AdminFormDrawer
             open={activeDrawer === 'blocker'}
@@ -1880,7 +1961,7 @@ const AdminProjectDetail: React.FC = () => {
             title="Quick Add Blocker"
             footer={<div className="flex justify-end gap-2"><button type="button" onClick={() => setActiveDrawer(null)} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300">Cancel</button><button type="button" onClick={() => { if (!newBlockerLabel.trim()) { setMessage('Blocker label is required.', 'error'); return; } createBlocker({ projectId: project.id, label: newBlockerLabel.trim(), ownerName: project.ownerName, status: 'open' }, actorName); setNewBlockerLabel(''); setActiveDrawer(null); setRefreshTick((value) => value + 1); }} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-100">Add Blocker</button></div>}
           >
-            <input value={newBlockerLabel} onChange={(e) => setNewBlockerLabel(e.target.value)} placeholder="Blocker label" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+            <input value={newBlockerLabel} onChange={(e) => setNewBlockerLabel(e.target.value)} placeholder="Blocker label" className={appInputClass(isDark)} />
           </AdminFormDrawer>
           <AdminFormDrawer
             open={activeDrawer === 'dependency'}
@@ -1888,7 +1969,7 @@ const AdminProjectDetail: React.FC = () => {
             title="Quick Add Dependency"
             footer={<div className="flex justify-end gap-2"><button type="button" onClick={() => setActiveDrawer(null)} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300">Cancel</button><button type="button" onClick={() => { if (!newDependencyLabel.trim()) { setMessage('Dependency label is required.', 'error'); return; } createDependency({ projectId: project.id, label: newDependencyLabel.trim(), status: 'waiting' }, actorName); setNewDependencyLabel(''); setActiveDrawer(null); setRefreshTick((value) => value + 1); }} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-100">Add Dependency</button></div>}
           >
-            <input value={newDependencyLabel} onChange={(e) => setNewDependencyLabel(e.target.value)} placeholder="Dependency label" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+            <input value={newDependencyLabel} onChange={(e) => setNewDependencyLabel(e.target.value)} placeholder="Dependency label" className={appInputClass(isDark)} />
           </AdminFormDrawer>
         </div>
       ))}
@@ -1896,7 +1977,7 @@ const AdminProjectDetail: React.FC = () => {
       {tab === 'financials' && withState('financials', true, (
         <div className="space-y-6">
           {proposal && (
-            <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-4">
+            <div className={`rounded-xl p-4 min-w-0 ${appPanelClass(isDark)}`}>
               <h3 className="text-sm font-bold text-white mb-2">Proposal & contract</h3>
               <p className="text-sm text-zinc-400 mb-2">
                 Total: <span className="text-white font-mono">${proposal.total.toLocaleString()}</span> — deposit {proposal.depositPercent}%
@@ -1920,15 +2001,15 @@ const AdminProjectDetail: React.FC = () => {
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-            <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-4">
+            <div className={`rounded-xl p-4 min-w-0 ${appPanelClass(isDark)}`}>
               <h3 className="text-xs font-bold uppercase text-zinc-500 mb-2">Budget (project)</h3>
               <p className="text-2xl font-bold text-white">${project.budget.toLocaleString()}</p>
             </div>
-            <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-4">
+            <div className={`rounded-xl p-4 min-w-0 ${appPanelClass(isDark)}`}>
               <h3 className="text-xs font-bold uppercase text-zinc-500 mb-2">Open balance (invoices)</h3>
               <p className="text-2xl font-bold text-white">${openTotal.toLocaleString()}</p>
             </div>
-            <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-4 sm:col-span-2">
+            <div className={`rounded-xl p-4 sm:col-span-2 min-w-0 ${appPanelClass(isDark)}`}>
               <h3 className="text-xs font-bold uppercase text-zinc-500 mb-2">Change Orders</h3>
               {changeOrders.length === 0 ? (
                 <p className="text-sm text-zinc-500">No change orders.</p>
@@ -1958,7 +2039,7 @@ const AdminProjectDetail: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-zinc-900/30 border border-zinc-800 rounded-xl overflow-x-auto">
+          <div className={`rounded-xl overflow-x-auto min-w-0 ${appPanelClass(isDark)}`}>
             <table className="w-full text-sm min-w-[500px]">
               <thead className="text-xs text-zinc-500 uppercase border-b border-zinc-800">
                 <tr>
@@ -2008,7 +2089,7 @@ const AdminProjectDetail: React.FC = () => {
             </table>
           </div>
 
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-4">
+          <div className={`rounded-xl p-4 min-w-0 ${appPanelClass(isDark)}`}>
             <h3 className="text-sm font-bold text-zinc-400 mb-2">Expenses</h3>
             <div className="mb-3 flex flex-wrap gap-2">
               <button
@@ -2055,8 +2136,8 @@ const AdminProjectDetail: React.FC = () => {
             footer={<div className="flex justify-end gap-2"><button type="button" onClick={() => setActiveDrawer(null)} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300">Cancel</button><button type="button" onClick={() => { try { if (!projectId) return; const amount = Number(newChangeOrderAmount || '0'); requestChangeOrder(projectId, newChangeOrderTitle.trim(), Number.isFinite(amount) ? amount : -1, user?.displayName || 'System'); setNewChangeOrderTitle(''); setNewChangeOrderAmount('0'); setActiveDrawer(null); setRefreshTick((value) => value + 1); setMessage('Change order request created.'); } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not request change order.', 'error'); } }} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-100">Submit Request</button></div>}
           >
             <div className="space-y-2">
-              <input value={newChangeOrderTitle} onChange={(e) => setNewChangeOrderTitle(e.target.value)} placeholder="Change order title" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
-              <input value={newChangeOrderAmount} onChange={(e) => setNewChangeOrderAmount(e.target.value.replace(/[^\d]/g, ''))} placeholder="Amount" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+              <input value={newChangeOrderTitle} onChange={(e) => setNewChangeOrderTitle(e.target.value)} placeholder="Change order title" className={appInputClass(isDark)} />
+              <input value={newChangeOrderAmount} onChange={(e) => setNewChangeOrderAmount(e.target.value.replace(/[^\d]/g, ''))} placeholder="Amount" className={appInputClass(isDark)} />
             </div>
           </AdminFormDrawer>
           <AdminFormDrawer
@@ -2066,8 +2147,8 @@ const AdminProjectDetail: React.FC = () => {
             footer={<div className="flex justify-end gap-2"><button type="button" onClick={() => setActiveDrawer(null)} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300">Cancel</button><button type="button" onClick={() => { if (!newExpenseLabel.trim()) { setMessage('Expense label is required.', 'error'); return; } createExpense({ projectId: project.id, label: newExpenseLabel.trim(), amount: Number(newExpenseAmount || '0'), category: 'other', date: new Date().toISOString().slice(0, 10), }, actorName); setNewExpenseLabel(''); setNewExpenseAmount('0'); setActiveDrawer(null); setRefreshTick((value) => value + 1); setMessage('Expense added.'); }} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-100">Add Expense</button></div>}
           >
             <div className="space-y-2">
-              <input value={newExpenseLabel} onChange={(e) => setNewExpenseLabel(e.target.value)} placeholder="Expense label" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
-              <input value={newExpenseAmount} onChange={(e) => setNewExpenseAmount(e.target.value.replace(/[^\d]/g, ''))} placeholder="Amount" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+              <input value={newExpenseLabel} onChange={(e) => setNewExpenseLabel(e.target.value)} placeholder="Expense label" className={appInputClass(isDark)} />
+              <input value={newExpenseAmount} onChange={(e) => setNewExpenseAmount(e.target.value.replace(/[^\d]/g, ''))} placeholder="Amount" className={appInputClass(isDark)} />
             </div>
           </AdminFormDrawer>
           <AdminFormDrawer
@@ -2077,8 +2158,8 @@ const AdminProjectDetail: React.FC = () => {
             footer={<div className="flex justify-end gap-2"><button type="button" onClick={() => setActiveDrawer(null)} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300">Cancel</button><button type="button" onClick={() => { try { createInvoice({ projectId: project.id, clientName: project.clientName, amount: Number(newInvoiceAmount || '0'), amountPaid: 0, status: 'draft', issuedDate: new Date().toISOString().slice(0, 10), dueDate: newInvoiceDueDate, }, actorName); setActiveDrawer(null); setRefreshTick((value) => value + 1); setMessage('Invoice added.'); } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not create invoice.', 'error'); } }} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-100">Add Invoice</button></div>}
           >
             <div className="space-y-2">
-              <input value={newInvoiceAmount} onChange={(e) => setNewInvoiceAmount(e.target.value.replace(/[^\d]/g, ''))} placeholder="Amount" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
-              <input type="date" value={newInvoiceDueDate} onChange={(e) => setNewInvoiceDueDate(e.target.value)} style={dateTimeInput.style} className={`w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 ${dateTimeInput.className}`} />
+              <input value={newInvoiceAmount} onChange={(e) => setNewInvoiceAmount(e.target.value.replace(/[^\d]/g, ''))} placeholder="Amount" className={appInputClass(isDark)} />
+              <input type="date" value={newInvoiceDueDate} onChange={(e) => setNewInvoiceDueDate(e.target.value)} style={dateTimeInput.style} className={`${appInputClass(isDark)} ${dateTimeInput.className}`} />
             </div>
           </AdminFormDrawer>
         </div>
@@ -2086,7 +2167,9 @@ const AdminProjectDetail: React.FC = () => {
 
       {tab === 'activity' && withState('activity', activity.length > 0, (
         <div className="space-y-3">
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-3 flex flex-wrap gap-2 items-center">
+          <div
+            className={`rounded-xl p-3 flex flex-wrap gap-2 items-center min-w-0 ${appPanelClass(isDark)}`}
+          >
             {(['all', 'alerts', 'mentions', 'unread'] as const).map((f) => (
               <button
                 key={f}
@@ -2106,7 +2189,11 @@ const AdminProjectDetail: React.FC = () => {
             </button>
           </div>
 
-          <div className="bg-zinc-900/30 border border-zinc-800 rounded-xl divide-y divide-zinc-800/80">
+          <div
+            className={`rounded-xl divide-y ${
+              isDark ? 'divide-zinc-800/80' : 'divide-zinc-200'
+            } min-w-0 ${appPanelClass(isDark)}`}
+          >
             {filteredActivity.length === 0 ? (
             <p className="p-4 text-sm text-zinc-500">No log entries for this project.</p>
           ) : (

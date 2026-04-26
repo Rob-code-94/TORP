@@ -2,7 +2,6 @@ import React from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { UserRole } from './types';
 import { AuthProvider } from './lib/auth';
-import DemoDataBanner from './components/DemoDataBanner';
 import Landing from './components/landing/Landing';
 import HQIndexRedirect from './components/hq/HQIndexRedirect';
 import HQLogin from './components/hq/HQLogin';
@@ -22,69 +21,98 @@ import AdminFinancials from './components/hq/admin/AdminFinancials';
 import AdminCrew from './components/hq/admin/AdminCrew';
 import AdminClients from './components/hq/admin/AdminClients';
 import AdminSettings from './components/hq/admin/AdminSettings';
-import { AdminThemeProvider } from './lib/adminTheme';
+import IntegrationsPage from './components/hq/settings/IntegrationsPage';
+import ThemedAppShell from './components/ThemedAppShell';
 
 /**
  * Router shell: `/` = public marketing; `/hq/*` = internal HQ; `/portal/*` = client.
+ * Non-landing routes use ThemedAppShell for shared light/dark (AdminThemeProvider).
  */
 const App: React.FC = () => {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <DemoDataBanner />
         <Routes>
           <Route path="/" element={<Landing />} />
-          <Route path="/hq" element={<HQIndexRedirect />} />
-          <Route path="/hq/login" element={<HQLogin />} />
-          <Route
-            path="/hq/admin"
-            element={
-              <RequireAuth roles={[UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.STAFF]} redirectTo="/hq/login">
-                <AdminThemeProvider>
+          <Route element={<ThemedAppShell />}>
+            <Route path="/hq" element={<HQIndexRedirect />} />
+            <Route path="/hq/login" element={<HQLogin />} />
+            <Route
+              path="/hq/admin"
+              element={
+                <RequireAuth roles={[UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.STAFF]} redirectTo="/hq/login">
                   <AdminLayout />
-                </AdminThemeProvider>
-              </RequireAuth>
-            }
-          >
-            <Route index element={<AdminCommand />} />
-            <Route path="projects" element={<AdminProjects />} />
-            <Route path="projects/:projectId" element={<AdminProjectDetail />} />
-            <Route path="planner" element={<AdminPlanner />} />
-            <Route path="financials" element={<AdminFinancials />} />
-            <Route path="crew" element={<AdminCrew />} />
-            <Route path="clients" element={<AdminClients />} />
-            <Route path="settings" element={<AdminSettings />} />
+                </RequireAuth>
+              }
+            >
+              <Route index element={<AdminCommand />} />
+              <Route path="projects" element={<AdminProjects />} />
+              <Route path="projects/:projectId" element={<AdminProjectDetail />} />
+              <Route path="planner" element={<AdminPlanner />} />
+              <Route path="financials" element={<AdminFinancials />} />
+              <Route path="crew" element={<AdminCrew />} />
+              <Route path="clients" element={<AdminClients />} />
+              <Route path="settings" element={<AdminSettings />} />
+              <Route
+                path="settings/integrations"
+                element={<IntegrationsPage variant="admin" />}
+              />
+            </Route>
+            <Route
+              path="/hq/staff"
+              element={
+                <RequireAuth roles={[UserRole.STAFF]} redirectTo="/hq/login">
+                  <HQShell role={UserRole.STAFF}>
+                    <StaffView />
+                  </HQShell>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/hq/staff/call-sheet/:shootId/print"
+              element={
+                <RequireAuth roles={[UserRole.STAFF]} redirectTo="/hq/login">
+                  <CallSheetPrintView />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/hq/staff/settings"
+              element={
+                <RequireAuth
+                  roles={[UserRole.STAFF, UserRole.PROJECT_MANAGER]}
+                  redirectTo="/hq/login"
+                >
+                  <Navigate to="/hq/staff/settings/integrations" replace />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/hq/staff/settings/integrations"
+              element={
+                <RequireAuth
+                  roles={[UserRole.STAFF, UserRole.PROJECT_MANAGER]}
+                  redirectTo="/hq/login"
+                >
+                  <HQShell role={UserRole.STAFF}>
+                    <IntegrationsPage variant="staff" />
+                  </HQShell>
+                </RequireAuth>
+              }
+            />
+            <Route path="/portal/login" element={<PortalLogin />} />
+            <Route
+              path="/portal"
+              element={
+                <RequireAuth roles={[UserRole.CLIENT]} redirectTo="/portal/login">
+                  <PortalShell>
+                    <ClientView />
+                  </PortalShell>
+                </RequireAuth>
+              }
+            />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
-          <Route
-            path="/hq/staff"
-            element={
-              <RequireAuth roles={[UserRole.STAFF]} redirectTo="/hq/login">
-                <HQShell role={UserRole.STAFF}>
-                  <StaffView />
-                </HQShell>
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/hq/staff/call-sheet/:shootId/print"
-            element={
-              <RequireAuth roles={[UserRole.STAFF]} redirectTo="/hq/login">
-                <CallSheetPrintView />
-              </RequireAuth>
-            }
-          />
-          <Route path="/portal/login" element={<PortalLogin />} />
-          <Route
-            path="/portal"
-            element={
-              <RequireAuth roles={[UserRole.CLIENT]} redirectTo="/portal/login">
-                <PortalShell>
-                  <ClientView />
-                </PortalShell>
-              </RequireAuth>
-            }
-          />
-          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

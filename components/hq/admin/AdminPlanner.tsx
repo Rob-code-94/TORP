@@ -12,6 +12,7 @@ import {
 import { openGoogleCalendarInNewTab, payloadFromPlannerItem } from '../../../lib/calendarEvent';
 import { useAuth } from '../../../lib/auth';
 import { useAdminTheme } from '../../../lib/adminTheme';
+import { appLinkMutedClass, appPanelClass } from '../../../lib/appThemeClasses';
 import { columnLabel, formatAdminDate, typeLabel } from './adminFormat';
 import CalendarEventSheet from './CalendarEventSheet';
 import type { CalendarProjectOption } from './CalendarEventSheet';
@@ -143,19 +144,33 @@ const AdminPlanner: React.FC = () => {
           <button
             type="button"
             onClick={openCalendarQuick}
-            className="inline-flex items-center justify-center gap-1.5 rounded-md border border-zinc-600 bg-zinc-900 px-3 py-2 text-xs font-bold uppercase tracking-wide text-zinc-100 w-full sm:w-auto"
+            className={`inline-flex items-center justify-center gap-1.5 rounded-md border px-3 py-2 text-xs font-bold uppercase tracking-wide w-full sm:w-auto ${
+              isDark
+                ? 'border-zinc-600 bg-zinc-900 text-zinc-100 hover:bg-zinc-800'
+                : 'border-zinc-900 bg-zinc-900 text-white hover:bg-zinc-800'
+            }`}
           >
             <Share2 size={14} className="shrink-0" />
             Quick add to calendar
           </button>
-          <div className="flex rounded-lg border border-zinc-800 p-0.5 bg-zinc-950/80 w-full sm:w-fit min-w-0 overflow-x-auto">
+          <div
+            className={`flex rounded-lg border p-0.5 w-full sm:w-fit min-w-0 overflow-x-auto ${
+              isDark ? 'border-zinc-800 bg-zinc-950/80' : 'border-zinc-200 bg-zinc-100/80'
+            }`}
+          >
             {(['calendar', 'list', 'board'] as const).map((v) => (
               <button
                 key={v}
                 type="button"
                 onClick={() => setView(v)}
                 className={`px-3 py-1.5 text-xs font-bold uppercase rounded-md transition-colors shrink-0 ${
-                  view === v ? 'bg-white text-black' : 'text-zinc-500 hover:text-zinc-200'
+                  view === v
+                    ? isDark
+                      ? 'bg-white text-black'
+                      : 'bg-zinc-900 text-white'
+                    : isDark
+                      ? 'text-zinc-500 hover:text-zinc-200'
+                      : 'text-zinc-500 hover:text-zinc-800'
                 }`}
               >
                 {v}
@@ -166,9 +181,15 @@ const AdminPlanner: React.FC = () => {
       </div>
 
       {view === 'list' && (
-        <div className="bg-zinc-900/30 border border-zinc-800 rounded-xl overflow-x-auto min-w-0">
+        <div className={`rounded-xl overflow-x-auto min-w-0 ${appPanelClass(isDark)}`}>
           <table className="w-full text-sm min-w-[880px]">
-            <thead className="text-xs text-zinc-500 uppercase border-b border-zinc-800 bg-zinc-950/60">
+            <thead
+              className={`text-xs uppercase border-b ${
+                isDark
+                  ? 'text-zinc-500 border-zinc-800 bg-zinc-950/60'
+                  : 'text-zinc-600 border-zinc-200 bg-zinc-100'
+              }`}
+            >
               <tr>
                 <th className="text-left px-3 py-2">Task</th>
                 <th className="text-left px-3 py-2">Project</th>
@@ -180,29 +201,81 @@ const AdminPlanner: React.FC = () => {
                 <th className="text-left px-3 py-2 whitespace-nowrap">Calendar</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-800/80">
+            <tbody className={isDark ? 'divide-y divide-zinc-800/80' : 'divide-y divide-zinc-200'}>
               {items.map((t) => (
-                <tr key={t.id} className="hover:bg-zinc-900/30">
-                  <td className="px-3 py-2.5 text-white">
+                <tr
+                  key={t.id}
+                  className={isDark ? 'hover:bg-zinc-900/20' : 'hover:bg-zinc-100/80'}
+                >
+                  <td
+                    className={`px-3 py-2.5 ${
+                      isDark ? 'text-white' : 'text-zinc-900'
+                    }`}
+                  >
                     {t.title}
-                    {t.done && <span className="ml-1 text-zinc-500 text-xs">· done</span>}
+                    {t.done && (
+                      <span className="ml-1 text-zinc-500 text-xs">· done</span>
+                    )}
                   </td>
-                  <td className="px-3 py-2.5 text-zinc-300">
-                    <Link to={`/hq/admin/projects/${t.projectId}`} className="hover:underline text-zinc-200">
+                  <td
+                    className={`px-3 py-2.5 ${
+                      isDark ? 'text-zinc-300' : 'text-zinc-800'
+                    }`}
+                  >
+                    <Link
+                      to={`/hq/admin/projects/${t.projectId}`}
+                      className={`hover:underline ${
+                        isDark ? 'text-zinc-200' : 'text-zinc-800'
+                      }`}
+                    >
                       {t.projectTitle}
                     </Link>
                   </td>
-                  <td className="px-3 py-2.5 text-zinc-500">{typeLabel(t.type)}</td>
-                  <td className="px-3 py-2.5 text-zinc-500">{columnLabel(t.column)}</td>
-                  <td className="px-3 py-2.5 text-zinc-300">{t.assigneeName}</td>
-                  <td className="px-3 py-2.5 text-zinc-500 font-mono text-xs">{formatAdminDate(t.dueDate)}</td>
-                  <td className="px-3 py-2.5 text-zinc-500 text-xs uppercase">{t.priority}</td>
-                  <td className="px-3 py-2.5 text-zinc-500">
+                  <td
+                    className={`px-3 py-2.5 ${
+                      isDark ? 'text-zinc-500' : 'text-zinc-600'
+                    }`}
+                  >
+                    {typeLabel(t.type)}
+                  </td>
+                  <td
+                    className={`px-3 py-2.5 ${
+                      isDark ? 'text-zinc-500' : 'text-zinc-600'
+                    }`}
+                  >
+                    {columnLabel(t.column)}
+                  </td>
+                  <td
+                    className={`px-3 py-2.5 ${
+                      isDark ? 'text-zinc-300' : 'text-zinc-800'
+                    }`}
+                  >
+                    {t.assigneeName}
+                  </td>
+                  <td
+                    className={`px-3 py-2.5 font-mono text-xs ${
+                      isDark ? 'text-zinc-500' : 'text-zinc-600'
+                    }`}
+                  >
+                    {formatAdminDate(t.dueDate)}
+                  </td>
+                  <td
+                    className={`px-3 py-2.5 text-xs uppercase ${
+                      isDark ? 'text-zinc-500' : 'text-zinc-600'
+                    }`}
+                  >
+                    {t.priority}
+                  </td>
+                  <td className={`px-3 py-2.5 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>
                     <div className="flex flex-wrap items-center gap-1">
                       <button
                         type="button"
                         onClick={() => onAddPlannerToGoogle(t)}
-                        className="inline-flex items-center gap-0.5 text-[10px] font-bold uppercase text-zinc-300 hover:text-white border border-zinc-700 rounded px-1.5 py-0.5"
+                        className={
+                          isDark
+                            ? 'inline-flex items-center gap-0.5 text-[10px] font-bold uppercase text-zinc-300 hover:text-white border border-zinc-700 rounded px-1.5 py-0.5'
+                            : 'inline-flex items-center gap-0.5 text-[10px] font-bold uppercase text-zinc-800 hover:text-zinc-900 border border-zinc-300 bg-white rounded px-1.5 py-0.5'
+                        }
                         title="Add to Google Calendar"
                       >
                         <CalendarPlus size={12} />
@@ -211,7 +284,7 @@ const AdminPlanner: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => openCalendarForItem(t)}
-                        className="text-[10px] font-bold uppercase text-zinc-500 hover:text-zinc-200 underline"
+                        className={`text-[10px] font-bold uppercase underline ${appLinkMutedClass(isDark)}`}
                       >
                         Invite
                       </button>
@@ -225,30 +298,59 @@ const AdminPlanner: React.FC = () => {
       )}
 
       {view === 'board' && (
-        <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-3 min-w-0">
           {COLUMNS.map((col) => (
-            <div key={col} className="bg-zinc-900/20 border border-zinc-800 rounded-xl min-h-[200px] flex flex-col">
-              <div className="px-3 py-2 border-b border-zinc-800/80 text-xs font-bold text-zinc-400 uppercase">
+            <div
+              key={col}
+              className={`rounded-xl min-h-[200px] flex flex-col min-w-0 ${
+                isDark
+                  ? 'bg-zinc-900/20 border border-zinc-800'
+                  : 'bg-zinc-100/80 border border-zinc-200'
+              }`}
+            >
+              <div
+                className={`px-3 py-2 border-b text-xs font-bold uppercase ${
+                  isDark
+                    ? 'border-zinc-800/80 text-zinc-400'
+                    : 'border-zinc-200 text-zinc-600'
+                }`}
+              >
                 {PLANNER_COLUMN_LABEL[col]}
-                <span className="ml-1 text-zinc-600">({board[col].length})</span>
+                <span className="ml-1 text-zinc-500">({board[col].length})</span>
               </div>
-              <div className="p-2 space-y-2 flex-1">
+              <div className="p-2 space-y-2 flex-1 min-w-0">
                 {board[col].map((t) => {
                   const st = plannerStatusFromItem(t);
                   return (
                     <div
                       key={t.id}
-                      className="bg-zinc-900/60 border border-zinc-800 rounded-lg p-2.5 text-sm min-w-0"
+                      className={`rounded-lg p-2.5 text-sm min-w-0 ${
+                        isDark
+                          ? 'bg-zinc-900/60 border border-zinc-800'
+                          : 'bg-white border border-zinc-200 shadow-[0_1px_0_0_rgba(24,24,27,0.04)]'
+                      }`}
                     >
-                      <p className="text-white font-medium leading-snug">{t.title}</p>
+                      <p
+                        className={`font-medium leading-snug ${
+                          isDark ? 'text-white' : 'text-zinc-900'
+                        }`}
+                      >
+                        {t.title}
+                      </p>
                       <p className="text-[10px] text-zinc-500 mt-1 truncate">{t.projectTitle}</p>
-                      <p className="text-[10px] text-zinc-600 mt-0.5 font-mono">{formatAdminDate(t.dueDate)}</p>
+                      <p className="text-[10px] text-zinc-600 mt-0.5 font-mono">
+                        {formatAdminDate(t.dueDate)}
+                      </p>
                       <label className="mt-1.5 flex items-center gap-1.5 min-w-0">
                         <span className="text-[9px] uppercase text-zinc-500 shrink-0">Status</span>
                         <select
                           value={st}
                           onChange={(e) => onBoardStatus(t, e.target.value as PlannerTaskStatus)}
-                          className="min-w-0 flex-1 rounded border border-zinc-700 bg-zinc-900 px-1 py-0.5 text-[10px] text-zinc-200"
+                          className={
+                            isDark
+                              ? 'min-w-0 flex-1 rounded border border-zinc-700 bg-zinc-900 px-1 py-0.5 text-[10px] text-zinc-200'
+                              : 'min-w-0 flex-1 rounded border border-zinc-300 bg-white px-1 py-0.5 text-[10px] text-zinc-900'
+                          }
                         >
                           {BOARD_STATUS_OPTIONS.map((o) => (
                             <option key={o.value} value={o.value}>
@@ -261,7 +363,11 @@ const AdminPlanner: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => onAddPlannerToGoogle(t)}
-                          className="inline-flex items-center gap-0.5 text-[9px] font-bold uppercase text-zinc-300 border border-zinc-700 rounded px-1 py-0.5 hover:bg-zinc-800"
+                          className={
+                            isDark
+                              ? 'inline-flex items-center gap-0.5 text-[9px] font-bold uppercase text-zinc-300 border border-zinc-700 rounded px-1 py-0.5 hover:bg-zinc-800'
+                              : 'inline-flex items-center gap-0.5 text-[9px] font-bold uppercase text-zinc-800 border border-zinc-300 rounded px-1 py-0.5 bg-white hover:bg-zinc-100'
+                          }
                           title="Add to Google Calendar"
                         >
                           <CalendarPlus size={10} />
@@ -270,7 +376,7 @@ const AdminPlanner: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => openCalendarForItem(t)}
-                          className="text-[9px] font-bold uppercase text-zinc-500 hover:text-zinc-200"
+                          className={`text-[9px] font-bold uppercase ${appLinkMutedClass(isDark)}`}
                         >
                           Invite
                         </button>
@@ -278,7 +384,9 @@ const AdminPlanner: React.FC = () => {
                     </div>
                   );
                 })}
-                {board[col].length === 0 && <p className="text-xs text-zinc-600 p-1">—</p>}
+                {board[col].length === 0 && (
+                  <p className="text-xs text-zinc-500 p-1">—</p>
+                )}
               </div>
             </div>
           ))}

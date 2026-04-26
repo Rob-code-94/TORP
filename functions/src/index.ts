@@ -50,8 +50,6 @@ export const adminSetCrewTempPassword = onCall<{ email: string; password: string
     const user = await auth.getUserByEmail(email);
     await auth.updateUser(user.uid, {
       password,
-      // Force profile refresh on next sign-in; clients can also read a custom
-      // claim in a follow-up (Phase 2).
     });
     return { ok: true as const };
   } catch (e) {
@@ -62,3 +60,36 @@ export const adminSetCrewTempPassword = onCall<{ email: string; password: string
     throw new HttpsError('internal', 'Could not update password.');
   }
 });
+
+export {
+  getMyCalendarConnection,
+  setMyCalendarPreferences,
+  googleCalendarOAuthStart,
+  googleCalendarOAuthCallback,
+  disconnectGoogleCalendar,
+  getMyFeedToken,
+  rotateMyFeedToken,
+  calendarFeed,
+  listOrgCalendarConnections,
+  forceResyncForUser,
+  retryMyCalendarSync,
+  getMyCalendarFreeBusy,
+} from './calendar/functions.js';
+
+export {
+  onShootWritten,
+  onShootUpdated,
+  onShootDeleted,
+  onMeetingWritten,
+  onMeetingUpdated,
+  onMeetingDeleted,
+  onPlannerItemWritten,
+  onPlannerItemUpdated,
+  onPlannerItemDeleted,
+} from './calendar/triggers.js';
+
+export {
+  startCalendarWatchForMe,
+  googleCalendarWebhook,
+  refreshCalendarWatchChannels,
+} from './calendar/watch.js';

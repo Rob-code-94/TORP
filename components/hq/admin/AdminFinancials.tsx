@@ -10,6 +10,14 @@ import {
 } from '../../../data/adminMock';
 import { useAuth } from '../../../lib/auth';
 import { useAdminTheme } from '../../../lib/adminTheme';
+import {
+  appInputClass,
+  appKpiLinkClass,
+  appLinkMutedClass,
+  appPanelClass,
+  rechartsAxisStroke,
+  rechartsTooltipProps,
+} from '../../../lib/appThemeClasses';
 import type { AdminInvoiceStatus, AdminProject } from '../../../types';
 import AdminFormDrawer from './AdminFormDrawer';
 import { formatAdminDate, invoiceStatusClassForTheme, proposalStatusClassForTheme } from './adminFormat';
@@ -137,24 +145,30 @@ const AdminFinancials: React.FC = () => {
         <h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-zinc-900'}`}>
           Invoices, proposals, cash
         </h2>
-        <p className="text-sm text-zinc-500 mt-1">Filters apply to the invoice list. Summary cards use all open invoices.</p>
+        <p className={`text-sm mt-1 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>
+          Filters apply to the invoice list. Summary cards use all open invoices.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm min-w-0">
-        <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5 min-w-0">
+        <div className={`rounded-xl p-5 min-w-0 ${appKpiLinkClass(isDark, false)}`}>
           <p className="text-zinc-500 text-xs uppercase font-bold">Open AR</p>
-          <p className="text-3xl font-bold text-white mt-1">${openTotal.toLocaleString()}</p>
+          <p className={`text-3xl font-bold mt-1 ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+            ${openTotal.toLocaleString()}
+          </p>
         </div>
-        <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-5 min-w-0">
+        <div className={`rounded-xl p-5 min-w-0 ${appKpiLinkClass(isDark, false)}`}>
           <p className="text-zinc-500 text-xs uppercase font-bold">Active projects</p>
-          <p className="text-3xl font-bold text-white mt-1">
+          <p className={`text-3xl font-bold mt-1 ${isDark ? 'text-white' : 'text-zinc-900'}`}>
             {MOCK_ADMIN_PROJECTS.filter((p) => p.status === 'active').length}
           </p>
         </div>
       </div>
 
-      <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-4 h-80 min-w-0">
-        <h3 className="text-sm font-semibold text-white mb-2">Revenue (sample series)</h3>
+      <div className={`rounded-xl p-4 h-80 min-w-0 ${appPanelClass(isDark)}`}>
+        <h3 className={`text-sm font-semibold mb-2 ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+          Revenue (sample series)
+        </h3>
         <ResponsiveContainer width="100%" height="88%">
           <AreaChart data={chart}>
             <defs>
@@ -163,30 +177,44 @@ const AdminFinancials: React.FC = () => {
                 <stop offset="95%" stopColor="#d4d4d8" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <XAxis dataKey="name" stroke="#52525b" fontSize={11} tickLine={false} axisLine={false} />
+            <XAxis
+              dataKey="name"
+              stroke={rechartsAxisStroke(isDark)}
+              fontSize={11}
+              tickLine={false}
+              axisLine={false}
+            />
             <YAxis
-              stroke="#52525b"
+              stroke={rechartsAxisStroke(isDark)}
               fontSize={11}
               tickLine={false}
               axisLine={false}
               tickFormatter={(v) => `$${v / 1000}k`}
             />
-            <Tooltip contentStyle={{ backgroundColor: '#18181b', borderColor: '#27272a', color: '#fff' }} />
-            <Area type="monotone" dataKey="revenue" stroke="#fafafa" strokeWidth={1.5} fill="url(#fRev)" />
+            <Tooltip {...rechartsTooltipProps(isDark)} />
+            <Area
+              type="monotone"
+              dataKey="revenue"
+              stroke={isDark ? '#fafafa' : '#3f3f46'}
+              strokeWidth={1.5}
+              fill="url(#fRev)"
+            />
           </AreaChart>
         </ResponsiveContainer>
       </div>
 
       <div className="min-w-0">
-        <h3 className="text-sm font-bold text-zinc-400 mb-2">Proposals</h3>
+        <h3 className={`text-sm font-bold mb-2 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>Proposals</h3>
         <div className="space-y-2">
           {MOCK_PROPOSALS.map((p) => (
             <div
               key={p.id}
-              className="bg-zinc-900/30 border border-zinc-800 rounded-lg px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 min-w-0"
+              className={`rounded-lg px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 min-w-0 ${appPanelClass(
+                isDark
+              )}`}
             >
               <div className="min-w-0">
-                <p className="text-white font-medium text-sm truncate">
+                <p className={`font-medium text-sm truncate ${isDark ? 'text-white' : 'text-zinc-900'}`}>
                   {p.clientName} — {MOCK_ADMIN_PROJECTS.find((x) => x.id === p.projectId)?.title}
                 </p>
                 <p className="text-xs text-zinc-500">Total: ${p.total.toLocaleString()}</p>
@@ -202,7 +230,7 @@ const AdminFinancials: React.FC = () => {
                 </span>
                 <Link
                   to={`/hq/admin/projects/${p.projectId}`}
-                  className="text-xs text-zinc-500 hover:text-white whitespace-nowrap"
+                  className={`text-xs whitespace-nowrap ${appLinkMutedClass(isDark)}`}
                 >
                   Open project
                 </Link>
@@ -214,7 +242,7 @@ const AdminFinancials: React.FC = () => {
 
       <div className="min-w-0">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between mb-2">
-          <h3 className="text-sm font-bold text-zinc-400">Invoices</h3>
+          <h3 className={`text-sm font-bold ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>Invoices</h3>
           <button
             type="button"
             onClick={openCreateDrawer}
@@ -230,7 +258,11 @@ const AdminFinancials: React.FC = () => {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as 'all' | AdminInvoiceStatus)}
-              className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
+              className={
+                isDark
+                  ? 'rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200'
+                  : 'rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900'
+              }
             >
               {INVOICE_STATUS_FILTERS.map((o) => (
                 <option key={o.value} value={o.value}>
@@ -244,7 +276,11 @@ const AdminFinancials: React.FC = () => {
             <select
               value={projectFilter}
               onChange={(e) => setProjectFilter(e.target.value as typeof projectFilter)}
-              className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
+              className={
+                isDark
+                  ? 'rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200'
+                  : 'rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900'
+              }
             >
               <option value="all">All projects</option>
               {MOCK_ADMIN_PROJECTS.map((p) => (
@@ -260,7 +296,11 @@ const AdminFinancials: React.FC = () => {
               type="date"
               value={dueFrom}
               onChange={(e) => setDueFrom(e.target.value)}
-              className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
+              className={
+                isDark
+                  ? 'rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200'
+                  : 'rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900'
+              }
             />
           </label>
           <label className="flex flex-col gap-1 text-xs text-zinc-500 min-w-0 sm:min-w-[140px]">
@@ -269,7 +309,11 @@ const AdminFinancials: React.FC = () => {
               type="date"
               value={dueTo}
               onChange={(e) => setDueTo(e.target.value)}
-              className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
+              className={
+                isDark
+                  ? 'rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200'
+                  : 'rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900'
+              }
             />
           </label>
           {(statusFilter !== 'all' || projectFilter !== 'all' || dueFrom || dueTo) && (
@@ -281,16 +325,20 @@ const AdminFinancials: React.FC = () => {
                 setDueFrom('');
                 setDueTo('');
               }}
-              className="text-xs text-zinc-500 hover:text-zinc-200 underline sm:mb-2"
+              className={`text-xs underline sm:mb-2 ${appLinkMutedClass(isDark)}`}
             >
               Clear filters
             </button>
           )}
         </div>
 
-        <div className="bg-zinc-900/30 border border-zinc-800 rounded-xl overflow-x-auto min-w-0">
+        <div className={`rounded-xl overflow-x-auto min-w-0 ${appPanelClass(isDark)}`}>
           <table className="w-full text-sm min-w-[800px]">
-            <thead className="text-xs text-zinc-500 uppercase border-b border-zinc-800">
+            <thead
+              className={`text-xs text-zinc-500 uppercase border-b ${
+                isDark ? 'border-zinc-800' : 'border-zinc-200'
+              }`}
+            >
               <tr>
                 <th className="text-left px-3 py-2">Id</th>
                 <th className="text-left px-3 py-2">Client / project</th>
@@ -301,7 +349,7 @@ const AdminFinancials: React.FC = () => {
                 <th className="text-left px-3 py-2" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-800/80">
+            <tbody className={isDark ? 'divide-y divide-zinc-800/80' : 'divide-y divide-zinc-200'}>
               {filteredInvoices.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-3 py-4 text-sm text-zinc-500">
@@ -313,13 +361,28 @@ const AdminFinancials: React.FC = () => {
                   const canMarkSent = i.status === 'draft';
                   const canMarkPaid = i.status !== 'paid' && i.status !== 'void';
                   return (
-                    <tr key={i.id} className="hover:bg-zinc-900/20">
-                      <td className="px-3 py-2.5 font-mono text-zinc-300">{i.id}</td>
-                      <td className="px-3 py-2.5 text-zinc-200 min-w-0 max-w-xs">
+                    <tr
+                      key={i.id}
+                      className={isDark ? 'hover:bg-zinc-900/20' : 'hover:bg-zinc-100/80'}
+                    >
+                      <td
+                        className={`px-3 py-2.5 font-mono ${isDark ? 'text-zinc-300' : 'text-zinc-600'}`}
+                      >
+                        {i.id}
+                      </td>
+                      <td
+                        className={`px-3 py-2.5 min-w-0 max-w-xs ${
+                          isDark ? 'text-zinc-200' : 'text-zinc-800'
+                        }`}
+                      >
                         <span className="break-words">{i.clientName}</span>
                         <span className="text-zinc-500 text-xs"> · {i.projectId}</span>
                       </td>
-                      <td className="px-3 py-2.5 text-right text-zinc-200">
+                      <td
+                        className={`px-3 py-2.5 text-right ${
+                          isDark ? 'text-zinc-200' : 'text-zinc-800'
+                        }`}
+                      >
                         ${(i.amount - i.amountPaid).toLocaleString()}
                       </td>
                       <td className="px-3 py-2.5 text-zinc-500 font-mono text-xs whitespace-nowrap">
@@ -341,7 +404,11 @@ const AdminFinancials: React.FC = () => {
                             type="button"
                             disabled={!canMarkSent}
                             onClick={() => onMarkSent(i.id)}
-                            className="rounded border border-zinc-600 bg-zinc-900 px-2 py-0.5 text-[11px] text-zinc-200 hover:border-zinc-500 disabled:opacity-40"
+                            className={
+                              isDark
+                                ? 'rounded border border-zinc-600 bg-zinc-900 px-2 py-0.5 text-[11px] text-zinc-200 hover:border-zinc-500 disabled:opacity-40'
+                                : 'rounded border border-zinc-300 bg-white px-2 py-0.5 text-[11px] text-zinc-800 hover:border-zinc-400 disabled:opacity-40'
+                            }
                           >
                             Mark sent
                           </button>
@@ -349,7 +416,11 @@ const AdminFinancials: React.FC = () => {
                             type="button"
                             disabled={!canMarkPaid}
                             onClick={() => onMarkPaid(i.id)}
-                            className="rounded border border-zinc-600 bg-zinc-900 px-2 py-0.5 text-[11px] text-zinc-200 hover:border-zinc-500 disabled:opacity-40"
+                            className={
+                              isDark
+                                ? 'rounded border border-zinc-600 bg-zinc-900 px-2 py-0.5 text-[11px] text-zinc-200 hover:border-zinc-500 disabled:opacity-40'
+                                : 'rounded border border-zinc-300 bg-white px-2 py-0.5 text-[11px] text-zinc-800 hover:border-zinc-400 disabled:opacity-40'
+                            }
                           >
                             Mark paid
                           </button>
@@ -358,7 +429,7 @@ const AdminFinancials: React.FC = () => {
                       <td className="px-3 py-2.5 text-right whitespace-nowrap">
                         <Link
                           to={`/hq/admin/projects/${i.projectId}`}
-                          className="text-xs text-zinc-500 hover:text-white"
+                          className={`text-xs ${appLinkMutedClass(isDark)}`}
                         >
                           Project
                         </Link>
@@ -408,7 +479,7 @@ const AdminFinancials: React.FC = () => {
                 const p = projectsById.get(id);
                 if (p) setNewClientName(p.clientName);
               }}
-              className="mt-1 w-full min-w-0 rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-100"
+              className={`mt-1 ${appInputClass(isDark)}`}
             >
               {MOCK_ADMIN_PROJECTS.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -422,7 +493,7 @@ const AdminFinancials: React.FC = () => {
             <input
               value={newClientName}
               onChange={(e) => setNewClientName(e.target.value)}
-              className="mt-1 w-full min-w-0 rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-100"
+              className={`mt-1 ${appInputClass(isDark)}`}
             />
           </label>
           <label className="block text-xs text-zinc-500">
@@ -432,7 +503,7 @@ const AdminFinancials: React.FC = () => {
               min={0}
               value={newAmount}
               onChange={(e) => setNewAmount(e.target.value)}
-              className="mt-1 w-full min-w-0 rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-100"
+              className={`mt-1 ${appInputClass(isDark)}`}
             />
           </label>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -442,7 +513,7 @@ const AdminFinancials: React.FC = () => {
                 type="date"
                 value={newIssued}
                 onChange={(e) => setNewIssued(e.target.value)}
-                className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-100"
+                className={`mt-1 ${appInputClass(isDark)}`}
               />
             </label>
             <label className="block text-xs text-zinc-500">
@@ -451,7 +522,7 @@ const AdminFinancials: React.FC = () => {
                 type="date"
                 value={newDue}
                 onChange={(e) => setNewDue(e.target.value)}
-                className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-100"
+                className={`mt-1 ${appInputClass(isDark)}`}
               />
             </label>
           </div>

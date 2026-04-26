@@ -12,7 +12,11 @@ import { useAuth } from '../../lib/auth';
 import { getFirebaseAuthInstance, isFirebaseConfigured } from '../../lib/firebase';
 import { messageForPasswordResetError } from '../../lib/firebaseAuthError';
 import { hqUserInitials } from '../../lib/hqUserDisplay';
-import { showAdminOrgSettingsLink } from '../../lib/hqProfileMenuConfig';
+import {
+  settingsLandingPathForRole,
+  showAdminOrgSettingsLink,
+  showStaffSettingsLink,
+} from '../../lib/hqProfileMenuConfig';
 import { UserRole } from '../../types';
 
 export type HqProfileMenuVariant = 'admin' | 'staff';
@@ -235,7 +239,11 @@ const HqProfileMenuCluster: React.FC<HqProfileMenuClusterProps> = ({
     ? 'rounded-lg border border-zinc-600 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-800'
     : 'rounded-lg border border-zinc-300 px-3 py-2 text-xs text-zinc-800 hover:bg-zinc-100';
 
-  const showSettings = variant === 'admin' && user && showAdminOrgSettingsLink(user.role);
+  const showAdminSettings =
+    variant === 'admin' && user ? showAdminOrgSettingsLink(user.role) : false;
+  const showStaffSettings =
+    variant === 'staff' && user ? showStaffSettingsLink(user.role) : false;
+  const settingsTo = user ? settingsLandingPathForRole(user.role) : null;
 
   if (!user) {
     return (
@@ -327,15 +335,26 @@ const HqProfileMenuCluster: React.FC<HqProfileMenuClusterProps> = ({
                 Request time off
               </span>
             </button>
-            {showSettings && (
+            {showAdminSettings && settingsTo && (
               <Link
                 role="menuitem"
-                to="/hq/admin/settings"
+                to={settingsTo}
                 className={`${itemBtn} flex items-center gap-2`}
                 onClick={() => setOpen(false)}
               >
                 <Settings size={14} className="shrink-0 opacity-70" />
                 Open org settings
+              </Link>
+            )}
+            {showStaffSettings && settingsTo && (
+              <Link
+                role="menuitem"
+                to={settingsTo}
+                className={`${itemBtn} flex items-center gap-2`}
+                onClick={() => setOpen(false)}
+              >
+                <Settings size={14} className="shrink-0 opacity-70" />
+                Open settings
               </Link>
             )}
           </div>

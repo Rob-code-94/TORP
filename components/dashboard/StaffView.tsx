@@ -16,7 +16,14 @@ import {
   openGoogleCalendarInNewTab,
   payloadFromAdminShoot,
 } from '../../lib/calendarEvent';
+import {
+  getMyCalendarFreeBusy,
+  isCalendarBackendAvailable,
+  type FreeBusyInterval,
+} from '../../lib/calendarIntegrations';
 import { isShootVisibleToCrew } from '../../lib/staffShoots';
+import { useAdminTheme } from '../../lib/adminTheme';
+import { appInputClass, appPanelClass } from '../../lib/appThemeClasses';
 import type { AdminShoot, PlannerItem, PlannerTaskStatus } from '../../types';
 import {
   CalendarPlus,
@@ -58,6 +65,8 @@ function ymdToday(): string {
 
 const StaffView: React.FC = () => {
   const { user, loading } = useAuth();
+  const { theme } = useAdminTheme();
+  const isDark = theme === 'dark';
   const [refresh, setRefresh] = useState(0);
   const [gearChecked, setGearChecked] = useState<Record<string, Record<string, boolean>>>({});
   const [staffMsg, setStaffMsg] = useState<string | null>(null);
@@ -141,6 +150,29 @@ const StaffView: React.FC = () => {
 
   const appOrigin = typeof window !== 'undefined' ? window.location.origin : '';
 
+  const [busyIntervals, setBusyIntervals] = useState<FreeBusyInterval[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    if (!isCalendarBackendAvailable() || upcomingShoots.length === 0) {
+      setBusyIntervals([]);
+      return () => {
+        cancelled = true;
+      };
+    }
+    const startMs = Date.now();
+    const endMs = startMs + 90 * 24 * 60 * 60 * 1000;
+    void getMyCalendarFreeBusy(new Date(startMs).toISOString(), new Date(endMs).toISOString()).then(
+      (result) => {
+        if (cancelled) return;
+        if (result.ok && result.data.available) setBusyIntervals(result.data.busy);
+        else setBusyIntervals([]);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [upcomingShoots.length]);
+
   const onTaskStatus = (t: PlannerItem, next: PlannerTaskStatus) => {
     if (!crewId) return;
     const ok = updatePlannerTask(t.id, { status: next }, actorName);
@@ -218,9 +250,21 @@ const StaffView: React.FC = () => {
   if (loading) {
     return (
       <div className="max-w-4xl min-w-0 space-y-6" aria-busy>
-        <div className="h-8 w-48 rounded bg-zinc-800/80 motion-safe:animate-pulse" />
-        <div className="h-24 rounded-xl border border-zinc-800 bg-zinc-900/20 motion-safe:animate-pulse" />
-        <div className="h-32 rounded-xl border border-zinc-800 bg-zinc-900/20 motion-safe:animate-pulse" />
+        <div
+          className={`h-8 w-48 rounded motion-safe:animate-pulse ${
+            isDark ? 'bg-zinc-800/80' : 'bg-zinc-200'
+          }`}
+        />
+        <div
+          className={`h-24 rounded-xl border motion-safe:animate-pulse ${
+            isDark ? 'border-zinc-800 bg-zinc-900/20' : 'border-zinc-200 bg-zinc-100'
+          }`}
+        />
+        <div
+          className={`h-32 rounded-xl border motion-safe:animate-pulse ${
+            isDark ? 'border-zinc-800 bg-zinc-900/20' : 'border-zinc-200 bg-zinc-100'
+          }`}
+        />
       </div>
     );
   }
@@ -228,14 +272,32 @@ const StaffView: React.FC = () => {
   return (
     <div className="max-w-4xl min-w-0 space-y-10">
       <div>
-        <h2 className="text-2xl font-bold text-white mb-2">Crew home</h2>
-        <p className="text-zinc-500 text-sm">Call sheets, project links, and your planner assignments in one place.</p>
+        <h2 className={`text-2xl font-bold mb-2 ${isDark ? 'text-white' : 'text-zinc-900'}`}>Crew home</h2>
+        <p className={`text-sm ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>
+          Call sheets, project links, and your planner assignments in one place.
+        </p>
+        <p className={`text-xs mt-2 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>
+          Want shoots and meetings to appear on your phone calendar?{' '}
+          <Link
+            to="/hq/staff/settings/integrations"
+            className={isDark ? 'underline text-zinc-200 hover:text-white' : 'underline text-zinc-800 hover:text-black'}
+          >
+            Open Integrations
+          </Link>
+          .
+        </p>
       </div>
 
       {staffMsg && (
         <p
           className={
-            staffMsgTone === 'ok' ? 'text-sm text-emerald-400' : 'text-sm text-rose-300'
+            staffMsgTone === 'ok'
+              ? isDark
+                ? 'text-sm text-emerald-400'
+                : 'text-sm text-emerald-700'
+              : isDark
+                ? 'text-sm text-rose-300'
+                : 'text-sm text-rose-600'
           }
           role="status"
         >
@@ -244,9 +306,15 @@ const StaffView: React.FC = () => {
       )}
 
       {!crewId && (
-        <div className="rounded-xl border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-100/90 min-w-0">
+        <div
+          className={`rounded-xl border px-4 py-3 text-sm min-w-0 ${
+            isDark
+              ? 'border-amber-900/50 bg-amber-950/30 text-amber-100/90'
+              : 'border-amber-200 bg-amber-50 text-amber-950'
+          }`}
+        >
           <p className="font-medium">No crew profile is linked to this sign-in</p>
-          <p className="mt-1 text-amber-200/80">
+          <p className={`mt-1 ${isDark ? 'text-amber-200/80' : 'text-amber-900/80'}`}>
             Use Continue as Crew on the login screen, or add a <code className="text-xs">crewId</code> custom claim for
             this account so we can show your shoots and tasks.
           </p>
@@ -254,29 +322,35 @@ const StaffView: React.FC = () => {
       )}
 
       {crewProfile && (
-        <section className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-5 min-w-0">
+        <section className={`rounded-xl p-5 min-w-0 ${appPanelClass(isDark)}`}>
           <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500 mb-3 flex items-center gap-2">
             <User size={14} /> Profile
           </h3>
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 min-w-0">
             <div className="min-w-0">
-              <p className="text-lg font-semibold text-white truncate">{crewProfile.displayName}</p>
-              <p className="text-sm text-zinc-400 mt-1">
-                Role: <span className="text-zinc-200">{crewProfile.role}</span>
-                <span className="text-zinc-600 mx-2">·</span>
-                <span className="text-zinc-200">{crewProfile.email}</span>
+              <p className={`text-lg font-semibold truncate ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+                {crewProfile.displayName}
+              </p>
+              <p className={`text-sm mt-1 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                Role: <span className={isDark ? 'text-zinc-200' : 'text-zinc-800'}>{crewProfile.role}</span>
+                <span className="text-zinc-500 mx-2">·</span>
+                <span className={isDark ? 'text-zinc-200' : 'text-zinc-800'}>{crewProfile.email}</span>
               </p>
             </div>
-            <div className="text-sm text-zinc-400 shrink-0 min-w-0 max-w-sm">
+            <div
+              className={`text-sm shrink-0 min-w-0 max-w-sm ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}
+            >
               <p className="text-zinc-500 text-[11px] uppercase tracking-wide mb-1">Summary</p>
-              <p className="text-zinc-300 break-words">{crewProfile.availability}</p>
+              <p className={`break-words ${isDark ? 'text-zinc-300' : 'text-zinc-800'}`}>
+                {crewProfile.availability}
+              </p>
             </div>
           </div>
         </section>
       )}
 
       {crewId && avDraft && (
-        <section className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-5 min-w-0">
+        <section className={`rounded-xl p-5 min-w-0 ${appPanelClass(isDark)}`}>
           <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500 mb-3">Availability</h3>
           {availabilityBlocked ? (
             <p className="text-sm text-amber-200/90 break-words">
@@ -294,7 +368,7 @@ const StaffView: React.FC = () => {
                   <input
                     value={avDraft.timezone}
                     onChange={(e) => setAvDraft((d) => (d ? { ...d, timezone: e.target.value } : d))}
-                    className="mt-1 w-full min-w-0 rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+                    className={`mt-1 ${appInputClass(isDark)}`}
                   />
                 </label>
                 <div>
@@ -307,8 +381,12 @@ const StaffView: React.FC = () => {
                         onClick={() => toggleDay(d.value)}
                         className={
                           avDraft.availableDays.includes(d.value)
-                            ? 'rounded-md bg-white px-2 py-1 text-xs font-medium text-zinc-900'
-                            : 'rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-400'
+                            ? isDark
+                              ? 'rounded-md bg-white px-2 py-1 text-xs font-medium text-zinc-900'
+                              : 'rounded-md bg-zinc-900 px-2 py-1 text-xs font-medium text-white'
+                            : isDark
+                              ? 'rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-400'
+                              : 'rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-600'
                         }
                       >
                         {d.label}
@@ -323,7 +401,7 @@ const StaffView: React.FC = () => {
                       type="time"
                       value={avDraft.weekdayStart}
                       onChange={(e) => setAvDraft((d) => (d ? { ...d, weekdayStart: e.target.value } : d))}
-                      className="mt-1 w-full min-w-0 rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
+                      className={`mt-1 ${appInputClass(isDark)}`}
                     />
                   </label>
                   <label className="text-xs text-zinc-500">
@@ -332,7 +410,7 @@ const StaffView: React.FC = () => {
                       type="time"
                       value={avDraft.weekdayEnd}
                       onChange={(e) => setAvDraft((d) => (d ? { ...d, weekdayEnd: e.target.value } : d))}
-                      className="mt-1 w-full min-w-0 rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
+                      className={`mt-1 ${appInputClass(isDark)}`}
                     />
                   </label>
                 </div>
@@ -343,7 +421,7 @@ const StaffView: React.FC = () => {
                       type="date"
                       value={avDraft.exceptionStart}
                       onChange={(e) => setAvDraft((d) => (d ? { ...d, exceptionStart: e.target.value } : d))}
-                      className="mt-1 w-full min-w-0 rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
+                      className={`mt-1 ${appInputClass(isDark)}`}
                     />
                   </label>
                   <label className="text-xs text-zinc-500">
@@ -352,7 +430,7 @@ const StaffView: React.FC = () => {
                       type="date"
                       value={avDraft.exceptionEnd}
                       onChange={(e) => setAvDraft((d) => (d ? { ...d, exceptionEnd: e.target.value } : d))}
-                      className="mt-1 w-full min-w-0 rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
+                      className={`mt-1 ${appInputClass(isDark)}`}
                     />
                   </label>
                 </div>
@@ -362,7 +440,7 @@ const StaffView: React.FC = () => {
                     value={avDraft.availabilityNotes}
                     onChange={(e) => setAvDraft((d) => (d ? { ...d, availabilityNotes: e.target.value } : d))}
                     rows={2}
-                    className="mt-1 w-full min-w-0 rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
+                    className={`mt-1 ${appInputClass(isDark)}`}
                   />
                 </label>
                 <button
@@ -392,11 +470,13 @@ const StaffView: React.FC = () => {
                 return (
                   <li
                     key={t.id}
-                    className="rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-3 flex flex-col gap-3 min-w-0"
+                    className={`rounded-lg px-4 py-3 flex flex-col gap-3 min-w-0 ${appPanelClass(isDark)}`}
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 min-w-0">
                       <div className="min-w-0">
-                        <p className="font-medium text-white truncate">{t.title}</p>
+                        <p className={`font-medium truncate ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+                          {t.title}
+                        </p>
                         <p className="text-xs text-zinc-500 truncate">
                           {t.projectTitle} · {t.clientName}
                         </p>
@@ -408,7 +488,11 @@ const StaffView: React.FC = () => {
                           <select
                             value={st}
                             onChange={(e) => onTaskStatus(t, e.target.value as PlannerTaskStatus)}
-                            className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-200 text-xs"
+                            className={
+                              isDark
+                                ? 'rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-zinc-200 text-xs'
+                                : 'rounded border border-zinc-300 bg-white px-2 py-1 text-zinc-900 text-xs'
+                            }
                           >
                             {STATUS_OPTIONS.map((o) => (
                               <option key={o.value} value={o.value}>
@@ -440,7 +524,9 @@ const StaffView: React.FC = () => {
               <li key={p.id} className="min-w-0">
                 <Link
                   to={`/hq/admin/projects/${p.id}`}
-                  className="text-sm text-white font-medium hover:underline break-words"
+                  className={`text-sm font-medium hover:underline break-words ${
+                    isDark ? 'text-white' : 'text-zinc-900'
+                  }`}
                 >
                   {p.title}
                 </Link>
@@ -455,8 +541,10 @@ const StaffView: React.FC = () => {
       )}
 
       <div className="min-w-0">
-        <h3 className="text-xl font-bold text-white mb-1">Call sheets</h3>
-        <p className="text-zinc-500 text-sm mb-6">Shoots where you are on the team, from production scheduling.</p>
+        <h3 className={`text-xl font-bold mb-1 ${isDark ? 'text-white' : 'text-zinc-900'}`}>Call sheets</h3>
+        <p className={`text-sm mb-6 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>
+          Shoots where you are on the team, from production scheduling.
+        </p>
 
         {crewId && myShoots.length === 0 && (
           <p className="text-sm text-zinc-500">No scheduled shoots for your crew profile.</p>
@@ -474,6 +562,7 @@ const StaffView: React.FC = () => {
                       appOrigin={appOrigin}
                       gearChecked={gearChecked[shoot.id] || {}}
                       setGear={setGear}
+                      busyIntervals={busyIntervals}
                     />
                   </div>
                 ))}
@@ -492,6 +581,7 @@ const StaffView: React.FC = () => {
                       appOrigin={appOrigin}
                       gearChecked={gearChecked[shoot.id] || {}}
                       setGear={setGear}
+                      busyIntervals={[]}
                     />
                   </div>
                 ))}
@@ -509,12 +599,32 @@ type ShootCardProps = {
   appOrigin: string;
   gearChecked: Record<string, boolean>;
   setGear: (shootId: string, label: string, on: boolean) => void;
+  busyIntervals: FreeBusyInterval[];
 };
 
-function ShootCard({ shoot, appOrigin, gearChecked, setGear }: ShootCardProps) {
+function shootOverlapsBusy(shoot: AdminShoot, busy: FreeBusyInterval[]): boolean {
+  if (!busy.length) return false;
+  const [y, m, d] = shoot.date.split('-').map((s) => Number.parseInt(s, 10));
+  const [hh, mm] = (shoot.callTime || '00:00').split(':').map((s) => Number.parseInt(s, 10));
+  const start = Date.UTC(y, (m || 1) - 1, d || 1, hh || 0, mm || 0, 0);
+  const end = start + 4 * 60 * 60 * 1000;
+  return busy.some((b) => {
+    const bs = Date.parse(b.startIso);
+    const be = Date.parse(b.endIso);
+    return Number.isFinite(bs) && Number.isFinite(be) && bs < end && be > start;
+  });
+}
+
+function ShootCard({ shoot, appOrigin, gearChecked, setGear, busyIntervals }: ShootCardProps) {
+  const { theme } = useAdminTheme();
+  const isDark = theme === 'dark';
   const payload = useMemo(
     () => (appOrigin ? payloadFromAdminShoot(shoot, appOrigin) : null),
     [shoot, appOrigin],
+  );
+  const isBusy = useMemo(
+    () => shootOverlapsBusy(shoot, busyIntervals),
+    [shoot, busyIntervals],
   );
   const gearList =
     shoot.gearItems && shoot.gearItems.length > 0
@@ -524,17 +634,49 @@ function ShootCard({ shoot, appOrigin, gearChecked, setGear }: ShootCardProps) {
         : [];
 
   return (
-    <div className="bg-zinc-900/30 border border-zinc-800 rounded-xl overflow-hidden min-w-0">
-      <div className="p-4 sm:p-6 border-b border-zinc-800 flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 min-w-0">
+    <div
+      className={`rounded-xl overflow-hidden min-w-0 ${
+        isDark ? 'border border-zinc-800 bg-zinc-900/30' : 'border border-zinc-200 bg-white shadow-sm'
+      }`}
+    >
+      <div
+        className={`p-4 sm:p-6 flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 min-w-0 ${
+          isDark ? 'border-b border-zinc-800' : 'border-b border-zinc-200'
+        }`}
+      >
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-3 mb-2">
             <span className="bg-white text-black text-xs font-bold px-2 py-0.5 rounded uppercase shrink-0">
               Shoot
             </span>
-            <h3 className="text-lg sm:text-xl font-bold text-white break-words">{shoot.title}</h3>
+            <h3
+              className={`text-lg sm:text-xl font-bold break-words ${
+                isDark ? 'text-white' : 'text-zinc-900'
+              }`}
+            >
+              {shoot.title}
+            </h3>
+            {isBusy && (
+              <span
+                className={`text-[11px] font-semibold px-2 py-0.5 rounded uppercase tracking-wide shrink-0 ${
+                  isDark
+                    ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                    : 'bg-amber-100 text-amber-800 border border-amber-300'
+                }`}
+                title="Your Google calendar shows another event during this window."
+              >
+                Busy on Google
+              </span>
+            )}
           </div>
-          <p className="text-sm text-zinc-400 break-words">{shoot.projectTitle}</p>
-          <div className="flex flex-wrap items-center gap-4 sm:gap-6 text-sm text-zinc-400 mt-3 min-w-0">
+          <p className={`text-sm break-words ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+            {shoot.projectTitle}
+          </p>
+          <div
+            className={`flex flex-wrap items-center gap-4 sm:gap-6 text-sm mt-3 min-w-0 ${
+              isDark ? 'text-zinc-400' : 'text-zinc-600'
+            }`}
+          >
             <div className="flex items-center gap-2 min-w-0">
               <Clock size={16} className="shrink-0" />
               <span>
@@ -553,7 +695,11 @@ function ShootCard({ shoot, appOrigin, gearChecked, setGear }: ShootCardProps) {
               <button
                 type="button"
                 onClick={() => openGoogleCalendarInNewTab(payload)}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 hover:border-zinc-500"
+                className={`w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm ${
+                  isDark
+                    ? 'border-zinc-600 bg-zinc-900 text-zinc-100 hover:border-zinc-500'
+                    : 'border-zinc-300 bg-white text-zinc-900 hover:border-zinc-400'
+                }`}
               >
                 <CalendarPlus size={16} />
                 Add to Google Calendar
@@ -566,7 +712,11 @@ function ShootCard({ shoot, appOrigin, gearChecked, setGear }: ShootCardProps) {
                     buildIcsFileContent(payload, { uid: `torp-shoot-${shoot.id}@torp` }),
                   )
                 }
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 hover:border-zinc-500"
+                className={`w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm ${
+                  isDark
+                    ? 'border-zinc-600 bg-zinc-900 text-zinc-100 hover:border-zinc-500'
+                    : 'border-zinc-300 bg-white text-zinc-900 hover:border-zinc-400'
+                }`}
               >
                 <Download size={16} />
                 Download .ics
@@ -577,7 +727,11 @@ function ShootCard({ shoot, appOrigin, gearChecked, setGear }: ShootCardProps) {
             to={`/hq/staff/call-sheet/${shoot.id}/print`}
             target="_blank"
             rel="noreferrer"
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-200"
+            className={
+              isDark
+                ? 'w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-200'
+                : 'w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800'
+            }
           >
             <FileText size={16} />
             Open print view
@@ -585,7 +739,11 @@ function ShootCard({ shoot, appOrigin, gearChecked, setGear }: ShootCardProps) {
         </div>
       </div>
 
-      <div className="p-4 sm:p-6 bg-zinc-950/30 grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 min-w-0">
+      <div
+        className={`p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 min-w-0 ${
+          isDark ? 'bg-zinc-950/30' : 'bg-zinc-50/90'
+        }`}
+      >
         <div className="min-w-0">
           <h4 className="text-xs font-bold uppercase tracking-widest text-zinc-500 mb-3 flex items-center gap-2">
             <User size={14} /> Crew
@@ -594,12 +752,26 @@ function ShootCard({ shoot, appOrigin, gearChecked, setGear }: ShootCardProps) {
             {shoot.crew.map((member) => (
               <div
                 key={member}
-                className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 px-3 py-2 rounded-lg min-w-0"
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg min-w-0 ${
+                  isDark
+                    ? 'bg-zinc-900 border border-zinc-800'
+                    : 'bg-white border border-zinc-200'
+                }`}
               >
-                <div className="w-6 h-6 rounded-full bg-zinc-700 flex items-center justify-center text-[10px] text-white font-bold shrink-0">
+                <div
+                  className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                    isDark
+                      ? 'bg-zinc-700 text-white'
+                      : 'bg-zinc-200 text-zinc-800'
+                  }`}
+                >
                   {member.charAt(0)}
                 </div>
-                <span className="text-sm text-zinc-300 truncate">{member}</span>
+                <span
+                  className={`text-sm truncate ${isDark ? 'text-zinc-300' : 'text-zinc-800'}`}
+                >
+                  {member}
+                </span>
               </div>
             ))}
           </div>
@@ -612,7 +784,7 @@ function ShootCard({ shoot, appOrigin, gearChecked, setGear }: ShootCardProps) {
           {gearList.length === 0 ? (
             <p className="text-sm text-zinc-500">—</p>
           ) : (
-            <ul className="space-y-2 text-sm text-zinc-300">
+            <ul className={`space-y-2 text-sm ${isDark ? 'text-zinc-300' : 'text-zinc-800'}`}>
               {gearList.map((g) => (
                 <li key={g} className="flex items-start gap-2 min-w-0 break-words">
                   <input
@@ -620,7 +792,7 @@ function ShootCard({ shoot, appOrigin, gearChecked, setGear }: ShootCardProps) {
                     id={`${shoot.id}-${g}`}
                     checked={!!gearChecked[g]}
                     onChange={(e) => setGear(shoot.id, g, e.target.checked)}
-                    className="mt-1 accent-white"
+                    className={isDark ? 'mt-1 accent-white' : 'mt-1 accent-zinc-900'}
                   />
                   <label htmlFor={`${shoot.id}-${g}`} className="cursor-pointer">
                     {g}

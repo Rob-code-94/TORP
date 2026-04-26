@@ -5,6 +5,7 @@ import { createClient, deleteClient, updateClient } from '../../../data/adminPro
 import { PROJECT_WIZARD_DRAFT_KEY } from './AdminProjectWizard';
 import AdminFormDrawer from './AdminFormDrawer';
 import { useAdminTheme } from '../../../lib/adminTheme';
+import { appInputClass, appLinkMutedClass, appPanelClass } from '../../../lib/appThemeClasses';
 import type { ClientProfile } from '../../../types';
 import ClientProfileForm, { EMPTY_CLIENT_PROFILE_DRAFT, type ClientProfileDraft } from './ClientProfileForm';
 
@@ -96,12 +97,22 @@ const AdminClients: React.FC = () => {
   return (
     <div className="max-w-4xl space-y-4 min-w-0">
       {returnToProjects && hasWizardDraft && (
-        <div className="rounded-xl border border-zinc-700 bg-zinc-900/50 p-3 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm text-zinc-300">Project draft is saved. Return when client setup is done.</p>
+        <div
+          className={`rounded-xl p-3 flex flex-wrap items-center justify-between gap-2 min-w-0 ${appPanelClass(
+            isDark
+          )}`}
+        >
+          <p className={`text-sm ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
+            Project draft is saved. Return when client setup is done.
+          </p>
           <button
             type="button"
             onClick={() => navigate('/hq/admin/projects')}
-            className="rounded-md border border-zinc-600 px-3 py-1.5 text-xs font-bold text-zinc-200"
+            className={
+              isDark
+                ? 'rounded-md border border-zinc-600 px-3 py-1.5 text-xs font-bold text-zinc-200'
+                : 'rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-bold text-zinc-800'
+            }
           >
             Return to Projects
           </button>
@@ -114,7 +125,11 @@ const AdminClients: React.FC = () => {
           <button
             type="button"
             onClick={openCreateDrawer}
-            className="w-full sm:w-auto rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-zinc-200 shrink-0"
+            className={
+              isDark
+                ? 'w-full sm:w-auto rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-zinc-200 shrink-0'
+                : 'w-full sm:w-auto rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-zinc-800 shrink-0'
+            }
           >
             Quick Add Client
           </button>
@@ -127,7 +142,7 @@ const AdminClients: React.FC = () => {
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search company, name, or email"
-          className="w-full sm:flex-1 sm:min-w-[200px] rounded-md border border-zinc-700 bg-zinc-900/40 px-3 py-1.5 text-sm text-zinc-100"
+          className={appInputClass(isDark)}
           aria-label="Search clients"
         />
         <label className="text-xs text-zinc-500 flex flex-col gap-0.5 sm:min-w-[150px]">
@@ -135,7 +150,11 @@ const AdminClients: React.FC = () => {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-            className="rounded-md border border-zinc-700 bg-zinc-900/40 px-2 py-1.5 text-sm text-zinc-200"
+            className={
+              isDark
+                ? 'rounded-md border border-zinc-700 bg-zinc-900/40 px-2 py-1.5 text-sm text-zinc-200'
+                : 'rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900'
+            }
           >
             <option value="all">All</option>
             <option value="prospect">Prospect</option>
@@ -150,7 +169,7 @@ const AdminClients: React.FC = () => {
               setSearchQuery('');
               setStatusFilter('all');
             }}
-            className="text-xs text-zinc-500 hover:text-zinc-200 underline self-start sm:mb-1"
+            className={`text-xs underline self-start sm:mb-1 ${appLinkMutedClass(isDark)}`}
           >
             Clear
           </button>
@@ -166,11 +185,13 @@ const AdminClients: React.FC = () => {
           filteredClients.map((c) => (
             <li
               key={c.id}
-              className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-4 flex flex-col sm:flex-row sm:justify-between gap-3 min-w-0"
+              className={`rounded-xl p-4 flex flex-col sm:flex-row sm:justify-between gap-3 min-w-0 ${appPanelClass(
+                isDark
+              )}`}
             >
               <div className="min-w-0">
-                <p className="text-white font-bold break-words">{c.company}</p>
-                <p className="text-sm text-zinc-400">{c.name}</p>
+                <p className={`font-bold break-words ${isDark ? 'text-white' : 'text-zinc-900'}`}>{c.company}</p>
+                <p className={`text-sm ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>{c.name}</p>
                 <p className="text-xs text-zinc-500 mt-1 break-words">
                   {c.email} · {c.phone}
                   {c.city && ` · ${c.city}`}
@@ -181,7 +202,11 @@ const AdminClients: React.FC = () => {
               <div className="text-xs text-zinc-500 flex flex-col items-start sm:items-end gap-1 shrink-0">
                 <span>Projects</span>
                 {c.projectIds.map((pid) => (
-                  <Link key={pid} to={`/hq/admin/projects/${pid}`} className="text-zinc-300 hover:text-white">
+                  <Link
+                    key={pid}
+                    to={`/hq/admin/projects/${pid}`}
+                    className={isDark ? 'text-zinc-300 hover:text-white' : 'text-zinc-700 hover:text-zinc-900'}
+                  >
                     {pid}
                   </Link>
                 ))}

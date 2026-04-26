@@ -34,6 +34,19 @@ import { useAuth } from '../../../lib/auth';
 import { hasHqFeatureAccess } from '../../../lib/hqAccess';
 import { hqUserGreetingName } from '../../../lib/hqUserDisplay';
 import type { AdminProject, PlannerItemPriority } from '../../../types';
+import {
+  appErrorBannerClass,
+  appIconWellClass,
+  appInputClass,
+  appKpiLinkClass,
+  appKpiValueClass,
+  appLinkMutedClass,
+  appOutlineButtonClass,
+  appPanelClass,
+  appSuccessBannerClass,
+  rechartsAxisStroke,
+  rechartsTooltipProps,
+} from '../../../lib/appThemeClasses';
 import { columnLabel, formatAdminDate, formatAdminDateTime } from './adminFormat';
 import AdminProjectWizard from './AdminProjectWizard';
 import AdminFormDrawer from './AdminFormDrawer';
@@ -291,19 +304,18 @@ const AdminCommand: React.FC = () => {
         Hello, {hqUserGreetingName(user ?? null)}
       </p>
       <div>
-        <p className="text-xs font-mono uppercase tracking-widest text-zinc-500 mb-1">Command center</p>
+        <p className={`text-xs font-mono uppercase tracking-widest mb-1 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>
+          Command center
+        </p>
         <h2 className={`text-2xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-zinc-900'}`}>What needs attention</h2>
-        <p className="text-sm text-zinc-500 mt-1">Operational view — same data will power Crew in read-only / filtered form.</p>
+        <p className={`text-sm mt-1 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>
+          Operational view — same data will power Crew in read-only / filtered form.
+        </p>
       </div>
 
       {status && (
         <div
-          className={[
-            'rounded-xl border px-4 py-2.5 text-sm',
-            status.tone === 'ok'
-              ? 'border-emerald-900/40 bg-emerald-950/20 text-emerald-200'
-              : 'border-red-900/40 bg-red-950/20 text-red-200',
-          ].join(' ')}
+          className={['rounded-xl px-4 py-2.5 text-sm', status.tone === 'ok' ? appSuccessBannerClass(isDark) : appErrorBannerClass(isDark)].join(' ')}
           role="status"
           aria-live="polite"
         >
@@ -311,9 +323,9 @@ const AdminCommand: React.FC = () => {
         </div>
       )}
 
-      <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-4 sm:p-5 min-w-0">
+      <div className={`rounded-xl p-4 sm:p-5 min-w-0 ${appPanelClass(isDark)}`}>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-white">Quick actions</h3>
+          <h3 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-zinc-900'}`}>Quick actions</h3>
           {(!canQuickTaskShoot || !canQuickClient || !canCreateProject) && (
             <p className="text-xs text-zinc-500">Some quick actions are disabled by your crew feature access.</p>
           )}
@@ -321,7 +333,12 @@ const AdminCommand: React.FC = () => {
         {loading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mt-3">
             {Array.from({ length: 4 }).map((_, idx) => (
-              <div key={idx} className="h-11 rounded-lg border border-zinc-800 bg-zinc-900/60 animate-pulse" />
+              <div
+                key={idx}
+                className={`h-11 rounded-lg border animate-pulse ${
+                  isDark ? 'border-zinc-800 bg-zinc-900/60' : 'border-zinc-200 bg-zinc-100'
+                }`}
+              />
             ))}
           </div>
         ) : (
@@ -330,7 +347,7 @@ const AdminCommand: React.FC = () => {
               type="button"
               onClick={() => setTaskOpen(true)}
               disabled={!canQuickTaskShoot || activeProjects.length === 0}
-              className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-xs font-bold uppercase tracking-wide text-zinc-100 disabled:text-zinc-500 disabled:border-zinc-800 disabled:cursor-not-allowed hover:bg-zinc-800/60"
+              className={appOutlineButtonClass(isDark)}
             >
               <ClipboardPlus size={14} />
               Add quick task
@@ -339,7 +356,7 @@ const AdminCommand: React.FC = () => {
               type="button"
               onClick={() => setShootOpen(true)}
               disabled={!canQuickTaskShoot || activeProjects.length === 0}
-              className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-xs font-bold uppercase tracking-wide text-zinc-100 disabled:text-zinc-500 disabled:border-zinc-800 disabled:cursor-not-allowed hover:bg-zinc-800/60"
+              className={appOutlineButtonClass(isDark)}
             >
               <CalendarPlus size={14} />
               Add quick shoot
@@ -348,7 +365,7 @@ const AdminCommand: React.FC = () => {
               type="button"
               onClick={() => setClientOpen(true)}
               disabled={!canQuickClient}
-              className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-xs font-bold uppercase tracking-wide text-zinc-100 disabled:text-zinc-500 disabled:border-zinc-800 disabled:cursor-not-allowed hover:bg-zinc-800/60"
+              className={appOutlineButtonClass(isDark)}
             >
               <UserPlus size={14} />
               Add client
@@ -357,7 +374,11 @@ const AdminCommand: React.FC = () => {
               type="button"
               onClick={() => setWizardOpen(true)}
               disabled={!canCreateProject}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-bold uppercase tracking-wide text-black disabled:bg-zinc-800 disabled:text-zinc-500 disabled:cursor-not-allowed hover:bg-zinc-200"
+              className={`inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-wide disabled:cursor-not-allowed ${
+                isDark
+                  ? 'bg-white text-black disabled:bg-zinc-800 disabled:text-zinc-500 hover:bg-zinc-200'
+                  : 'bg-zinc-900 text-white hover:bg-zinc-800 disabled:bg-zinc-200 disabled:text-zinc-500'
+              }`}
             >
               <Plus size={14} />
               Add project
@@ -365,124 +386,146 @@ const AdminCommand: React.FC = () => {
           </div>
         )}
         {activeProjects.length === 0 && (
-          <p className="text-xs text-amber-300 mt-2">No active projects found. Create a project first to enable quick task and quick shoot.</p>
+          <p className={`text-xs mt-2 ${isDark ? 'text-amber-300' : 'text-amber-800'}`}>
+            No active projects found. Create a project first to enable quick task and quick shoot.
+          </p>
         )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {canFinancialsPage ? (
-          <Link to="/hq/admin/financials" className="bg-zinc-900/50 border border-zinc-800 p-5 rounded-xl hover:border-zinc-700 transition-colors">
+          <Link to="/hq/admin/financials" className={`p-5 rounded-xl transition-colors block ${appKpiLinkClass(isDark)}`}>
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs text-zinc-500 mb-1">Revenue (YTD, sample)</p>
-                <p className="text-2xl font-bold text-white">${(stats.revenueYtd / 1000).toFixed(0)}k</p>
+                <p className={`text-xs mb-1 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>Revenue (YTD, sample)</p>
+                <p className={appKpiValueClass(isDark)}>${(stats.revenueYtd / 1000).toFixed(0)}k</p>
               </div>
-              <div className="p-2 bg-zinc-800/80 rounded-lg text-zinc-300">
+              <div className={appIconWellClass(isDark)}>
                 <DollarSign size={20} />
               </div>
             </div>
-            <div className="mt-3 flex items-center text-xs text-zinc-500">
-              <TrendingUp size={12} className="mr-1 text-zinc-400" /> Live aggregate
+            <div className={`mt-3 flex items-center text-xs ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>
+              <TrendingUp size={12} className={`mr-1 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`} /> Live aggregate
             </div>
           </Link>
         ) : (
-          <div className="bg-zinc-900/50 border border-zinc-800 p-5 rounded-xl opacity-60">
+          <div className={`p-5 rounded-xl opacity-60 ${appKpiLinkClass(isDark, false)}`}>
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs text-zinc-500 mb-1">Revenue (YTD, sample)</p>
-                <p className="text-2xl font-bold text-white">${(stats.revenueYtd / 1000).toFixed(0)}k</p>
+                <p className={`text-xs mb-1 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>Revenue (YTD, sample)</p>
+                <p className={appKpiValueClass(isDark)}>${(stats.revenueYtd / 1000).toFixed(0)}k</p>
               </div>
-              <div className="p-2 bg-zinc-800/80 rounded-lg text-zinc-300">
+              <div className={appIconWellClass(isDark)}>
                 <DollarSign size={20} />
               </div>
             </div>
-            <p className="mt-3 text-xs text-zinc-500">Financials access disabled by admin.</p>
+            <p className={`mt-3 text-xs ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>Financials access disabled by admin.</p>
           </div>
         )}
 
-        <Link to="/hq/admin/projects" className="bg-zinc-900/50 border border-zinc-800 p-5 rounded-xl hover:border-zinc-700 transition-colors">
+        <Link to="/hq/admin/projects" className={`p-5 rounded-xl block ${appKpiLinkClass(isDark)}`}>
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-xs text-zinc-500 mb-1">Active projects</p>
-              <p className="text-2xl font-bold text-white">{stats.activeProjects}</p>
+              <p className={`text-xs mb-1 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>Active projects</p>
+              <p className={appKpiValueClass(isDark)}>{stats.activeProjects}</p>
             </div>
-            <div className="p-2 bg-zinc-800/80 rounded-lg text-zinc-300">
+            <div className={appIconWellClass(isDark)}>
               <Film size={20} />
             </div>
           </div>
-          <p className="mt-3 text-xs text-zinc-500">Pipelines: prod + post in flight</p>
+          <p className={`mt-3 text-xs ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>Pipelines: prod + post in flight</p>
         </Link>
 
-        <div className="bg-zinc-900/50 border border-zinc-800 p-5 rounded-xl">
+        <div className={`p-5 rounded-xl ${appKpiLinkClass(isDark, false)}`}>
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-xs text-zinc-500 mb-1">Outstanding (open invoices)</p>
-              <p className="text-2xl font-bold text-white">
-                ${stats.outstanding.toLocaleString()}
-              </p>
+              <p className={`text-xs mb-1 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>Outstanding (open invoices)</p>
+              <p className={appKpiValueClass(isDark)}>${stats.outstanding.toLocaleString()}</p>
             </div>
-            <div className="p-2 bg-zinc-800/80 rounded-lg text-amber-500/90">
+            <div
+              className={
+                isDark
+                  ? 'p-2 bg-zinc-800/80 rounded-lg text-amber-500/90'
+                  : 'p-2 bg-amber-50 rounded-lg text-amber-700 border border-amber-200/80'
+              }
+            >
               <FileText size={20} />
             </div>
           </div>
-          <Link
-            to="/hq/admin/financials"
-            className="mt-3 text-xs text-zinc-500 hover:text-white inline-flex items-center gap-1"
-          >
+          <Link to="/hq/admin/financials" className={`mt-3 text-xs inline-flex items-center gap-1 ${appLinkMutedClass(isDark)}`}>
             Open financials
           </Link>
         </div>
 
-        <Link to="/hq/admin/projects?stage=post" className="bg-zinc-900/50 border border-zinc-800 p-5 rounded-xl hover:border-zinc-700 transition-colors">
+        <Link to="/hq/admin/projects?stage=post" className={`p-5 rounded-xl block ${appKpiLinkClass(isDark)}`}>
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-xs text-zinc-500 mb-1">Approvals in review</p>
-              <p className="text-2xl font-bold text-white">{stats.pendingApprovals}</p>
+              <p className={`text-xs mb-1 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>Approvals in review</p>
+              <p className={appKpiValueClass(isDark)}>{stats.pendingApprovals}</p>
             </div>
-            <div className="p-2 bg-zinc-800/80 rounded-lg text-zinc-300">
+            <div className={appIconWellClass(isDark)}>
               <Video size={20} />
             </div>
           </div>
-          <p className="mt-3 text-xs text-zinc-500">Client-visible cuts / stills</p>
+          <p className={`mt-3 text-xs ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>Client-visible cuts / stills</p>
         </Link>
       </div>
 
-      <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-4 sm:p-5 min-w-0">
+      <div className={`rounded-xl p-4 sm:p-5 min-w-0 ${isDark ? 'bg-zinc-900/40 border border-zinc-800' : 'bg-white border border-zinc-200'}`}>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-            <Calendar size={16} className="text-zinc-400" /> This week
+          <h3 className={`text-sm font-semibold flex items-center gap-2 ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+            <Calendar size={16} className={isDark ? 'text-zinc-400' : 'text-zinc-500'} /> This week
           </h3>
-          <Link to="/hq/admin/planner?view=calendar&mode=week" className="text-xs text-zinc-500 hover:text-white">
+          <Link to="/hq/admin/planner?view=calendar&mode=week" className={`text-xs ${appLinkMutedClass(isDark)}`}>
             Open full planner
           </Link>
         </div>
         {loading ? (
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 mt-3">
             {Array.from({ length: 7 }).map((_, idx) => (
-              <div key={idx} className="h-20 rounded-lg border border-zinc-800 bg-zinc-900/60 animate-pulse" />
+              <div
+                key={idx}
+                className={`h-20 rounded-lg border animate-pulse ${
+                  isDark ? 'border-zinc-800 bg-zinc-900/60' : 'border-zinc-200 bg-zinc-100'
+                }`}
+              />
             ))}
           </div>
         ) : (
-          <div className="mt-3 overflow-x-auto rounded-lg border border-zinc-800">
-            <div className="grid grid-cols-7 min-w-[720px] divide-x divide-zinc-800/80">
+          <div
+            className={`mt-3 overflow-x-auto rounded-lg border min-w-0 ${isDark ? 'border-zinc-800' : 'border-zinc-200'}`}
+          >
+            <div className={`grid grid-cols-7 min-w-[720px] ${isDark ? 'divide-x divide-zinc-800/80' : 'divide-x divide-zinc-200'}`}>
               {weekData.map((day) => (
                 <button
                   key={day.ymd}
                   type="button"
                   onClick={() => navigate(`/hq/admin/planner?view=calendar&mode=day&date=${day.ymd}`)}
-                  className="text-left p-2.5 hover:bg-zinc-800/40 transition-colors min-h-[96px]"
+                  className={`text-left p-2.5 transition-colors min-h-[96px] ${
+                    isDark ? 'hover:bg-zinc-800/40' : 'hover:bg-zinc-100'
+                  }`}
                 >
-                  <p className="text-[10px] uppercase text-zinc-500 font-bold">
-                    {day.short} <span className="text-zinc-400">{day.day}</span>
+                  <p className={`text-[10px] uppercase font-bold ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>
+                    {day.short} <span className={isDark ? 'text-zinc-400' : 'text-zinc-500'}>{day.day}</span>
                   </p>
                   <div className="mt-1 space-y-1">
                     {day.items.slice(0, 2).map((item) => (
-                      <p key={item.id} className="text-[10px] text-zinc-300 truncate" title={item.title}>
+                      <p
+                        key={item.id}
+                        className={`text-[10px] truncate ${isDark ? 'text-zinc-300' : 'text-zinc-800'}`}
+                        title={item.title}
+                      >
                         {item.title}
                       </p>
                     ))}
-                    {day.items.length === 0 && <p className="text-[10px] text-zinc-600">No items</p>}
-                    {day.items.length > 2 && <p className="text-[10px] text-zinc-500">+{day.items.length - 2} more</p>}
+                    {day.items.length === 0 && (
+                      <p className={`text-[10px] ${isDark ? 'text-zinc-600' : 'text-zinc-500'}`}>No items</p>
+                    )}
+                    {day.items.length > 2 && (
+                      <p className={`text-[10px] ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>
+                        +{day.items.length - 2} more
+                      </p>
+                    )}
                   </div>
                 </button>
               ))}
@@ -492,8 +535,12 @@ const AdminCommand: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-5 h-72">
-          <h3 className="text-sm font-semibold text-white mb-4">Revenue trajectory (sample)</h3>
+        <div
+          className={`rounded-xl p-5 h-72 ${isDark ? 'bg-zinc-900/40 border border-zinc-800' : 'bg-white border border-zinc-200'}`}
+        >
+          <h3 className={`text-sm font-semibold mb-4 ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+            Revenue trajectory (sample)
+          </h3>
           <ResponsiveContainer width="100%" height="85%">
             <AreaChart data={revenueData}>
               <defs>
@@ -502,22 +549,19 @@ const AdminCommand: React.FC = () => {
                   <stop offset="95%" stopColor="#e4e4e7" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <XAxis dataKey="name" stroke="#52525b" fontSize={11} tickLine={false} axisLine={false} />
+              <XAxis dataKey="name" stroke={rechartsAxisStroke(isDark)} fontSize={11} tickLine={false} axisLine={false} />
               <YAxis
-                stroke="#52525b"
+                stroke={rechartsAxisStroke(isDark)}
                 fontSize={11}
                 tickLine={false}
                 axisLine={false}
                 tickFormatter={(v) => `$${v / 1000}k`}
               />
-              <Tooltip
-                contentStyle={{ backgroundColor: '#18181b', borderColor: '#27272a', color: '#fff' }}
-                itemStyle={{ color: '#fff' }}
-              />
+              <Tooltip {...rechartsTooltipProps(isDark)} />
               <Area
                 type="monotone"
                 dataKey="revenue"
-                stroke="#fafafa"
+                stroke={isDark ? '#fafafa' : '#27272a'}
                 strokeWidth={1.5}
                 fillOpacity={1}
                 fill="url(#cRev)"
@@ -527,38 +571,51 @@ const AdminCommand: React.FC = () => {
         </div>
 
         <div className="space-y-4">
-          <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-4">
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+          <div className={`rounded-xl p-4 ${isDark ? 'bg-zinc-900/40 border border-zinc-800' : 'bg-white border border-zinc-200'}`}>
+            <h3 className={`text-sm font-semibold flex items-center gap-2 ${isDark ? 'text-white' : 'text-zinc-900'}`}>
               <AlertTriangle size={16} className="text-amber-500" /> Urgent tasks
             </h3>
             {urgent.length === 0 ? (
-              <p className="text-sm text-zinc-500 mt-2">No urgent open items.</p>
+              <p className={`text-sm mt-2 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>No urgent open items.</p>
             ) : (
               <ul className="mt-3 space-y-2">
                 {urgent.map((t) => (
                   <li
                     key={t.id}
-                    className="flex items-start justify-between gap-2 text-sm border-b border-zinc-800/80 last:border-0 pb-2 last:pb-0"
+                    className={`flex items-start justify-between gap-2 text-sm border-b last:border-0 pb-2 last:pb-0 ${
+                      isDark ? 'border-zinc-800/80' : 'border-zinc-200'
+                    }`}
                   >
-                    <Link to={`/hq/admin/projects/${t.projectId}`} className="min-w-0 hover:text-white">
-                      <span className="text-white font-medium">{t.title}</span>
-                      <span className="text-zinc-500"> · {t.projectTitle}</span>
+                    <Link
+                      to={`/hq/admin/projects/${t.projectId}`}
+                      className={`min-w-0 ${isDark ? 'hover:text-white' : 'hover:text-zinc-700'}`}
+                    >
+                      <span className={`font-medium ${isDark ? 'text-white' : 'text-zinc-900'}`}>{t.title}</span>
+                      <span className={isDark ? 'text-zinc-500' : 'text-zinc-600'}> · {t.projectTitle}</span>
                     </Link>
-                    <span className="shrink-0 text-[10px] uppercase text-zinc-500">{columnLabel(t.column)}</span>
+                    <span className={`shrink-0 text-[10px] uppercase ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>
+                      {columnLabel(t.column)}
+                    </span>
                   </li>
                 ))}
               </ul>
             )}
-            <Link to="/hq/admin/planner" className="text-xs text-zinc-500 hover:text-white mt-2 inline-block">
+            <Link to="/hq/admin/planner" className={`text-xs mt-2 inline-block ${appLinkMutedClass(isDark)}`}>
               View planner
             </Link>
           </div>
           {overdue.length > 0 && (
-            <div className="bg-red-950/20 border border-red-900/40 rounded-xl p-4">
-              <h3 className="text-sm font-semibold text-red-200 flex items-center gap-2">
+            <div
+              className={
+                isDark
+                  ? 'bg-red-950/20 border border-red-900/40 rounded-xl p-4'
+                  : 'bg-red-50 border border-red-200 rounded-xl p-4'
+              }
+            >
+              <h3 className={`text-sm font-semibold flex items-center gap-2 ${isDark ? 'text-red-200' : 'text-red-800'}`}>
                 <Banknote size={16} /> Overdue or aging
               </h3>
-            <ul className="mt-2 text-sm text-red-100/90">
+              <ul className={`mt-2 text-sm ${isDark ? 'text-red-100/90' : 'text-red-800'}`}>
                 {overdue.map((i) => (
                   <li key={i.id} className="py-1">
                     <Link to="/hq/admin/financials" className="hover:underline">
@@ -573,22 +630,32 @@ const AdminCommand: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-4">
-          <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-            <Calendar size={16} className="text-zinc-400" /> Upcoming schedule (shoots)
+        <div className={`rounded-xl p-4 ${isDark ? 'bg-zinc-900/40 border border-zinc-800' : 'bg-white border border-zinc-200'}`}>
+          <h3 className={`text-sm font-semibold flex items-center gap-2 ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+            <Calendar size={16} className={isDark ? 'text-zinc-400' : 'text-zinc-500'} /> Upcoming schedule (shoots)
           </h3>
           <ul className="mt-3 space-y-3 text-sm">
             {nextShoots.map((s) => (
-              <li key={s.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 border-b border-zinc-800/80 pb-3 last:border-0 last:pb-0">
+              <li
+                key={s.id}
+                className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 border-b pb-3 last:border-0 last:pb-0 ${
+                  isDark ? 'border-zinc-800/80' : 'border-zinc-200'
+                }`}
+              >
                 <div>
-                  <Link to={`/hq/admin/projects/${s.projectId}`} className="text-white font-medium hover:underline">{s.projectTitle}</Link>
-                  <p className="text-zinc-500 text-xs">
+                  <Link
+                    to={`/hq/admin/projects/${s.projectId}`}
+                    className={`font-medium hover:underline ${isDark ? 'text-white' : 'text-zinc-900'}`}
+                  >
+                    {s.projectTitle}
+                  </Link>
+                  <p className={`text-xs ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>
                     {formatAdminDate(s.date)} @ {s.callTime} — {s.location}
                   </p>
                 </div>
                 <Link
                   to={`/hq/admin/projects/${s.projectId}`}
-                  className="text-xs text-zinc-500 hover:text-white"
+                  className={`text-xs ${appLinkMutedClass(isDark)}`}
                 >
                   Open project
                 </Link>
@@ -597,20 +664,23 @@ const AdminCommand: React.FC = () => {
           </ul>
         </div>
 
-        <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-4">
-          <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-            <CheckCircle size={16} className="text-zinc-400" /> Pending client approvals
+        <div className={`rounded-xl p-4 ${isDark ? 'bg-zinc-900/40 border border-zinc-800' : 'bg-white border border-zinc-200'}`}>
+          <h3 className={`text-sm font-semibold flex items-center gap-2 ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+            <CheckCircle size={16} className={isDark ? 'text-zinc-400' : 'text-zinc-500'} /> Pending client approvals
           </h3>
           {pendingAssets.length === 0 ? (
-            <p className="text-sm text-zinc-500 mt-2">Nothing in client review.</p>
+            <p className={`text-sm mt-2 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>Nothing in client review.</p>
           ) : (
-            <ul className="mt-3 space-y-2 text-sm text-zinc-300">
+            <ul className={`mt-3 space-y-2 text-sm ${isDark ? 'text-zinc-300' : 'text-zinc-800'}`}>
               {pendingAssets.map((a) => (
                 <li key={a.id}>
-                  <Link to={`/hq/admin/projects/${a.projectId}`} className="hover:text-white">
+                  <Link
+                    to={`/hq/admin/projects/${a.projectId}`}
+                    className={isDark ? 'hover:text-white' : 'hover:text-zinc-600'}
+                  >
                     {a.label}{' '}
                   </Link>
-                  <span className="text-zinc-500">
+                  <span className={isDark ? 'text-zinc-500' : 'text-zinc-600'}>
                     (v{a.version})
                   </span>
                 </li>
@@ -621,16 +691,28 @@ const AdminCommand: React.FC = () => {
       </div>
 
       <div>
-        <h3 className="text-sm font-semibold text-zinc-400 mb-2">Recent activity feed</h3>
-        <div className="bg-zinc-900/30 border border-zinc-800 rounded-xl divide-y divide-zinc-800/80 max-h-56 overflow-y-auto">
+        <h3 className={`text-sm font-semibold mb-2 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>Recent activity feed</h3>
+        <div
+          className={`rounded-xl max-h-56 overflow-y-auto ${
+            isDark
+              ? 'bg-zinc-900/30 border border-zinc-800 divide-y divide-zinc-800/80'
+              : 'bg-white border border-zinc-200 divide-y divide-zinc-200'
+          }`}
+        >
           {MOCK_ACTIVITY.map((a) => (
-            <Link key={a.id} to={`/hq/admin/projects/${a.projectId}`} className="block px-4 py-2.5 text-sm hover:bg-zinc-900/40">
-              <span className="text-zinc-500 text-xs">
+            <Link
+              key={a.id}
+              to={`/hq/admin/projects/${a.projectId}`}
+              className={`block px-4 py-2.5 text-sm ${
+                isDark ? 'hover:bg-zinc-900/40' : 'hover:bg-zinc-50'
+              }`}
+            >
+              <span className={`text-xs block ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>
                 {formatAdminDateTime(a.createdAt)}
               </span>
-              <span className="text-zinc-300">
+              <span className={isDark ? 'text-zinc-300' : 'text-zinc-800'}>
                 {a.actorName} — {a.action}
-                <span className="text-zinc-500"> — {a.projectTitle}</span>
+                <span className={isDark ? 'text-zinc-500' : 'text-zinc-600'}> — {a.projectTitle}</span>
               </span>
             </Link>
           ))}
@@ -654,10 +736,22 @@ const AdminCommand: React.FC = () => {
         subtitle="Create a client profile for project setup"
         footer={
           <div className="flex justify-end gap-2">
-            <button type="button" onClick={() => setClientOpen(false)} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300">
+            <button
+              type="button"
+              onClick={() => setClientOpen(false)}
+              className={`rounded-md border px-3 py-1.5 text-xs ${
+                isDark ? 'border-zinc-700 text-zinc-300' : 'border-zinc-300 text-zinc-700'
+              }`}
+            >
               Cancel
             </button>
-            <button type="button" onClick={submitQuickClient} className="rounded-md bg-white px-3 py-1.5 text-xs font-bold text-black hover:bg-zinc-200">
+            <button
+              type="button"
+              onClick={submitQuickClient}
+              className={`rounded-md px-3 py-1.5 text-xs font-bold ${
+                isDark ? 'bg-white text-black hover:bg-zinc-200' : 'bg-zinc-900 text-white hover:bg-zinc-800'
+              }`}
+            >
               Save Client
             </button>
           </div>
@@ -673,10 +767,22 @@ const AdminCommand: React.FC = () => {
         subtitle="Create a planner task from command center"
         footer={
           <div className="flex justify-end gap-2">
-            <button type="button" onClick={() => setTaskOpen(false)} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300">
+            <button
+              type="button"
+              onClick={() => setTaskOpen(false)}
+              className={`rounded-md border px-3 py-1.5 text-xs ${
+                isDark ? 'border-zinc-700 text-zinc-300' : 'border-zinc-300 text-zinc-700'
+              }`}
+            >
               Cancel
             </button>
-            <button type="button" onClick={submitQuickTask} className="rounded-md bg-white px-3 py-1.5 text-xs font-bold text-black hover:bg-zinc-200">
+            <button
+              type="button"
+              onClick={submitQuickTask}
+              className={`rounded-md px-3 py-1.5 text-xs font-bold ${
+                isDark ? 'bg-white text-black hover:bg-zinc-200' : 'bg-zinc-900 text-white hover:bg-zinc-800'
+              }`}
+            >
               Save Task
             </button>
           </div>
@@ -695,7 +801,7 @@ const AdminCommand: React.FC = () => {
                 };
               })
             }
-            className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+            className={appInputClass(isDark)}
           >
             <option value="">Select project</option>
             {activeProjects.map((project) => (
@@ -704,10 +810,24 @@ const AdminCommand: React.FC = () => {
               </option>
             ))}
           </select>
-          <input value={taskDraft.title} onChange={(e) => setTaskDraft((v) => ({ ...v, title: e.target.value }))} placeholder="Task title" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+          <input
+            value={taskDraft.title}
+            onChange={(e) => setTaskDraft((v) => ({ ...v, title: e.target.value }))}
+            placeholder="Task title"
+            className={appInputClass(isDark)}
+          />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <input type="date" value={taskDraft.dueDate} onChange={(e) => setTaskDraft((v) => ({ ...v, dueDate: e.target.value }))} className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
-            <select value={taskDraft.priority} onChange={(e) => setTaskDraft((v) => ({ ...v, priority: e.target.value as PlannerItemPriority }))} className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100">
+            <input
+              type="date"
+              value={taskDraft.dueDate}
+              onChange={(e) => setTaskDraft((v) => ({ ...v, dueDate: e.target.value }))}
+              className={appInputClass(isDark)}
+            />
+            <select
+              value={taskDraft.priority}
+              onChange={(e) => setTaskDraft((v) => ({ ...v, priority: e.target.value as PlannerItemPriority }))}
+              className={appInputClass(isDark)}
+            >
               <option value="low">Low</option>
               <option value="medium">Medium</option>
               <option value="high">High</option>
@@ -724,10 +844,22 @@ const AdminCommand: React.FC = () => {
         subtitle="Create a shoot event from command center"
         footer={
           <div className="flex justify-end gap-2">
-            <button type="button" onClick={() => setShootOpen(false)} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300">
+            <button
+              type="button"
+              onClick={() => setShootOpen(false)}
+              className={`rounded-md border px-3 py-1.5 text-xs ${
+                isDark ? 'border-zinc-700 text-zinc-300' : 'border-zinc-300 text-zinc-700'
+              }`}
+            >
               Cancel
             </button>
-            <button type="button" onClick={submitQuickShoot} className="rounded-md bg-white px-3 py-1.5 text-xs font-bold text-black hover:bg-zinc-200">
+            <button
+              type="button"
+              onClick={submitQuickShoot}
+              className={`rounded-md px-3 py-1.5 text-xs font-bold ${
+                isDark ? 'bg-white text-black hover:bg-zinc-200' : 'bg-zinc-900 text-white hover:bg-zinc-800'
+              }`}
+            >
               Save Shoot
             </button>
           </div>
@@ -737,7 +869,7 @@ const AdminCommand: React.FC = () => {
           <select
             value={shootDraft.projectId}
             onChange={(e) => setShootDraft((v) => ({ ...v, projectId: e.target.value }))}
-            className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+            className={appInputClass(isDark)}
           >
             <option value="">Select project</option>
             {activeProjects.map((project) => (
@@ -746,13 +878,39 @@ const AdminCommand: React.FC = () => {
               </option>
             ))}
           </select>
-          <input value={shootDraft.title} onChange={(e) => setShootDraft((v) => ({ ...v, title: e.target.value }))} placeholder="Shoot title" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+          <input
+            value={shootDraft.title}
+            onChange={(e) => setShootDraft((v) => ({ ...v, title: e.target.value }))}
+            placeholder="Shoot title"
+            className={appInputClass(isDark)}
+          />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <input type="date" value={shootDraft.date} onChange={(e) => setShootDraft((v) => ({ ...v, date: e.target.value }))} className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
-            <input type="time" value={shootDraft.callTime} onChange={(e) => setShootDraft((v) => ({ ...v, callTime: e.target.value }))} className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+            <input
+              type="date"
+              value={shootDraft.date}
+              onChange={(e) => setShootDraft((v) => ({ ...v, date: e.target.value }))}
+              className={appInputClass(isDark)}
+            />
+            <input
+              type="time"
+              value={shootDraft.callTime}
+              onChange={(e) => setShootDraft((v) => ({ ...v, callTime: e.target.value }))}
+              className={appInputClass(isDark)}
+            />
           </div>
-          <input value={shootDraft.location} onChange={(e) => setShootDraft((v) => ({ ...v, location: e.target.value }))} placeholder="Location" className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
-          <textarea value={shootDraft.description} onChange={(e) => setShootDraft((v) => ({ ...v, description: e.target.value }))} placeholder="Description (optional)" rows={3} className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100" />
+          <input
+            value={shootDraft.location}
+            onChange={(e) => setShootDraft((v) => ({ ...v, location: e.target.value }))}
+            placeholder="Location"
+            className={appInputClass(isDark)}
+          />
+          <textarea
+            value={shootDraft.description}
+            onChange={(e) => setShootDraft((v) => ({ ...v, description: e.target.value }))}
+            placeholder="Description (optional)"
+            rows={3}
+            className={appInputClass(isDark)}
+          />
         </div>
       </AdminFormDrawer>
     </div>
