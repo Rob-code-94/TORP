@@ -1,27 +1,34 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { getIdTokenResult, onAuthStateChanged, signOut, updateProfile } from 'firebase/auth';
 import { UserRole } from '../types';
+import { authUserFromFirebase } from './firebaseAuthUser';
+import { getFirebaseAuthInstance, isFirebaseConfigured } from './firebase';
 
 /** Logged-in roles only (PUBLIC is represented by `user === null`). */
 export type AuthRole = UserRole.ADMIN | UserRole.PROJECT_MANAGER | UserRole.STAFF | UserRole.CLIENT;
 
 const HQ_SESSION_KEY = 'torp.hq.session';
+const PORTAL_SESSION_KEY = 'torp.portal.session';
 
 export interface AuthUser {
   role: AuthRole;
-  /** Demo display name; replaced by Firebase profile later */
   displayName?: string;
   email?: string;
-  /** When role is STAFF, links to `CrewProfile.id` for planner / profile surfaces */
   crewId?: string;
 }
 
 interface AuthContextValue {
   user: AuthUser | null;
-  /** Full session (role + optional identity fields). */
+  /** True while the initial Firebase `onAuthStateChanged` (or first session read) completes. */
+  loading: boolean;
+  /** `true` when this build is using the Firebase client (env configured). */
+  isFirebase: boolean;
+  /** Demo / session-only: sets in-memory + sessionStorage. Ignored for Firebase when a Firebase `User` is already active (use sign out first). */
   loginAs: (session: AuthUser) => void;
-  /** Demo: merge display name / email into session and persist to sessionStorage. */
   updateSessionProfile: (patch: Partial<Pick<AuthUser, 'displayName' | 'email'>>) => void;
   logout: () => void;
+  /** Re-sync `user` from the current ID token (e.g. after `setCustomUserClaims` on the server). */
+  refreshIdToken: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -46,39 +53,147 @@ function readStoredHqUser(): AuthUser | null {
   }
 }
 
+function readStoredPortalUser(): AuthUser | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(PORTAL_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as AuthUser;
+    if (!parsed || typeof parsed.role !== 'string' || parsed.role !== UserRole.CLIENT) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function readLegacySessionUser(): AuthUser | null {
+  return readStoredHqUser() ?? readStoredPortalUser();
+}
+
+function persistUser(user: AuthUser | null, firebaseUserActive: boolean) {
+  if (typeof window === 'undefined') return;
+  if (firebaseUserActive) {
+    sessionStorage.removeItem(HQ_SESSION_KEY);
+    sessionStorage.removeItem(PORTAL_SESSION_KEY);
+    return;
+  }
+  if (!user) {
+    sessionStorage.removeItem(HQ_SESSION_KEY);
+    sessionStorage.removeItem(PORTAL_SESSION_KEY);
+    return;
+  }
+  if (user.role === UserRole.CLIENT) {
+    sessionStorage.setItem(PORTAL_SESSION_KEY, JSON.stringify(user));
+    sessionStorage.removeItem(HQ_SESSION_KEY);
+  } else {
+    sessionStorage.setItem(HQ_SESSION_KEY, JSON.stringify(user));
+    sessionStorage.removeItem(PORTAL_SESSION_KEY);
+  }
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<AuthUser | null>(() => readStoredHqUser());
+  const useFirebase = isFirebaseConfigured();
+  const [user, setUser] = useState<AuthUser | null>(() => (useFirebase ? null : readLegacySessionUser()));
+  const [loading, setLoading] = useState(() => useFirebase);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (user && (user.role === UserRole.ADMIN || user.role === UserRole.PROJECT_MANAGER || user.role === UserRole.STAFF)) {
-      sessionStorage.setItem(HQ_SESSION_KEY, JSON.stringify(user));
-    } else {
-      sessionStorage.removeItem(HQ_SESSION_KEY);
+    if (!useFirebase) {
+      setUser(readLegacySessionUser());
+      setLoading(false);
+      return;
     }
-  }, [user]);
+    const auth = getFirebaseAuthInstance();
+    const unsub = onAuthStateChanged(auth, async (next) => {
+      if (next) {
+        const token = await getIdTokenResult(next);
+        setUser(authUserFromFirebase(next, token));
+        if (typeof window !== 'undefined') {
+          sessionStorage.removeItem(HQ_SESSION_KEY);
+          sessionStorage.removeItem(PORTAL_SESSION_KEY);
+        }
+      } else {
+        // Rehydrate demo sessions (HQ + portal) when not signed in to Firebase
+        setUser(readLegacySessionUser());
+      }
+      setLoading(false);
+    });
+    return unsub;
+  }, [useFirebase]);
 
-  const loginAs = useCallback((session: AuthUser) => {
-    setUser(session);
-  }, []);
+  useEffect(() => {
+    if (useFirebase) {
+      try {
+        if (getFirebaseAuthInstance().currentUser) return;
+      } catch {
+        return;
+      }
+    }
+    persistUser(user, false);
+  }, [user, useFirebase]);
 
-  const updateSessionProfile = useCallback((patch: Partial<Pick<AuthUser, 'displayName' | 'email'>>) => {
-    setUser((prev) => (prev ? { ...prev, ...patch } : null));
-  }, []);
+  const loginAs = useCallback(
+    (session: AuthUser) => {
+      if (useFirebase && getFirebaseAuthInstance().currentUser) {
+        // Avoid mixing anonymous mock sessions with a signed-in Firebase user.
+        return;
+      }
+      setUser(session);
+    },
+    [useFirebase]
+  );
+
+  const refreshIdToken = useCallback(async () => {
+    if (!useFirebase) return;
+    const auth = getFirebaseAuthInstance();
+    const u = auth.currentUser;
+    if (!u) return;
+    await u.getIdToken(true);
+    const token = await getIdTokenResult(u);
+    setUser(authUserFromFirebase(u, token));
+  }, [useFirebase]);
+
+  const updateSessionProfile = useCallback(
+    (patch: Partial<Pick<AuthUser, 'displayName' | 'email'>>) => {
+      setUser((prev) => (prev ? { ...prev, ...patch } : null));
+      if (useFirebase) {
+        const u = getFirebaseAuthInstance().currentUser;
+        if (u) {
+          if (patch.displayName != null) {
+            void updateProfile(u, { displayName: patch.displayName || undefined });
+          }
+          // Email change uses `updateEmail` from profile menu; token email updates via re-auth.
+        }
+      }
+    },
+    [useFirebase]
+  );
 
   const logout = useCallback(() => {
+    if (useFirebase) {
+      const auth = getFirebaseAuthInstance();
+      if (auth.currentUser) {
+        void signOut(auth);
+        return;
+      }
+    }
     setUser(null);
-    if (typeof window !== 'undefined') sessionStorage.removeItem(HQ_SESSION_KEY);
-  }, []);
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem(HQ_SESSION_KEY);
+      sessionStorage.removeItem(PORTAL_SESSION_KEY);
+    }
+  }, [useFirebase]);
 
   const value = useMemo(
     () => ({
       user,
+      loading,
+      isFirebase: useFirebase,
       loginAs,
       updateSessionProfile,
       logout,
+      refreshIdToken,
     }),
-    [user, loginAs, updateSessionProfile, logout]
+    [user, loading, useFirebase, loginAs, updateSessionProfile, logout, refreshIdToken]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

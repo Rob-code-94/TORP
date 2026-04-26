@@ -1,51 +1,135 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { getIdTokenResult, sendPasswordResetEmail, signInWithEmailAndPassword } from 'firebase/auth';
 import { ArrowLeft } from 'lucide-react';
 import { UserRole } from '../../types';
-import { useAuth } from '../../lib/auth';
+import { useAuth, type AuthUser } from '../../lib/auth';
 import { authenticateHqUser } from '../../lib/demoHqUsers';
+import { getFirebaseAuthInstance, isFirebaseConfigured } from '../../lib/firebase';
+import { authUserFromFirebase } from '../../lib/firebaseAuthUser';
+import { messageForFirebaseSignInError, messageForPasswordResetError } from '../../lib/firebaseAuthError';
 
-function postLoginPath(role: UserRole): string {
-  if (role === UserRole.STAFF) return '/hq/staff';
-  if (role === UserRole.ADMIN || role === UserRole.PROJECT_MANAGER) return '/hq/admin';
+function postLoginPathForUser(u: AuthUser): string {
+  if (u.role === UserRole.STAFF) return '/hq/staff';
+  if (u.role === UserRole.ADMIN || u.role === UserRole.PROJECT_MANAGER) return '/hq/admin';
+  if (u.role === UserRole.CLIENT) return '/portal';
   return '/hq/login';
 }
 
-/** Demo staff/admin sign-in. Phase 2: Firebase Auth + custom claims. */
+/** Sign-in: Firebase when configured; otherwise local demo session. */
 const HQLogin: React.FC = () => {
-  const { user, loginAs, logout } = useAuth();
+  const { user, loginAs, logout, loading: authLoading, isFirebase } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotStatus, setForgotStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [forgotError, setForgotError] = useState<string | null>(null);
 
-  const submit = (e: React.FormEvent) => {
+  const useFirebase = isFirebaseConfigured() && isFirebase;
+
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setBusy(true);
     try {
-      const result = authenticateHqUser(email, password);
-      if (!result.ok) {
-        setError(result.error);
-        return;
+      if (useFirebase) {
+        const auth = getFirebaseAuthInstance();
+        const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
+        const token = await getIdTokenResult(cred.user);
+        const u = authUserFromFirebase(cred.user, token);
+        navigate(postLoginPathForUser(u), { replace: true });
+      } else {
+        const result = authenticateHqUser(email, password);
+        if (result.ok === false) {
+          setError(result.error);
+          return;
+        }
+        loginAs(result.user);
+        navigate(postLoginPathForUser(result.user), { replace: true });
       }
-      loginAs(result.user);
-      navigate(postLoginPath(result.user.role), { replace: true });
+    } catch (e) {
+      setError(messageForFirebaseSignInError(e));
     } finally {
       setBusy(false);
     }
   };
 
-  const goAdminQuick = () => {
-    loginAs({ role: UserRole.ADMIN, displayName: 'Admin' });
-    navigate('/hq/admin', { replace: true });
+  const goAdminQuick = async () => {
+    setError(null);
+    if (useFirebase) {
+      setBusy(true);
+      try {
+        const auth = getFirebaseAuthInstance();
+        const cred = await signInWithEmailAndPassword(auth, 'info@torp.life', 'Admin1234');
+        const token = await getIdTokenResult(cred.user);
+        const u = authUserFromFirebase(cred.user, token);
+        navigate(postLoginPathForUser(u), { replace: true });
+      } catch (e) {
+        setError(messageForFirebaseSignInError(e));
+      } finally {
+        setBusy(false);
+      }
+    } else {
+      loginAs({ role: UserRole.ADMIN, displayName: 'Admin' });
+      navigate('/hq/admin', { replace: true });
+    }
   };
 
-  const goStaffQuick = () => {
-    loginAs({ role: UserRole.STAFF, displayName: 'Crew', crewId: 'cr-1' });
-    navigate('/hq/staff', { replace: true });
+  const goStaffQuick = async () => {
+    setError(null);
+    if (useFirebase) {
+      setBusy(true);
+      try {
+        const auth = getFirebaseAuthInstance();
+        const cred = await signInWithEmailAndPassword(auth, 'staff@torp.life', 'Staff1234');
+        const token = await getIdTokenResult(cred.user);
+        const u = authUserFromFirebase(cred.user, token);
+        navigate(postLoginPathForUser(u), { replace: true });
+      } catch (e) {
+        setError(messageForFirebaseSignInError(e));
+      } finally {
+        setBusy(false);
+      }
+    } else {
+      loginAs({ role: UserRole.STAFF, displayName: 'Crew', crewId: 'cr-1' });
+      navigate('/hq/staff', { replace: true });
+    }
   };
+
+  const sendForgot = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotEmail.trim()) {
+      setForgotError('Email is required.');
+      return;
+    }
+    if (!useFirebase) {
+      setForgotStatus('sent');
+      setForgotError(null);
+      return;
+    }
+    setForgotError(null);
+    setForgotStatus('sending');
+    try {
+      const auth = getFirebaseAuthInstance();
+      await sendPasswordResetEmail(auth, forgotEmail.trim().toLowerCase());
+      setForgotStatus('sent');
+    } catch (err) {
+      setForgotStatus('error');
+      setForgotError(messageForPasswordResetError(err));
+    }
+  };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-400 flex items-center justify-center p-6 text-sm">
+        Loading…
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center p-6 font-sans min-w-0">
@@ -61,7 +145,9 @@ const HQLogin: React.FC = () => {
           <p className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-2">TORP HQ</p>
           <h1 className="text-2xl font-black tracking-tight text-white mb-2">Staff sign-in</h1>
           <p className="text-sm text-zinc-400 mb-6">
-            Local demo accounts — replace with Firebase Auth. Email is normalized to lowercase for lookup.
+            {useFirebase
+              ? 'Use your organizational email and password. If this is a local setup, add accounts in Firebase and set custom claims for roles.'
+              : 'Local sign-in mode: email is normalized to lowercase for lookup.'}
           </p>
 
           {user &&
@@ -109,23 +195,75 @@ const HQLogin: React.FC = () => {
             </button>
           </form>
 
-          <p className="mt-6 text-[11px] text-zinc-600 text-center uppercase tracking-wide">Quick preview</p>
-          <div className="mt-2 space-y-2">
+          <div className="mt-3">
             <button
               type="button"
-              onClick={goAdminQuick}
-              className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-semibold py-3 rounded-xl text-sm transition-colors"
+              onClick={() => {
+                setForgotOpen((v) => !v);
+                setForgotEmail(email);
+                setForgotStatus('idle');
+                setForgotError(null);
+              }}
+              className="text-xs text-zinc-500 hover:text-zinc-300 underline underline-offset-2"
             >
-              Continue as Admin (no password)
+              Forgot password?
             </button>
-            <button
-              type="button"
-              onClick={goStaffQuick}
-              className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-semibold py-3 rounded-xl text-sm transition-colors"
-            >
-              Continue as Crew (linked to demo crew)
-            </button>
+            {forgotOpen && (
+              <form onSubmit={sendForgot} className="mt-3 space-y-2 rounded-lg border border-zinc-800 bg-zinc-950/50 p-3">
+                <p className="text-[11px] text-zinc-500">
+                  {useFirebase
+                    ? "We'll email a link if the address is registered. For privacy we show the same message either way."
+                    : 'Password reset links send automatically when Firebase email auth is enabled.'}
+                </p>
+                <input
+                  type="email"
+                  value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
+                  className="w-full min-w-0 rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-2 text-sm"
+                  placeholder="email@org.com"
+                />
+                {forgotError && <p className="text-xs text-red-300">{forgotError}</p>}
+                {forgotStatus === 'sent' && (
+                  <p className="text-xs text-emerald-300">
+                    {useFirebase
+                      ? 'If that address is registered, a reset link was sent. Check your inbox and spam folder.'
+                      : 'If that address is registered, a reset link can be sent once Firebase email auth is enabled.'}
+                  </p>
+                )}
+                <button
+                  type="submit"
+                  disabled={forgotStatus === 'sending'}
+                  className="w-full rounded-lg bg-zinc-800 py-2 text-xs font-bold text-white hover:bg-zinc-700"
+                >
+                  {forgotStatus === 'sending' ? 'Sending…' : 'Send reset link'}
+                </button>
+              </form>
+            )}
           </div>
+
+          {import.meta.env.DEV && (
+            <>
+              <p className="mt-6 text-[11px] text-zinc-600 text-center uppercase tracking-wide">Quick preview (dev only)</p>
+              <div className="mt-2 space-y-2">
+                <button
+                  type="button"
+                  onClick={goAdminQuick}
+                  disabled={busy}
+                  className="w-full bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white font-semibold py-3 rounded-xl text-sm transition-colors"
+                >
+                  Continue as Admin{useFirebase ? ' (Firebase: info@torp.life)' : ' (no password)'}
+                </button>
+                <button
+                  type="button"
+                  onClick={goStaffQuick}
+                  disabled={busy}
+                  className="w-full bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white font-semibold py-3 rounded-xl text-sm transition-colors"
+                >
+                  Continue as Crew{useFirebase ? ' (Firebase: staff@torp.life)' : ' (local crew profile)'}
+                </button>
+              </div>
+            </>
+          )}
 
           <p className="mt-8 text-center text-[11px] text-zinc-600">
             Need the client portal?{' '}

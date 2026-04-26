@@ -1,5 +1,5 @@
 import type { AuthUser } from './auth';
-import { MOCK_CREW } from '../data/adminMock';
+import { getProjectById, MOCK_CREW } from '../data/adminMock';
 import { UserRole, type CrewFeatureKey, type CrewProfile } from '../types';
 
 /**
@@ -88,6 +88,21 @@ export function getCrewByAuthUser(user: AuthUser | null | undefined): CrewProfil
   return MOCK_CREW.find((crew) => crew.email.trim().toLowerCase() === email);
 }
 
+/** STAFF may open `/hq/admin/projects/:projectId` for assigned (or owner) projects only. */
+export function staffCanViewProject(user: AuthUser, projectId: string): boolean {
+  if (user.role !== UserRole.STAFF || !user.crewId) return false;
+  const p = getProjectById(projectId);
+  if (!p) return false;
+  if (p.ownerCrewId === user.crewId) return true;
+  return (p.assignedCrewIds || []).includes(user.crewId);
+}
+
+function projectIdFromHqAdminProjectsDetail(pathname: string): string | null {
+  const m = pathname.match(/^\/hq\/admin\/projects\/([^/]+)\/?$/);
+  if (!m || !m[1]) return null;
+  return m[1];
+}
+
 export function hasHqFeatureAccess(
   user: AuthUser | null | undefined,
   feature: CrewFeatureKey
@@ -141,8 +156,16 @@ export function canHqAdminAccessPathForUser(
   user: AuthUser | null | undefined
 ): boolean {
   if (!user) return false;
+  if (user.role === UserRole.STAFF) {
+    const projectId = projectIdFromHqAdminProjectsDetail(pathname);
+    if (projectId) return staffCanViewProject(user, projectId);
+    return false;
+  }
   const navId = resolveHqAdminNavId(pathname);
-  if (!navId) return true;
+  // Default-deny: any /hq/admin/* path that resolveHqAdminNavId does not
+  // explicitly map is blocked. Adding a new admin route therefore requires
+  // updating the resolver, preventing accidental access leaks.
+  if (!navId) return false;
   const feature = NAV_FEATURE_REQUIREMENT[navId];
   if (!feature) return canHqAdminAccessPath(pathname, user.role);
   return hasHqFeatureAccess(user, feature);

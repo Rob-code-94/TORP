@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { ArrowLeft, CalendarPlus, Share2 } from 'lucide-react';
 import {
@@ -54,6 +54,7 @@ import { saveProjectNarrative } from '../../../data/adminProjectsApi';
 import { openGoogleCalendarInNewTab, payloadFromAdminMeeting, payloadFromAdminShoot } from '../../../lib/calendarEvent';
 import { useAuth } from '../../../lib/auth';
 import { adminDateTimeInputProps, useAdminTheme } from '../../../lib/adminTheme';
+import { staffCanViewProject } from '../../../lib/hqAccess';
 import { hasProjectCapability, isProjectRole } from '../../../lib/projectPermissions';
 import type {
   AdminInvoiceStatus,
@@ -69,6 +70,7 @@ import type {
   ProjectAssetStatus,
   ProjectStage,
 } from '../../../types';
+import { UserRole } from '../../../types';
 import {
   assetStatusClassForTheme,
   formatAdminDate,
@@ -81,6 +83,19 @@ import AdminFormDrawer from './AdminFormDrawer';
 import CalendarEventSheet from './CalendarEventSheet';
 
 type Tab = 'overview' | 'brief' | 'planner' | 'schedule' | 'assets' | 'deliverables' | 'controls' | 'financials' | 'activity';
+const STAFF_PROJECT_TABS: Tab[] = ['overview', 'brief', 'planner', 'schedule', 'assets', 'deliverables'];
+const ALL_PROJECT_TABS: Tab[] = ['overview', 'brief', 'planner', 'schedule', 'assets', 'deliverables', 'controls', 'financials', 'activity'];
+const TAB_LABELS: Record<Tab, string> = {
+  overview: 'Overview',
+  brief: 'Brief',
+  planner: 'Planner',
+  schedule: 'Schedule',
+  assets: 'Assets',
+  deliverables: 'Deliverables',
+  controls: 'Controls',
+  financials: 'Financials',
+  activity: 'Activity',
+};
 type LoadState = 'loading' | 'empty' | 'error' | 'success';
 type ActivityFilter = 'all' | 'alerts' | 'mentions' | 'unread';
 type ScheduleFormType = 'shoot' | 'meeting';
@@ -101,8 +116,13 @@ const AdminProjectDetail: React.FC = () => {
   const { user } = useAuth();
   const { theme } = useAdminTheme();
   const isDark = theme === 'dark';
+  const isStaff = user?.role === UserRole.STAFF;
   const { projectId } = useParams();
   const [tab, setTab] = useState<Tab>('overview');
+  useEffect(() => {
+    if (!isStaff) return;
+    if (!STAFF_PROJECT_TABS.includes(tab)) setTab('overview');
+  }, [isStaff, tab]);
   const tabState: Record<Tab, LoadState> = {
     overview: 'success',
     brief: 'success',
@@ -200,6 +220,17 @@ const AdminProjectDetail: React.FC = () => {
   const project = projectId ? getProjectById(projectId) : undefined;
 
   const planner = useMemo(() => (projectId ? getPlannerByProject(projectId) : []), [projectId, refreshTick]);
+  const plannerView = useMemo(() => {
+    if (user?.role !== UserRole.STAFF || !user.crewId) return planner;
+    return planner.filter((t) => {
+      const ids = t.assigneeCrewIds?.length
+        ? t.assigneeCrewIds
+        : t.assigneeCrewId
+          ? [t.assigneeCrewId]
+          : [];
+      return ids.includes(user.crewId!);
+    });
+  }, [planner, user]);
   const shoots = useMemo(() => (projectId ? getShootsByProject(projectId) : []), [projectId, refreshTick]);
   const meetings = useMemo(() => (projectId ? getMeetingsByProject(projectId) : []), [projectId, refreshTick]);
   const assets = useMemo(() => (projectId ? getAssetsByProject(projectId) : []), [projectId, refreshTick]);
@@ -212,7 +243,7 @@ const AdminProjectDetail: React.FC = () => {
   const blockers = useMemo(() => (projectId ? getBlockersByProject(projectId) : []), [projectId, refreshTick]);
   const dependencies = useMemo(() => (projectId ? getDependenciesByProject(projectId) : []), [projectId, refreshTick]);
   const changeOrders = useMemo(() => (projectId ? getChangeOrdersByProject(projectId) : []), [projectId, refreshTick]);
-  const assignableCrew = useMemo(() => projectAssignableCrew(project.id), [project.id, refreshTick]);
+  const assignableCrew = useMemo(() => (projectId ? projectAssignableCrew(projectId) : []), [projectId, refreshTick]);
   const filteredActivity = useMemo(() => {
     if (activityFilter === 'all') return activity;
     if (activityFilter === 'unread') return activity.filter((item) => !readIds.includes(item.id));
@@ -227,7 +258,11 @@ const AdminProjectDetail: React.FC = () => {
   }, [activity, activityFilter, readIds, user?.displayName]);
 
   if (!projectId || !project) {
-    return <Navigate to="/hq/admin/projects" replace />;
+    return <Navigate to={isStaff ? '/hq/staff' : '/hq/admin/projects'} replace />;
+  }
+
+  if (isStaff && user && !staffCanViewProject(user, project.id)) {
+    return <Navigate to="/hq/staff" replace />;
   }
 
   const openTotal = invoices.reduce((s, i) => s + (i.amount - i.amountPaid), 0);
@@ -513,11 +548,11 @@ const AdminProjectDetail: React.FC = () => {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <Link
-            to="/hq/admin/projects"
+            to={isStaff ? '/hq/staff' : '/hq/admin/projects'}
             className="inline-flex items-center gap-2 text-xs text-zinc-500 hover:text-white mb-2"
           >
             <ArrowLeft size={14} />
-            All projects
+            {isStaff ? 'Crew home' : 'All projects'}
           </Link>
           <h2 className={`text-2xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-zinc-900'}`}>{project.title}</h2>
           <p className="text-sm text-zinc-500 mt-1">
@@ -556,15 +591,7 @@ const AdminProjectDetail: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap gap-2 min-w-0">
-        {tabBtn('overview', 'Overview')}
-        {tabBtn('brief', 'Brief')}
-        {tabBtn('planner', 'Planner')}
-        {tabBtn('schedule', 'Schedule')}
-        {tabBtn('assets', 'Assets')}
-        {tabBtn('deliverables', 'Deliverables')}
-        {tabBtn('controls', 'Controls')}
-        {tabBtn('financials', 'Financials')}
-        {tabBtn('activity', 'Activity')}
+          {(isStaff ? STAFF_PROJECT_TABS : ALL_PROJECT_TABS).map((id) => tabBtn(id, TAB_LABELS[id]))}
         </div>
       </div>
 
@@ -584,7 +611,7 @@ const AdminProjectDetail: React.FC = () => {
           <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-4">
             <div className="flex items-center justify-between gap-2 mb-2">
               <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Summary</h3>
-              {!isEditingNarrative && (
+              {!isEditingNarrative && !isStaff && (
                 <button type="button" onClick={beginNarrativeEdit} className="text-[11px] underline text-zinc-400">
                   Edit
                 </button>
@@ -692,7 +719,7 @@ const AdminProjectDetail: React.FC = () => {
           <div>
             <div className="flex items-center justify-between gap-2 mb-1">
               <h3 className="text-xs font-bold uppercase text-zinc-500">Brief</h3>
-              {!isEditingNarrative && (
+              {!isEditingNarrative && !isStaff && (
                 <button type="button" onClick={beginNarrativeEdit} className="text-[11px] underline text-zinc-400">
                   Edit
                 </button>
@@ -757,18 +784,20 @@ const AdminProjectDetail: React.FC = () => {
           <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/20 px-3 py-2">
             <p className="text-xs uppercase tracking-widest text-zinc-500">Task Workstream</p>
             <div className="flex items-center gap-3">
-              <p className="text-xs text-zinc-400">{planner.length} task(s)</p>
-              <button
-                type="button"
-                onClick={() => openTaskEditor('__new__')}
-                className="rounded-md border border-zinc-700 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-zinc-200"
-              >
-                Quick Add Task
-              </button>
+              <p className="text-xs text-zinc-400">{plannerView.length} task(s)</p>
+              {!isStaff && (
+                <button
+                  type="button"
+                  onClick={() => openTaskEditor('__new__')}
+                  className="rounded-md border border-zinc-700 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-zinc-200"
+                >
+                  Quick Add Task
+                </button>
+              )}
             </div>
           </div>
           <div className="bg-zinc-900/30 border border-zinc-800 rounded-xl overflow-x-auto min-w-0">
-            {planner.length === 0 ? (
+            {plannerView.length === 0 ? (
               <p className="p-4 text-sm text-zinc-500">No planner tasks yet. Add the first work item above.</p>
             ) : (
               <table className="w-full text-sm min-w-[920px]">
@@ -784,7 +813,7 @@ const AdminProjectDetail: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800/80">
-                {planner.map((t) => (
+                {plannerView.map((t) => (
                   <tr key={t.id} className="hover:bg-zinc-900/30">
                     <td className="px-3 py-2.5 text-white">
                       {t.title}
@@ -793,6 +822,7 @@ const AdminProjectDetail: React.FC = () => {
                     <td className="px-3 py-2.5 text-zinc-400">
                       <select
                         value={t.type}
+                        disabled={isStaff}
                         onChange={(e) => {
                           const next = e.target.value as PlannerItemType;
                           updatePlannerTask(t.id, { type: next }, actorName);
@@ -813,6 +843,7 @@ const AdminProjectDetail: React.FC = () => {
                     <td className="px-3 py-2.5 text-zinc-500">
                       <select
                         value={plannerStatusFromItem(t)}
+                        disabled={isStaff}
                         onChange={(e) => {
                           const next = e.target.value as PlannerTaskStatus;
                           const mapped = plannerStatusToLegacy(next);
@@ -831,6 +862,7 @@ const AdminProjectDetail: React.FC = () => {
                     <td className="px-3 py-2.5 text-zinc-400">
                       <select
                         value={t.priority}
+                        disabled={isStaff}
                         onChange={(e) => {
                           const next = e.target.value as PlannerItemPriority;
                           updatePlannerTask(t.id, { priority: next }, actorName);
@@ -1302,7 +1334,7 @@ const AdminProjectDetail: React.FC = () => {
           </div>
           <div className="bg-zinc-900/30 border border-zinc-800 rounded-xl divide-y divide-zinc-800/80">
           {assets.length === 0 ? (
-            <p className="p-4 text-sm text-zinc-500">No assets linked (mock).</p>
+            <p className="p-4 text-sm text-zinc-500">No assets linked to this project yet.</p>
           ) : (
             assets.map((a) => (
               <div
@@ -1865,7 +1897,7 @@ const AdminProjectDetail: React.FC = () => {
         <div className="space-y-6">
           {proposal && (
             <div className="bg-zinc-900/40 border border-zinc-800 rounded-xl p-4">
-              <h3 className="text-sm font-bold text-white mb-2">Proposal & contract (mock)</h3>
+              <h3 className="text-sm font-bold text-white mb-2">Proposal & contract</h3>
               <p className="text-sm text-zinc-400 mb-2">
                 Total: <span className="text-white font-mono">${proposal.total.toLocaleString()}</span> — deposit {proposal.depositPercent}%
               </p>
@@ -1977,7 +2009,7 @@ const AdminProjectDetail: React.FC = () => {
           </div>
 
           <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-4">
-            <h3 className="text-sm font-bold text-zinc-400 mb-2">Expenses (mock)</h3>
+            <h3 className="text-sm font-bold text-zinc-400 mb-2">Expenses</h3>
             <div className="mb-3 flex flex-wrap gap-2">
               <button
                 type="button"
@@ -2012,7 +2044,7 @@ const AdminProjectDetail: React.FC = () => {
             </ul>
             {expenseTotal > 0 && (
               <p className="text-xs text-zinc-500 mt-2">
-                Rough P&amp;L note: budget - expenses - (mock) internal hours not subtracted
+                Rough P&amp;L note: budget minus expenses (internal hours not included)
               </p>
             )}
           </div>

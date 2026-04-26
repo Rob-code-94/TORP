@@ -569,6 +569,7 @@ export const MOCK_SHOOTS_ADMIN: AdminShoot[] = [
     crew: ['M. Reyes', 'A. Vance'],
     crewIds: ['cr-2', 'cr-1'],
     gearSummary: 'Komodo-X + anamorphics, Teradek, 1× HMI',
+    gearItems: ['RED Komodo-X (Pkg A)', 'Atlas Orion Anamorphic', 'Teradek Bolt 6', 'Aputure 600d x2'],
   },
   {
     id: 'S-A2',
@@ -581,6 +582,7 @@ export const MOCK_SHOOTS_ADMIN: AdminShoot[] = [
     crew: ['M. Reyes', 'J. Park'],
     crewIds: ['cr-2', 'cr-3'],
     gearSummary: '2-cam gimbal; drone (permit TBD)',
+    gearItems: ['Sony FX6 + 24-70', 'DJI RS3 Pro', 'ND set', 'Walkies x4'],
   },
 ];
 
@@ -856,6 +858,23 @@ export function updateClientProfile(
   return { ok: true, client };
 }
 
+export function deleteClientProfile(
+  clientId: string
+): { ok: true } | { ok: false; error: string } {
+  const client = MOCK_CLIENTS.find((item) => item.id === clientId);
+  if (!client) return { ok: false, error: 'Client not found.' };
+  if (client.projectIds.length > 0) {
+    return {
+      ok: false,
+      error: 'This client is linked to projects. Reassign or archive those projects before deleting the profile.',
+    };
+  }
+  const idx = MOCK_CLIENTS.findIndex((item) => item.id === clientId);
+  if (idx < 0) return { ok: false, error: 'Client not found.' };
+  MOCK_CLIENTS.splice(idx, 1);
+  return { ok: true };
+}
+
 export function getPlannerByProject(id: string): PlannerItem[] {
   return MOCK_PLANNER.filter((t) => t.projectId === id).map((item) => {
     const assigneeCrewIds = item.assigneeCrewIds?.length ? item.assigneeCrewIds : [item.assigneeCrewId];
@@ -884,6 +903,10 @@ export function getProposalByProject(id: string): AdminProposal | undefined {
 
 export function getShootsByProject(id: string): AdminShoot[] {
   return MOCK_SHOOTS_ADMIN.filter((s) => s.projectId === id);
+}
+
+export function getAdminShootById(id: string): AdminShoot | undefined {
+  return MOCK_SHOOTS_ADMIN.find((s) => s.id === id);
 }
 
 export function getMeetingsByProject(id: string): AdminMeeting[] {
@@ -1329,14 +1352,82 @@ export function removeCrewFromProject(projectId: string, crewId: string, actorNa
   return { ok: true };
 }
 
+export interface BulkProjectResult {
+  ok: boolean;
+  affected: string[];
+  failed: Array<{ projectId: string; error: string }>;
+}
+
+export function bulkAssignCrewToProjects(
+  projectIds: string[],
+  crewIds: string[],
+  actorName: string
+): BulkProjectResult {
+  const affected: string[] = [];
+  const failed: Array<{ projectId: string; error: string }> = [];
+  for (const projectId of projectIds) {
+    const project = getProjectById(projectId);
+    if (!project) {
+      failed.push({ projectId, error: 'Project not found.' });
+      continue;
+    }
+    let mutated = false;
+    for (const crewId of crewIds) {
+      const result = assignCrewToProject(projectId, crewId, actorName);
+      if (result.ok) mutated = true;
+    }
+    if (mutated) affected.push(projectId);
+  }
+  return { ok: failed.length === 0, affected, failed };
+}
+
+// Admin override that flips stage to 'archived' regardless of current stage.
+// Differs from transitionProjectStage which only allows 'delivered' → 'archived'.
+export function bulkArchiveProjects(projectIds: string[], actorName: string): BulkProjectResult {
+  const affected: string[] = [];
+  const failed: Array<{ projectId: string; error: string }> = [];
+  for (const projectId of projectIds) {
+    const project = MOCK_ADMIN_PROJECTS.find((item) => item.id === projectId);
+    if (!project) {
+      failed.push({ projectId, error: 'Project not found.' });
+      continue;
+    }
+    if (project.stage === 'archived') {
+      affected.push(projectId);
+      continue;
+    }
+    const fromStage = project.stage;
+    MOCK_STAGE_TRANSITIONS.push({
+      id: `st-${MOCK_STAGE_TRANSITIONS.length + 1}`,
+      projectId,
+      fromStage,
+      toStage: 'archived',
+      changedBy: actorName,
+      changedAt: new Date().toISOString(),
+    });
+    project.stage = 'archived';
+    project.status = 'complete';
+    pushActivity({
+      projectId,
+      entityType: 'project',
+      entityLabel: 'Stage',
+      actorName,
+      action: `archived (was ${formatStageLabel(fromStage)})`,
+      projectTitle: project.title,
+    });
+    affected.push(projectId);
+  }
+  return { ok: failed.length === 0, affected, failed };
+}
+
 export function createPlannerTask(input: Omit<PlannerItem, 'id'>, actorName: string): PlannerItem {
   if (!input.title.trim()) throw new Error('Task title is required.');
   const assigneeIds = input.assigneeCrewIds?.length ? input.assigneeCrewIds : [input.assigneeCrewId];
   const assignees = validateProjectAssignees(input.projectId, assigneeIds);
-  if (!assignees.ok) throw new Error(assignees.error);
+  if (assignees.ok === false) throw new Error(assignees.error);
   const dueDate = input.dueDate || new Date().toISOString().slice(0, 10);
   const availability = validateCrewAvailabilityForDate(input.projectId, assigneeIds, dueDate);
-  if (!availability.ok) throw new Error(availability.error);
+  if (availability.ok === false) throw new Error(availability.error);
   const normalizedNames = assigneeIds
     .map((crewId) => MOCK_CREW.find((crew) => crew.id === crewId)?.displayName)
     .filter((name): name is string => Boolean(name));
@@ -1363,10 +1454,10 @@ export function updatePlannerTask(taskId: string, patch: Partial<PlannerItem>, a
   const requestedAssignees = patch.assigneeCrewIds?.length ? patch.assigneeCrewIds : patch.assigneeCrewId ? [patch.assigneeCrewId] : undefined;
   if (requestedAssignees) {
     const assignee = validateProjectAssignees(item.projectId, requestedAssignees);
-    if (!assignee.ok) throw new Error(assignee.error);
+    if (assignee.ok === false) throw new Error(assignee.error);
     const dueDate = patch.dueDate || item.dueDate;
     const availability = validateCrewAvailabilityForDate(item.projectId, requestedAssignees, dueDate);
-    if (!availability.ok) throw new Error(availability.error);
+    if (availability.ok === false) throw new Error(availability.error);
   }
   const nextPatch = { ...patch };
   if (requestedAssignees) {
@@ -1412,9 +1503,9 @@ export function createShoot(input: Omit<AdminShoot, 'id'>, actorName: string): A
   if (!input.title.trim()) throw new Error('Shoot title is required.');
   if (!input.date) throw new Error('Shoot date is required.');
   const participants = validateProjectParticipants(input.projectId, input.crew);
-  if (!participants.ok) throw new Error(participants.error);
+  if (participants.ok === false) throw new Error(participants.error);
   const availability = validateCrewAvailabilityForDate(input.projectId, participants.crewIds || [], input.date);
-  if (!availability.ok) throw new Error(availability.error);
+  if (availability.ok === false) throw new Error(availability.error);
   const item: AdminShoot = { ...input, id: `S-${Date.now()}`, crew: participants.names || input.crew, crewIds: participants.crewIds };
   MOCK_SHOOTS_ADMIN.unshift(item);
   pushActivity({
@@ -1431,9 +1522,9 @@ export function createMeeting(input: Omit<AdminMeeting, 'id'>, actorName: string
   if (!input.title.trim()) throw new Error('Meeting title is required.');
   if (!input.date) throw new Error('Meeting date is required.');
   const participants = validateProjectParticipants(input.projectId, input.participants);
-  if (!participants.ok) throw new Error(participants.error);
+  if (participants.ok === false) throw new Error(participants.error);
   const availability = validateCrewAvailabilityForDate(input.projectId, participants.crewIds || [], input.date);
-  if (!availability.ok) throw new Error(availability.error);
+  if (availability.ok === false) throw new Error(availability.error);
   const item: AdminMeeting = {
     ...input,
     id: `M-${Date.now()}`,
@@ -1456,9 +1547,9 @@ export function updateShoot(shootId: string, patch: Partial<AdminShoot>, actorNa
   if (!item) return { ok: false };
   if (patch.crew) {
     const participants = validateProjectParticipants(item.projectId, patch.crew);
-    if (!participants.ok) throw new Error(participants.error);
+    if (participants.ok === false) throw new Error(participants.error);
     const availability = validateCrewAvailabilityForDate(item.projectId, participants.crewIds || [], patch.date || item.date);
-    if (!availability.ok) throw new Error(availability.error);
+    if (availability.ok === false) throw new Error(availability.error);
     patch.crew = participants.names;
     patch.crewIds = participants.crewIds;
   }
@@ -1492,9 +1583,9 @@ export function updateMeeting(meetingId: string, patch: Partial<AdminMeeting>, a
   if (!item) return { ok: false };
   if (patch.participants) {
     const participants = validateProjectParticipants(item.projectId, patch.participants);
-    if (!participants.ok) throw new Error(participants.error);
+    if (participants.ok === false) throw new Error(participants.error);
     const availability = validateCrewAvailabilityForDate(item.projectId, participants.crewIds || [], patch.date || item.date);
-    if (!availability.ok) throw new Error(availability.error);
+    if (availability.ok === false) throw new Error(availability.error);
     patch.participants = participants.names;
     patch.participantCrewIds = participants.crewIds;
   }

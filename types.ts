@@ -300,6 +300,8 @@ export interface AdminShoot extends Shoot {
   callTime: string;
   projectTitle: string;
   gearSummary: string;
+  /** Optional per-shoot gear checklist (mock; future: Firestore). */
+  gearItems?: string[];
   description?: string;
   crewIds?: string[];
 }

@@ -1,7 +1,7 @@
 import React from 'react';
-import { useLocation } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { UserRole } from '../../types';
-import { LayoutDashboard, Calendar, Users, FileText, Settings, LogOut, Video } from 'lucide-react';
+import { LayoutDashboard, LogOut } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { hqUserInitials } from '../../lib/hqUserDisplay';
 import HqProfileMenuCluster from '../hq/HqProfileMenu';
@@ -12,30 +12,25 @@ interface DashboardLayoutProps {
   onLogout: () => void;
 }
 
+type NavItem = { icon: React.ReactNode; label: string; to: string };
+
 const DashboardLayout: React.FC<DashboardLayoutProps> = ({ role, children, onLogout }) => {
   const { user, updateSessionProfile } = useAuth();
   const { pathname } = useLocation();
   const initials = hqUserInitials(user);
 
-  const getNavItems = () => {
+  // Only render nav entries that route somewhere real. Modules without a
+  // landing route (financials, gear check, approvals, etc.) live elsewhere
+  // and must not appear here as no-op buttons.
+  const getNavItems = (): NavItem[] => {
     switch (role) {
-      case UserRole.ADMIN:
-        return [
-          { icon: <LayoutDashboard size={20} />, label: "Overview" },
-          { icon: <FileText size={20} />, label: "Financials" },
-          { icon: <Users size={20} />, label: "Crew" },
-          { icon: <Calendar size={20} />, label: "Master Schedule" },
-        ];
       case UserRole.STAFF:
-        return [
-          { icon: <Calendar size={20} />, label: "My Call Sheets" },
-          { icon: <Video size={20} />, label: "Gear Check" },
-        ];
+        return [{ icon: <LayoutDashboard size={20} />, label: 'Overview', to: '/hq/staff' }];
       case UserRole.CLIENT:
-        return [
-            { icon: <Video size={20} />, label: "Approvals" },
-            { icon: <FileText size={20} />, label: "Invoices" },
-        ];
+        return [{ icon: <LayoutDashboard size={20} />, label: 'Overview', to: '/portal' }];
+      case UserRole.ADMIN:
+      case UserRole.PROJECT_MANAGER:
+        return [{ icon: <LayoutDashboard size={20} />, label: 'Overview', to: '/hq/admin' }];
       default:
         return [];
     }
@@ -53,11 +48,22 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ role, children, onLog
         </div>
 
         <nav className="flex-1 py-6 px-3 space-y-1">
-          {getNavItems().map((item, idx) => (
-            <button key={idx} className="flex items-center gap-3 px-3 py-2.5 w-full text-left text-sm text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-lg transition-colors group">
+          {getNavItems().map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-3 py-2.5 w-full text-left text-sm rounded-lg transition-colors group ${
+                  isActive
+                    ? 'bg-zinc-900 text-white'
+                    : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+                }`
+              }
+            >
               <span className="group-hover:text-white transition-colors">{item.icon}</span>
               {item.label}
-            </button>
+            </NavLink>
           ))}
         </nav>
 

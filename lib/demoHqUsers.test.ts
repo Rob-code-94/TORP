@@ -35,7 +35,7 @@ describe('authenticateHqUser', () => {
   it('rejects wrong password with generic error', () => {
     const r = authenticateHqUser('info@torp.life', 'wrong');
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toMatch(/invalid/i);
+    if (r.ok === false) expect(r.error).toMatch(/invalid/i);
   });
 
   it('staff login includes crewId', () => {

@@ -7,7 +7,11 @@ import { useAuth } from '../../lib/auth';
  * `/hq` — send authenticated admin/staff to their dashboard, else to login.
  */
 const HQIndexRedirect: React.FC = () => {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <div className="min-h-screen bg-zinc-950" aria-hidden />;
+  }
 
   if (
     !user ||

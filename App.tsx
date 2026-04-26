@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { UserRole } from './types';
 import { AuthProvider } from './lib/auth';
+import DemoDataBanner from './components/DemoDataBanner';
 import Landing from './components/landing/Landing';
 import HQIndexRedirect from './components/hq/HQIndexRedirect';
 import HQLogin from './components/hq/HQLogin';
@@ -10,6 +11,7 @@ import HQShell from './components/hq/HQShell';
 import PortalShell from './components/portal/PortalShell';
 import RequireAuth from './components/common/RequireAuth';
 import StaffView from './components/dashboard/StaffView';
+import CallSheetPrintView from './components/dashboard/CallSheetPrintView';
 import ClientView from './components/dashboard/ClientView';
 import AdminLayout from './components/hq/admin/AdminLayout';
 import AdminCommand from './components/hq/admin/AdminCommand';
@@ -29,6 +31,7 @@ const App: React.FC = () => {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <DemoDataBanner />
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/hq" element={<HQIndexRedirect />} />
@@ -36,7 +39,7 @@ const App: React.FC = () => {
           <Route
             path="/hq/admin"
             element={
-              <RequireAuth roles={[UserRole.ADMIN, UserRole.PROJECT_MANAGER]} redirectTo="/hq/login">
+              <RequireAuth roles={[UserRole.ADMIN, UserRole.PROJECT_MANAGER, UserRole.STAFF]} redirectTo="/hq/login">
                 <AdminThemeProvider>
                   <AdminLayout />
                 </AdminThemeProvider>
@@ -59,6 +62,14 @@ const App: React.FC = () => {
                 <HQShell role={UserRole.STAFF}>
                   <StaffView />
                 </HQShell>
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/hq/staff/call-sheet/:shootId/print"
+            element={
+              <RequireAuth roles={[UserRole.STAFF]} redirectTo="/hq/login">
+                <CallSheetPrintView />
               </RequireAuth>
             }
           />

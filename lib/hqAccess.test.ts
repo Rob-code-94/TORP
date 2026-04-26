@@ -10,6 +10,7 @@ import {
   hqAdminNavIdsForRole,
   hqAdminNavIdsForUser,
   resolveHqAdminNavId,
+  staffCanViewProject,
 } from './hqAccess';
 
 describe('hqAdminNavIdsForRole', () => {
@@ -42,6 +43,73 @@ describe('canHqAdminAccessPath', () => {
 describe('resolveHqAdminNavId', () => {
   it('maps command root', () => {
     expect(resolveHqAdminNavId('/hq/admin')).toBe('command');
+  });
+});
+
+describe('canHqAdminAccessPathForUser default-deny', () => {
+  const adminUser: AuthUser = {
+    role: UserRole.ADMIN,
+    displayName: 'Admin User',
+    email: 'admin@torp.life',
+  };
+  const pmUser: AuthUser = {
+    role: UserRole.PROJECT_MANAGER,
+    displayName: 'PM User',
+    email: 'pm@torp.life',
+    crewId: 'cr-6',
+  };
+  const staffUser: AuthUser = {
+    role: UserRole.STAFF,
+    displayName: 'Staff User',
+    email: 'staff@torp.life',
+    crewId: 'cr-1',
+  };
+
+  it('blocks unmapped /hq/admin/* paths for ADMIN', () => {
+    expect(canHqAdminAccessPathForUser('/hq/admin/secret', adminUser)).toBe(false);
+    expect(canHqAdminAccessPathForUser('/hq/admin/anything-new', adminUser)).toBe(false);
+  });
+
+  it('blocks unmapped /hq/admin/* paths for PROJECT_MANAGER', () => {
+    expect(canHqAdminAccessPathForUser('/hq/admin/secret', pmUser)).toBe(false);
+  });
+
+  it('blocks unmapped /hq/admin/* paths for STAFF', () => {
+    expect(canHqAdminAccessPathForUser('/hq/admin/secret', staffUser)).toBe(false);
+  });
+
+  it('still allows ADMIN on every mapped nav route', () => {
+    for (const path of [
+      '/hq/admin',
+      '/hq/admin/crew',
+      '/hq/admin/projects',
+      '/hq/admin/planner',
+      '/hq/admin/financials',
+      '/hq/admin/clients',
+      '/hq/admin/settings',
+    ]) {
+      expect(canHqAdminAccessPathForUser(path, adminUser)).toBe(true);
+    }
+  });
+
+  it('still allows PM on the four PM nav routes', () => {
+    for (const path of ['/hq/admin', '/hq/admin/crew', '/hq/admin/projects', '/hq/admin/planner']) {
+      expect(canHqAdminAccessPathForUser(path, pmUser)).toBe(true);
+    }
+  });
+
+  it('allows STAFF on assigned project detail only', () => {
+    const staff: AuthUser = {
+      role: UserRole.STAFF,
+      displayName: 'Staff',
+      email: 'staff@torp.life',
+      crewId: 'cr-1',
+    };
+    expect(canHqAdminAccessPathForUser('/hq/admin', staff)).toBe(false);
+    expect(canHqAdminAccessPathForUser('/hq/admin/projects', staff)).toBe(false);
+    expect(staffCanViewProject(staff, 'p1')).toBe(true);
+    expect(canHqAdminAccessPathForUser('/hq/admin/projects/p1', staff)).toBe(true);
+    expect(staffCanViewProject(staff, 'p-ghost')).toBe(false);
   });
 });
 

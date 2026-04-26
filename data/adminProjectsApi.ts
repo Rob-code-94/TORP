@@ -17,15 +17,19 @@ import {
   MOCK_DEPENDENCIES,
   MOCK_PROJECT_DELIVERABLES,
   MOCK_RISKS,
+  bulkAssignCrewToProjects,
+  bulkArchiveProjects,
   createClientProfile,
   requestCrewPasswordReset,
   setCrewTemporaryPassword,
   deleteCrewMemberProfile,
+  deleteClientProfile,
   updateClientProfile,
   updateCrewMemberProfile,
   updateProjectNarrative,
   transitionProjectStage,
 } from './adminMock';
+import type { BulkProjectResult } from './adminMock';
 import type { CrewAvailability, CrewProfile } from '../types';
 
 export type UiLoadState = 'loading' | 'empty' | 'error' | 'success';
@@ -126,6 +130,18 @@ export function moveProjectStage(projectId: string, toStage: ProjectStage, actor
   return transitionProjectStage(projectId, toStage, actorName);
 }
 
+export function bulkAssignCrew(
+  projectIds: string[],
+  crewIds: string[],
+  actorName: string
+): BulkProjectResult {
+  return bulkAssignCrewToProjects(projectIds, crewIds, actorName);
+}
+
+export function archiveProjects(projectIds: string[], actorName: string): BulkProjectResult {
+  return bulkArchiveProjects(projectIds, actorName);
+}
+
 export interface ProjectControlsResponse {
   deliverables: ProjectDeliverable[];
   risks: RiskItem[];
@@ -171,6 +187,10 @@ export function createClient(request: CreateClientRequest) {
 
 export function updateClient(clientId: string, request: CreateClientRequest) {
   return updateClientProfile(clientId, request);
+}
+
+export function deleteClient(clientId: string) {
+  return deleteClientProfile(clientId);
 }
 
 export interface CreateCrewRequest {

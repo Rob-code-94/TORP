@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { MOCK_CREW } from '../../../data/adminMock';
 import { createCrew, deleteCrew, sendCrewResetLink, setCrewPassword, updateCrew } from '../../../data/adminProjectsApi';
 import { useAuth } from '../../../lib/auth';
+import { isFirebaseConfigured } from '../../../lib/firebase';
+import { sendCrewAuthPasswordReset, setCrewAuthTempPassword } from '../../../lib/crewAuthAdmin';
 import AdminFormDrawer from './AdminFormDrawer';
 import type { CrewFeatureKey, CrewProfile } from '../../../types';
 import { UserRole } from '../../../types';
@@ -67,7 +69,7 @@ const EMPTY_CREW_DRAFT: CrewDraft = {
 };
 
 const AdminCrew: React.FC = () => {
-  const { user } = useAuth();
+  const { user, isFirebase } = useAuth();
   const isAdmin = user?.role === UserRole.ADMIN;
   const isProjectManager = user?.role === UserRole.PROJECT_MANAGER;
   const crewReadOnly = isProjectManager;
@@ -79,7 +81,42 @@ const AdminCrew: React.FC = () => {
   const [status, setStatus] = useState<string | null>(null);
   const [statusTone, setStatusTone] = useState<'ok' | 'error'>('ok');
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [directoryQuery, setDirectoryQuery] = useState('');
+  const [roleFilter, setRoleFilter] = useState<'all' | CrewProfile['role']>('all');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [listVersion, setListVersion] = useState(0);
   const editingCrew = useMemo(() => MOCK_CREW.find((crew) => crew.id === editingCrewId), [editingCrewId]);
+
+  const filteredCrew = useMemo(() => {
+    return MOCK_CREW.filter((c) => {
+      const t = directoryQuery.trim().toLowerCase();
+      if (t) {
+        const blob = `${c.displayName} ${c.email} ${c.role}`.toLowerCase();
+        if (!blob.includes(t)) return false;
+      }
+      if (roleFilter !== 'all' && c.role !== roleFilter) return false;
+      if (activeFilter === 'active' && !c.active) return false;
+      if (activeFilter === 'inactive' && c.active) return false;
+      return true;
+    });
+  }, [directoryQuery, roleFilter, activeFilter, listVersion]);
+
+  // Detect availability records the simple single-window editor cannot represent
+  // without losing data. The editor flattens all selected days to one (start,end)
+  // pair and serializes a single exception range; if the underlying record has
+  // multiple distinct windows or multiple exceptions, save would silently drop them.
+  const availabilityRichness = useMemo(() => {
+    if (!editingCrew) return { distinctWindows: 0, exceptions: 0 };
+    const pairs = new Set(
+      editingCrew.availabilityDetail.windows.map((w) => `${w.startTime}-${w.endTime}`)
+    );
+    return {
+      distinctWindows: pairs.size,
+      exceptions: editingCrew.availabilityDetail.exceptions.length,
+    };
+  }, [editingCrew]);
+  const availabilityBlocked =
+    availabilityRichness.distinctWindows > 1 || availabilityRichness.exceptions > 1;
 
   const openCreate = () => {
     setEditingCrewId(null);
@@ -142,6 +179,13 @@ const AdminCrew: React.FC = () => {
 
   const saveCrew = () => {
     if (crewReadOnly) return;
+    if (availabilityBlocked) {
+      setStatus(
+        'This crew member has multi-window or multi-exception availability that the simple editor cannot represent without losing data. An admin must adjust this in the data layer until the advanced editor ships.'
+      );
+      setStatusTone('error');
+      return;
+    }
     if (draft.systemRole === UserRole.ADMIN && !isAdmin) {
       setStatus('Only an admin can assign the Admin system role.');
       setStatusTone('error');
@@ -165,11 +209,31 @@ const AdminCrew: React.FC = () => {
       setStatusTone('error');
       return;
     }
+    setListVersion((n) => n + 1);
     closeDrawer();
   };
 
-  const sendResetLink = () => {
+  const sendResetLink = async () => {
     if (!editingCrewId || crewReadOnly) return;
+    if (isFirebaseConfigured() && isFirebase) {
+      const r = await sendCrewAuthPasswordReset(draft.email);
+      if (r.ok === false) {
+        setStatus(r.error);
+        setStatusTone('error');
+        return;
+      }
+      const result = sendCrewResetLink(editingCrewId, actorLabel);
+      if (result.ok) {
+        setStatus(
+          `Password reset email sent. Logged in directory at ${new Date(result.crew.lastResetRequestedAt || '').toLocaleString()}.`
+        );
+        setStatusTone('ok');
+      } else {
+        setStatus('Email was sent, but the crew record could not be updated.');
+        setStatusTone('ok');
+      }
+      return;
+    }
     const result = sendCrewResetLink(editingCrewId, actorLabel);
     if (!result.ok) {
       setStatus('error' in result ? result.error : 'Could not send reset link.');
@@ -190,8 +254,26 @@ const AdminCrew: React.FC = () => {
     }));
   };
 
-  const saveTempPassword = () => {
+  const saveTempPassword = async () => {
     if (!editingCrewId || crewReadOnly) return;
+    if (isFirebaseConfigured() && isFirebase) {
+      const r = await setCrewAuthTempPassword(draft.email, draft.tempPassword);
+      if (r.ok === false) {
+        setStatus(r.error);
+        setStatusTone('error');
+        return;
+      }
+      const result = setCrewPassword(editingCrewId, actorLabel, draft.tempPassword);
+      if (!result.ok) {
+        setStatus('Firebase password was updated, but the crew record could not be time-stamped locally.');
+        setStatusTone('ok');
+        return;
+      }
+      setDraft((current) => ({ ...current, tempPassword: '' }));
+      setStatus(`Temporary password set in Auth at ${new Date(result.crew.lastTempPasswordSetAt || '').toLocaleString()}.`);
+      setStatusTone('ok');
+      return;
+    }
     const result = setCrewPassword(editingCrewId, actorLabel, draft.tempPassword);
     if (!result.ok) {
       setStatus('error' in result ? result.error : 'Could not set temporary password.');
@@ -226,6 +308,7 @@ const AdminCrew: React.FC = () => {
     setConfirmDeleteOpen(false);
     setStatus('Crew member deleted.');
     setStatusTone('ok');
+    setListVersion((n) => n + 1);
   };
 
   const toggleFeatureAccess = (key: CrewFeatureKey) => {
@@ -244,7 +327,7 @@ const AdminCrew: React.FC = () => {
       <div className="flex items-center justify-between gap-2">
         <div>
         <p className="text-xs font-mono uppercase text-zinc-500">Crew</p>
-        <h2 className="text-xl font-bold text-white">Directory &amp; rates (mock)</h2>
+        <h2 className="text-xl font-bold text-white">Directory &amp; rates</h2>
         {crewReadOnly && <p className="text-xs text-zinc-500 mt-1">Read-only for project managers.</p>}
         </div>
         {!crewReadOnly && (
@@ -254,6 +337,57 @@ const AdminCrew: React.FC = () => {
             className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-zinc-200 shrink-0"
           >
             Add Crew Member
+          </button>
+        )}
+      </div>
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end min-w-0">
+        <input
+          type="search"
+          value={directoryQuery}
+          onChange={(e) => setDirectoryQuery(e.target.value)}
+          placeholder="Search name, email, craft"
+          className="w-full sm:flex-1 sm:min-w-[200px] rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-100"
+          aria-label="Search crew"
+        />
+        <label className="text-xs text-zinc-500 flex flex-col gap-0.5 sm:min-w-[130px]">
+          Craft
+          <select
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value as typeof roleFilter)}
+            className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
+          >
+            <option value="all">All</option>
+            <option value="director">Director</option>
+            <option value="dp">DP</option>
+            <option value="editor">Editor</option>
+            <option value="producer">Producer</option>
+            <option value="audio">Audio</option>
+            <option value="other">Other</option>
+          </select>
+        </label>
+        <label className="text-xs text-zinc-500 flex flex-col gap-0.5 sm:min-w-[120px]">
+          Status
+          <select
+            value={activeFilter}
+            onChange={(e) => setActiveFilter(e.target.value as typeof activeFilter)}
+            className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-200"
+          >
+            <option value="all">All</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </label>
+        {(directoryQuery || roleFilter !== 'all' || activeFilter !== 'all') && (
+          <button
+            type="button"
+            onClick={() => {
+              setDirectoryQuery('');
+              setRoleFilter('all');
+              setActiveFilter('all');
+            }}
+            className="text-xs text-zinc-500 hover:text-zinc-200 underline self-start sm:mb-1"
+          >
+            Clear
           </button>
         )}
       </div>
@@ -271,7 +405,14 @@ const AdminCrew: React.FC = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-800/80">
-            {MOCK_CREW.map((c) => (
+            {filteredCrew.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="px-3 py-4 text-sm text-zinc-500">
+                  No people match your filters.
+                </td>
+              </tr>
+            ) : (
+              filteredCrew.map((c) => (
               <tr key={c.id} className="text-zinc-200">
                 <td className="px-3 py-2.5 font-medium text-white">
                   <button type="button" onClick={() => openEdit(c.id)} className="underline decoration-zinc-700 underline-offset-2">
@@ -295,7 +436,8 @@ const AdminCrew: React.FC = () => {
                   ))}
                 </td>
               </tr>
-            ))}
+            ))
+            )}
           </tbody>
         </table>
       </div>
@@ -310,7 +452,17 @@ const AdminCrew: React.FC = () => {
               Cancel
             </button>
             {!crewReadOnly && (
-              <button type="button" onClick={saveCrew} className="rounded-md bg-white px-3 py-1.5 text-xs font-bold text-black hover:bg-zinc-200">
+              <button
+                type="button"
+                onClick={saveCrew}
+                disabled={availabilityBlocked}
+                title={
+                  availabilityBlocked
+                    ? 'This profile has complex availability. Saving is disabled until a multi-window editor is available.'
+                    : undefined
+                }
+                className="rounded-md bg-white px-3 py-1.5 text-xs font-bold text-black hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
+              >
                 {editingCrewId ? 'Save Changes' : 'Create Crew'}
               </button>
             )}
@@ -422,14 +574,30 @@ const AdminCrew: React.FC = () => {
           </div>
           <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3 space-y-2">
             <p className="text-xs uppercase tracking-wide text-zinc-500">Availability</p>
+            {availabilityBlocked && (
+              <div className="rounded-md border border-amber-700/60 bg-amber-950/40 p-2 text-[11px] leading-snug text-amber-200">
+                <p className="font-semibold uppercase tracking-wide">Availability locked</p>
+                <p className="mt-1 text-amber-100/90">
+                  This profile has{' '}
+                  {availabilityRichness.distinctWindows > 1 && (
+                    <>{availabilityRichness.distinctWindows} different time windows</>
+                  )}
+                  {availabilityRichness.distinctWindows > 1 && availabilityRichness.exceptions > 1 && ' and '}
+                  {availabilityRichness.exceptions > 1 && (
+                    <>{availabilityRichness.exceptions} time-off exceptions</>
+                  )}
+                  . The simple editor would flatten this and silently lose data, so saving is blocked. Contact an admin to adjust the underlying record.
+                </p>
+              </div>
+            )}
             <div className="flex flex-wrap gap-2">
               {WEEKDAY_OPTIONS.map((option) => (
                 <button
                   key={option.value}
                   type="button"
-                  disabled={crewReadOnly}
+                  disabled={crewReadOnly || availabilityBlocked}
                   onClick={() => toggleDay(option.value)}
-                  className={`rounded-full border px-2.5 py-1 text-xs ${
+                  className={`rounded-full border px-2.5 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50 ${
                     draft.availableDays.includes(option.value)
                       ? 'border-white bg-white text-black'
                       : 'border-zinc-700 text-zinc-300'
@@ -444,21 +612,21 @@ const AdminCrew: React.FC = () => {
                 value={draft.timezone}
                 onChange={(e) => setDraft((v) => ({ ...v, timezone: e.target.value }))}
                 placeholder="Timezone"
-                disabled={crewReadOnly}
+                disabled={crewReadOnly || availabilityBlocked}
                 className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 disabled:opacity-50"
               />
               <input
                 type="time"
                 value={draft.weekdayStart}
                 onChange={(e) => setDraft((v) => ({ ...v, weekdayStart: e.target.value }))}
-                disabled={crewReadOnly}
+                disabled={crewReadOnly || availabilityBlocked}
                 className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 disabled:opacity-50"
               />
               <input
                 type="time"
                 value={draft.weekdayEnd}
                 onChange={(e) => setDraft((v) => ({ ...v, weekdayEnd: e.target.value }))}
-                disabled={crewReadOnly}
+                disabled={crewReadOnly || availabilityBlocked}
                 className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 disabled:opacity-50"
               />
             </div>
@@ -467,14 +635,14 @@ const AdminCrew: React.FC = () => {
                 type="date"
                 value={draft.exceptionStart}
                 onChange={(e) => setDraft((v) => ({ ...v, exceptionStart: e.target.value }))}
-                disabled={crewReadOnly}
+                disabled={crewReadOnly || availabilityBlocked}
                 className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 disabled:opacity-50"
               />
               <input
                 type="date"
                 value={draft.exceptionEnd}
                 onChange={(e) => setDraft((v) => ({ ...v, exceptionEnd: e.target.value }))}
-                disabled={crewReadOnly}
+                disabled={crewReadOnly || availabilityBlocked}
                 className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 disabled:opacity-50"
               />
             </div>
@@ -483,7 +651,7 @@ const AdminCrew: React.FC = () => {
               onChange={(e) => setDraft((v) => ({ ...v, availabilityNotes: e.target.value }))}
               rows={2}
               placeholder="Availability notes"
-              disabled={crewReadOnly}
+              disabled={crewReadOnly || availabilityBlocked}
               className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 disabled:opacity-50"
             />
           </div>

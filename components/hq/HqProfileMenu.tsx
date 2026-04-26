@@ -1,7 +1,16 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import {
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  sendPasswordResetEmail,
+  updateEmail,
+} from 'firebase/auth';
 import { CalendarOff, KeyRound, Mail, Settings } from 'lucide-react';
 import type { AuthUser } from '../../lib/auth';
+import { useAuth } from '../../lib/auth';
+import { getFirebaseAuthInstance, isFirebaseConfigured } from '../../lib/firebase';
+import { messageForPasswordResetError } from '../../lib/firebaseAuthError';
 import { hqUserInitials } from '../../lib/hqUserDisplay';
 import { showAdminOrgSettingsLink } from '../../lib/hqProfileMenuConfig';
 import { UserRole } from '../../types';
@@ -46,6 +55,8 @@ const HqProfileMenuCluster: React.FC<HqProfileMenuClusterProps> = ({
   pathname,
   updateSessionProfile,
 }) => {
+  const { isFirebase: useFirebase, refreshIdToken } = useAuth();
+  const firebaseOn = isFirebaseConfigured() && useFirebase;
   const btnRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [fixedStyle, setFixedStyle] = useState<{ top: number; left: number } | null>(null);
@@ -53,6 +64,8 @@ const HqProfileMenuCluster: React.FC<HqProfileMenuClusterProps> = ({
   const [modal, setModal] = useState<'none' | 'reset' | 'email' | 'timeoff'>('none');
   const [emailDraft, setEmailDraft] = useState('');
   const [emailError, setEmailError] = useState<string | null>(null);
+  const [reauthPassword, setReauthPassword] = useState('');
+  const [authBusy, setAuthBusy] = useState(false);
   const [timeStart, setTimeStart] = useState('');
   const [timeEnd, setTimeEnd] = useState('');
   const [timeNote, setTimeNote] = useState('');
@@ -126,30 +139,83 @@ const HqProfileMenuCluster: React.FC<HqProfileMenuClusterProps> = ({
   const openEmailModal = () => {
     setEmailDraft(email || '');
     setEmailError(null);
+    setReauthPassword('');
     setOpen(false);
     setModal('email');
   };
 
-  const submitEmail = () => {
+  const submitEmail = async () => {
     if (!isValidEmail(emailDraft)) {
       setEmailError('Enter a valid email address.');
       return;
     }
-    updateSessionProfile({ email: emailDraft.trim().toLowerCase() });
-    setFlash('Email updated (demo; stored in this browser session only).');
+    const next = emailDraft.trim().toLowerCase();
+    if (firebaseOn) {
+      if (!reauthPassword) {
+        setEmailError('Enter your current password to confirm.');
+        return;
+      }
+      const auth = getFirebaseAuthInstance();
+      const fu = auth.currentUser;
+      if (!fu || !fu.email) {
+        setEmailError('You are not signed in with a password account.');
+        return;
+      }
+      setAuthBusy(true);
+      setEmailError(null);
+      try {
+        const cred = EmailAuthProvider.credential(fu.email, reauthPassword);
+        await reauthenticateWithCredential(fu, cred);
+        await updateEmail(fu, next);
+        updateSessionProfile({ email: next });
+        await refreshIdToken();
+        setFlash('Email updated. You can sign in with the new address next time.');
+        setReauthPassword('');
+        setModal('none');
+        setOpen(false);
+      } catch (e) {
+        setEmailError('Could not update email. Check your password and try again.');
+      } finally {
+        setAuthBusy(false);
+      }
+      return;
+    }
+    updateSessionProfile({ email: next });
+    setFlash('Email updated (this browser session only).');
     setModal('none');
     setOpen(false);
   };
 
-  const submitReset = () => {
-    const target = email || 'your account email';
-    setFlash(`Demo: a password reset would be sent to ${target}.`);
+  const submitReset = async () => {
+    if (firebaseOn) {
+      const auth = getFirebaseAuthInstance();
+      const target = auth.currentUser?.email || email;
+      if (!target) {
+        setFlash('No email on this account to reset.');
+        setModal('none');
+        setOpen(false);
+        return;
+      }
+      setAuthBusy(true);
+      try {
+        await sendPasswordResetEmail(auth, target);
+        setFlash('Check your inbox for a password reset link.');
+      } catch (e) {
+        setFlash(messageForPasswordResetError(e));
+      } finally {
+        setAuthBusy(false);
+      }
+      setModal('none');
+      setOpen(false);
+      return;
+    }
+    setFlash('Password reset is available when the app uses Firebase sign-in.');
     setModal('none');
     setOpen(false);
   };
 
   const submitTimeOff = () => {
-    setFlash('Demo: time-off request recorded locally (no manager workflow yet).');
+    setFlash('Time-off request recorded locally. Manager workflow will be enabled with backend approvals.');
     setModal('none');
     setTimeStart('');
     setTimeEnd('');
@@ -273,7 +339,6 @@ const HqProfileMenuCluster: React.FC<HqProfileMenuClusterProps> = ({
               </Link>
             )}
           </div>
-          <p className="mt-2 text-[10px] text-zinc-500 leading-snug">Demo actions only — no email is sent.</p>
         </div>
       )}
 
@@ -287,7 +352,9 @@ const HqProfileMenuCluster: React.FC<HqProfileMenuClusterProps> = ({
           <div className={`w-full max-w-sm rounded-xl border p-4 ${panelSurface}`} onClick={(e) => e.stopPropagation()}>
             <h3 className="font-bold text-sm mb-2">Reset password?</h3>
             <p className="text-xs text-zinc-500 mb-4">
-              This is a demo. In production, TORP would email a reset link to {email || 'your address'}.
+              {firebaseOn
+                ? `We will email a link to ${email || 'the address on this account'}.`
+                : 'Connect Firebase to send real reset links from this app.'}
             </p>
             <div className="flex justify-end gap-2">
               <button type="button" className={dialogBtnSecondary} onClick={() => setModal('none')}>
@@ -297,8 +364,9 @@ const HqProfileMenuCluster: React.FC<HqProfileMenuClusterProps> = ({
                 type="button"
                 className="rounded-lg bg-white px-3 py-2 text-xs font-bold text-black"
                 onClick={submitReset}
+                disabled={authBusy}
               >
-                Confirm
+                {authBusy ? 'Sending…' : 'Confirm'}
               </button>
             </div>
           </div>
@@ -324,6 +392,19 @@ const HqProfileMenuCluster: React.FC<HqProfileMenuClusterProps> = ({
               }}
               className="w-full min-w-0 rounded-lg border border-zinc-600 bg-zinc-950 px-3 py-2 text-sm mb-1"
             />
+            {firebaseOn && (
+              <label className="block text-[11px] uppercase text-zinc-500 mb-1 mt-2">Current password</label>
+            )}
+            {firebaseOn && (
+              <input
+                type="password"
+                value={reauthPassword}
+                onChange={(e) => setReauthPassword(e.target.value)}
+                autoComplete="current-password"
+                className="w-full min-w-0 rounded-lg border border-zinc-600 bg-zinc-950 px-3 py-2 text-sm mb-1"
+                placeholder="Required to change email"
+              />
+            )}
             {emailError && <p className="text-xs text-red-400 mb-2">{emailError}</p>}
             <div className="flex justify-end gap-2 mt-3">
               <button type="button" className={dialogBtnSecondary} onClick={() => setModal('none')}>
@@ -332,9 +413,10 @@ const HqProfileMenuCluster: React.FC<HqProfileMenuClusterProps> = ({
               <button
                 type="button"
                 className="rounded-lg bg-white px-3 py-2 text-xs font-bold text-black"
-                onClick={submitEmail}
+                onClick={() => void submitEmail()}
+                disabled={authBusy}
               >
-                Save
+                {authBusy ? 'Saving…' : 'Save'}
               </button>
             </div>
           </div>

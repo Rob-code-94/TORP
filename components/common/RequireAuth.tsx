@@ -13,7 +13,15 @@ interface RequireAuthProps {
  * Phase 2: swap to Firebase custom claims while keeping the same API.
  */
 const RequireAuth: React.FC<RequireAuthProps> = ({ roles, redirectTo, children }) => {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-500 text-sm" aria-live="polite">
+        Loading…
+      </div>
+    );
+  }
 
   if (!user || !roles.includes(user.role)) {
     return <Navigate to={redirectTo} replace />;

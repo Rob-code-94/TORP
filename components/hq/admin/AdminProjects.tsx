@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CalendarDays, KanbanSquare, ListFilter, Search } from 'lucide-react';
-import { MOCK_ADMIN_PROJECTS, PROJECT_STAGE_ORDER, transitionProjectStage } from '../../../data/adminMock';
+import { MOCK_ADMIN_PROJECTS, MOCK_CREW, PROJECT_STAGE_ORDER, transitionProjectStage } from '../../../data/adminMock';
+import { archiveProjects, bulkAssignCrew } from '../../../data/adminProjectsApi';
 import { useAuth } from '../../../lib/auth';
 import { useAdminTheme } from '../../../lib/adminTheme';
 import { hasProjectCapability } from '../../../lib/projectPermissions';
@@ -50,6 +51,9 @@ const AdminProjects: React.FC = () => {
   const [wizardDraft, setWizardDraft] = useState<CreateProjectRequest | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<ProjectStage | null>(null);
+  const [assignPickerOpen, setAssignPickerOpen] = useState(false);
+  const [pickerCrewIds, setPickerCrewIds] = useState<string[]>([]);
+  const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
 
   const rows = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -90,17 +94,51 @@ const AdminProjects: React.FC = () => {
     setSelectedIds((current) => (current.includes(projectId) ? current.filter((id) => id !== projectId) : [...current, projectId]));
   };
 
-  const applyBulkAssign = () => {
-    if (!bulkMode) return;
+  const openBulkAssignPicker = () => {
+    if (!bulkMode || !canBulkAssign) return;
+    if (selectedIds.length === 0) {
+      setFeedback('Select at least one project.');
+      return;
+    }
+    setPickerCrewIds([]);
+    setAssignPickerOpen(true);
+  };
+
+  const confirmBulkAssign = () => {
     if (!canBulkAssign) return;
-    setFeedback(selectedIds.length === 0 ? 'Select at least one project.' : `Assigned ${selectedIds.length} project(s).`);
+    if (pickerCrewIds.length === 0) {
+      setFeedback('Pick at least one crew member.');
+      return;
+    }
+    const result = bulkAssignCrew(selectedIds, pickerCrewIds, user?.displayName || 'System');
+    setFeedback(
+      result.ok
+        ? `Assigned ${pickerCrewIds.length} crew to ${result.affected.length} project(s).`
+        : `Assigned to ${result.affected.length} project(s); ${result.failed.length} failed.`
+    );
+    setAssignPickerOpen(false);
+    setPickerCrewIds([]);
     setSelectedIds([]);
   };
 
-  const applyBulkArchive = () => {
-    if (!bulkMode) return;
+  const requestBulkArchive = () => {
+    if (!bulkMode || !canBulkArchive) return;
+    if (selectedIds.length === 0) {
+      setFeedback('Select at least one project.');
+      return;
+    }
+    setArchiveConfirmOpen(true);
+  };
+
+  const confirmBulkArchive = () => {
     if (!canBulkArchive) return;
-    setFeedback(selectedIds.length === 0 ? 'Select at least one project.' : `Archived ${selectedIds.length} project(s).`);
+    const result = archiveProjects(selectedIds, user?.displayName || 'System');
+    setFeedback(
+      result.ok
+        ? `Archived ${result.affected.length} project(s).`
+        : `Archived ${result.affected.length} project(s); ${result.failed.length} failed.`
+    );
+    setArchiveConfirmOpen(false);
     setSelectedIds([]);
   };
 
@@ -295,9 +333,10 @@ const AdminProjects: React.FC = () => {
             <span className={`text-xs ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>{selectedIds.length} selected</span>
             <button
               type="button"
-              disabled={!canBulkAssign}
-              onClick={applyBulkAssign}
-              className={`rounded-md border px-2.5 py-1 text-xs disabled:opacity-40 ${
+              disabled={!canBulkAssign || selectedIds.length === 0}
+              onClick={openBulkAssignPicker}
+              title={selectedIds.length === 0 ? 'Select at least one project' : undefined}
+              className={`rounded-md border px-2.5 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-40 ${
                 isDark ? 'border-zinc-700 text-zinc-200' : 'border-zinc-300 text-zinc-700'
               }`}
             >
@@ -315,9 +354,10 @@ const AdminProjects: React.FC = () => {
             </button>
             <button
               type="button"
-              disabled={!canBulkArchive}
-              onClick={applyBulkArchive}
-              className={`rounded-md border px-2.5 py-1 text-xs disabled:opacity-40 ${
+              disabled={!canBulkArchive || selectedIds.length === 0}
+              onClick={requestBulkArchive}
+              title={selectedIds.length === 0 ? 'Select at least one project' : undefined}
+              className={`rounded-md border px-2.5 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-40 ${
                 isDark ? 'border-red-900/60 text-red-300' : 'border-red-300 text-red-700'
               }`}
             >
@@ -516,6 +556,115 @@ const AdminProjects: React.FC = () => {
             </div>
           ))}
           {sortedByDate.length === 0 && <p className={`p-4 text-sm ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>No projects in this range.</p>}
+        </div>
+      )}
+
+      {assignPickerOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="bulk-assign-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setAssignPickerOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className={`w-full max-w-md rounded-xl border p-5 ${
+              isDark ? 'border-zinc-800 bg-zinc-950 text-white' : 'border-zinc-300 bg-white text-zinc-900'
+            }`}
+          >
+            <h3 id="bulk-assign-title" className="text-base font-bold">Bulk assign crew</h3>
+            <p className={`mt-1 text-xs ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+              Adds selected crew to {selectedIds.length} project(s). Existing assignments are preserved.
+            </p>
+            <div className="mt-4 max-h-64 overflow-y-auto space-y-1.5 pr-1">
+              {MOCK_CREW.filter((c) => c.active).map((c) => {
+                const checked = pickerCrewIds.includes(c.id);
+                return (
+                  <label
+                    key={c.id}
+                    className={`flex items-center gap-2 rounded-md border px-2.5 py-2 text-sm ${
+                      isDark ? 'border-zinc-800 bg-zinc-900/40' : 'border-zinc-200 bg-zinc-50'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() =>
+                        setPickerCrewIds((current) =>
+                          checked ? current.filter((id) => id !== c.id) : [...current, c.id]
+                        )
+                      }
+                      className={isDark ? 'accent-white' : 'accent-zinc-900'}
+                    />
+                    <span className="flex-1">{c.displayName}</span>
+                    <span className={`text-[11px] ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>{c.role}</span>
+                  </label>
+                );
+              })}
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setAssignPickerOpen(false)}
+                className={`rounded-md border px-3 py-1.5 text-xs ${
+                  isDark ? 'border-zinc-700 text-zinc-300' : 'border-zinc-300 text-zinc-700'
+                }`}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmBulkAssign}
+                disabled={pickerCrewIds.length === 0}
+                className={`rounded-md px-3 py-1.5 text-xs font-bold uppercase tracking-wide disabled:cursor-not-allowed disabled:opacity-50 ${
+                  isDark ? 'bg-white text-black hover:bg-zinc-200' : 'bg-zinc-900 text-white hover:bg-zinc-800'
+                }`}
+              >
+                Assign {pickerCrewIds.length || ''}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {archiveConfirmOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="bulk-archive-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setArchiveConfirmOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className={`w-full max-w-md rounded-xl border p-5 ${
+              isDark ? 'border-zinc-800 bg-zinc-950 text-white' : 'border-zinc-300 bg-white text-zinc-900'
+            }`}
+          >
+            <h3 id="bulk-archive-title" className="text-base font-bold">Archive projects</h3>
+            <p className={`mt-2 text-sm ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
+              Archive {selectedIds.length} selected project(s)? They will be moved to the Archived stage and marked complete.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setArchiveConfirmOpen(false)}
+                className={`rounded-md border px-3 py-1.5 text-xs ${
+                  isDark ? 'border-zinc-700 text-zinc-300' : 'border-zinc-300 text-zinc-700'
+                }`}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmBulkArchive}
+                className="rounded-md border border-red-700 bg-red-900/40 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-red-200 hover:bg-red-900/60"
+              >
+                Archive {selectedIds.length}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

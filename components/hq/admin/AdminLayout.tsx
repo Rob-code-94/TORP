@@ -17,6 +17,7 @@ import {
   X,
 } from 'lucide-react';
 import { useAuth } from '../../../lib/auth';
+import { UserRole } from '../../../types';
 import { useAdminTheme } from '../../../lib/adminTheme';
 import { canHqAdminAccessPathForUser, hqAdminNavIdsForUser } from '../../../lib/hqAccess';
 import { hqUserInitials } from '../../../lib/hqUserDisplay';
@@ -111,7 +112,7 @@ const AdminLayout: React.FC = () => {
   const middleDockNav = filteredNav.filter((item) => middleDockIds.has(item.id));
 
   if (user && !canHqAdminAccessPathForUser(pathname, user)) {
-    return <Navigate to="/hq/admin" replace />;
+    return <Navigate to={user.role === UserRole.STAFF ? '/hq/staff' : '/hq/admin'} replace />;
   }
 
   const onLogout = () => {
@@ -183,6 +184,30 @@ const AdminLayout: React.FC = () => {
             sidebarCollapsed ? 'px-2' : 'px-3',
           ].join(' ')}
         >
+          {user?.role === UserRole.STAFF && (
+            <div className={sidebarCollapsed ? 'mb-2 flex justify-center' : 'mb-3'}>
+              <NavLink
+                to="/hq/staff"
+                className={({ isActive }) =>
+                  `flex items-center gap-2 rounded-lg text-sm font-medium ${
+                    sidebarCollapsed ? 'justify-center px-2 py-2' : 'px-3 py-2'
+                  } ${
+                    isActive
+                      ? isDark
+                        ? 'bg-zinc-900 text-white'
+                        : 'bg-zinc-200 text-zinc-950'
+                      : isDark
+                        ? 'text-zinc-400 hover:text-white hover:bg-zinc-900/60'
+                        : 'text-zinc-600 hover:text-zinc-900 hover:bg-zinc-200'
+                  }`
+                }
+                title="Back to crew home"
+              >
+                <span aria-hidden>←</span>
+                {!sidebarCollapsed && 'Crew home'}
+              </NavLink>
+            </div>
+          )}
           {renderNavItems(primaryNav, sidebarCollapsed)}
         </nav>
         <div className={`px-2 pb-3 ${sidebarCollapsed ? '' : 'px-3'} flex justify-center`}>
