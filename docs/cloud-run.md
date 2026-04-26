@@ -1,6 +1,17 @@
-# Cloud Run (GitHub → Cloud Build) — “normal container” setup
+# Cloud Run (GitHub → Cloud Build) — container with Vite + API shell
 
-This repo is intended to run as a **static Vite site** served from `dist/` inside a normal container (see `Dockerfile`).
+The **Dockerfile** does two things:
+
+1. **Build** — `npm run build` with `VITE_FIREBASE_*` (must be build args, usually from [Secret Manager](build-secrets.md)).
+2. **Run** — `node server/index.mjs` serves `dist/`, `GET /api/health`, and token routes under `/api/v1/`.
+
+| Endpoint | Purpose |
+|----------|--------|
+| `GET /api/health` | Load balancer / quick smoke (no auth) |
+| `GET /api/v1/whoami` | Decode `Authorization: Bearer` Firebase ID token (requires Admin SDK; uses ADC on Cloud Run) |
+| `GET /api/v1/tenant-only/ping` | Example **403** if `tenantId` claim is missing (tenant guard) |
+
+**Cloud Run runtime:** the default service account should be able to verify ID tokens. If `whoami` returns 503, check Admin initialization and roles (see Firebase troubleshooting).
 
 ## One-time GCP setup (per project)
 
@@ -36,9 +47,11 @@ Important:
 
 `cloudbuild.yaml`:
 
-1. `docker build` using the repo root `Dockerfile`
+1. `docker build` with **Secret Manager** → `--build-arg` for all required `VITE_*` (see [build-secrets.md](build-secrets.md))
 2. pushes to: `us-west1-docker.pkg.dev/torp-hub/cloud-run-source-deploy/torp/torp-cinematic-production-management:$BUILD_ID`
-3. deploys Cloud Run service `torp-cinematic-production-management` on port **8080**
+3. deploys Cloud Run service `torp-cinematic-production-management` on port **8080** (serves app + API)
+
+If the build fails on “permission denied” for secrets, grant the **Cloud Build** service account `roles/secretmanager.secretAccessor` on the six secrets.
 
 ## Manual deploy (optional)
 

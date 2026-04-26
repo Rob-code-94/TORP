@@ -18,6 +18,11 @@ export function isFirebaseConfigured(): boolean {
   return Boolean(apiKey && authDomain && projectId);
 }
 
+/** Project ID your web client uses — must match Firebase console → Project settings → Project ID. */
+export function getConfiguredFirebaseProjectId(): string | undefined {
+  return projectId;
+}
+
 export function getFirebaseApp(): FirebaseApp {
   if (!isFirebaseConfigured()) {
     throw new Error('Firebase is not configured. Set VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, and VITE_FIREBASE_PROJECT_ID.');

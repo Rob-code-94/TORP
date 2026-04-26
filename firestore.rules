@@ -1,0 +1,43 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function hasTenant() {
+      return isSignedIn()
+        && 'tenantId' in request.auth.token
+        && request.auth.token.tenantId is string
+        && request.auth.token.tenantId.size() > 0;
+    }
+
+    function sameTenantInDoc() {
+      return hasTenant()
+        && resource != null
+        && 'tenantId' in resource.data
+        && resource.data.tenantId == request.auth.token.tenantId;
+    }
+
+    // Preferred layout: tenant data under /tenants/{tid}/... (tid must match claim)
+    match /tenants/{tid}/{path=**} {
+      allow read, write: if isSignedIn()
+        && 'tenantId' in request.auth.token
+        && request.auth.token.tenantId == tid;
+    }
+
+    // Example: collection with a tenantId field (adjust collection id to your app)
+    match /shared_collections/{docId} {
+      allow read, update, delete: if isSignedIn() && sameTenantInDoc();
+      allow create: if hasTenant()
+        && 'tenantId' in request.resource.data
+        && request.resource.data.tenantId == request.auth.token.tenantId;
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -12,6 +12,8 @@ Prerequisites: Node.js 20+
 
 ```bash
 npm install
+cp .env.example .env.local
+# Fill `VITE_*` from Firebase → Project settings (Project ID must match the console, e.g. torp-hub).
 npm run dev
 ```
 
@@ -19,10 +21,11 @@ npm run dev
 
 This repo includes:
 
-- `Dockerfile`: builds `dist/` and serves it on `0.0.0.0:$PORT` (Cloud Run compatible)
-- `cloudbuild.yaml`: builds/pushes an image to Artifact Registry and deploys Cloud Run
+- `Dockerfile`: Vite `npm run build` (needs `VITE_*` at **build** time) and **Express** in `server/index.mjs` to serve `dist/` plus `/api/health` and token smoke routes
+- `cloudbuild.yaml`: Docker build with Secret Manager, push to Artifact Registry, deploy Cloud Run
+- `firestore.rules` / `storage.rules` + `firebase.json` — deploy rules with Firebase CLI when ready
 
-See: `docs/cloud-run.md`
+See: `docs/cloud-run.md`, `docs/build-secrets.md`, `docs/domain-hardening.md`
 
 ## GCP project pinning (local dev convenience)
 

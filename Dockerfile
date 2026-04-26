@@ -1,31 +1,42 @@
+# Vite build args must be provided at `docker build` (Cloud Build injects from Secret Manager; see `docs/build-secrets.md`)
 FROM node:20-alpine AS build
 WORKDIR /app
 
-# Install dependencies first (better layer caching)
 COPY package.json package-lock.json ./
 RUN npm ci
 
-# Build static assets
 COPY . .
+
+ARG VITE_FIREBASE_API_KEY
+ARG VITE_FIREBASE_AUTH_DOMAIN
+ARG VITE_FIREBASE_PROJECT_ID
+ARG VITE_FIREBASE_STORAGE_BUCKET
+ARG VITE_FIREBASE_MESSAGING_SENDER_ID
+ARG VITE_FIREBASE_APP_ID
+
+ENV VITE_FIREBASE_API_KEY=$VITE_FIREBASE_API_KEY
+ENV VITE_FIREBASE_AUTH_DOMAIN=$VITE_FIREBASE_AUTH_DOMAIN
+ENV VITE_FIREBASE_PROJECT_ID=$VITE_FIREBASE_PROJECT_ID
+ENV VITE_FIREBASE_STORAGE_BUCKET=$VITE_FIREBASE_STORAGE_BUCKET
+ENV VITE_FIREBASE_MESSAGING_SENDER_ID=$VITE_FIREBASE_MESSAGING_SENDER_ID
+ENV VITE_FIREBASE_APP_ID=$VITE_FIREBASE_APP_ID
+
 RUN npm run build
 
 FROM node:20-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
-
-# Tiny init + static file server
-RUN apk add --no-cache tini \
-  && npm install -g serve@14.2.4 \
-  && ln -sf "$(npm root -g)/serve/build/main.js" /usr/local/bin/serve \
-  && chmod +x /usr/local/bin/serve
-
-# Vite outputs to /dist
-COPY --from=build /app/dist ./dist
-
-# Cloud Run provides PORT; default to 8080 for local runs
 ENV PORT=8080
 EXPOSE 8080
 
+RUN apk add --no-cache tini
+
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
+COPY --from=build /app/dist ./dist
+COPY server ./server
+
 USER node
 ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["sh", "-c", "exec serve -s dist -l \"tcp://0.0.0.0:${PORT}\""]
+CMD ["node", "server/index.mjs"]

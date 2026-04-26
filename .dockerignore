@@ -1,4 +1,10 @@
 node_modules
+
+# Do not copy local env into image layers
+.env
+.env.local
+.env.*
+!.env.example
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

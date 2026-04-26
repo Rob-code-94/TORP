@@ -18,6 +18,15 @@ export function messageForFirebaseSignInError(error: unknown): string {
       return 'Too many attempts. Wait a few minutes, then try again.';
     case 'auth/user-disabled':
       return 'This account has been disabled. Contact an admin.';
+    case 'auth/operation-not-allowed':
+      return 'Email/password sign-in is not enabled in Firebase, or the action is not allowed. Check the Authentication sign-in methods.';
+    case 'auth/network-request-failed':
+    case 'auth/internal-error':
+      return 'Network error. Check your connection and try again.';
+    case 'auth/unauthorized-domain':
+      return 'This app host is not allowed. Add it under Firebase Authentication → Settings → Authorized domains.';
+    case 'auth/invalid-api-key':
+      return 'Firebase web configuration is missing or wrong. Re-check VITE_FIREBASE_* in your build and .env.local.';
     default:
       return GENERIC;
   }
