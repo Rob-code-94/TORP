@@ -33,6 +33,8 @@ The Cloud Build service account must **access** each secret (usually: `project-n
 
 In console: **Secret Manager** → each secret → **Permissions** → grant the Cloud Build service account `Secret Manager Secret Accessor`.
 
+If builds still fail with `secretmanager.versions.access` **denied**, check **Cloud Build → your build → Details** for `serviceAccount`. Some projects run builds as **`PROJECT_NUMBER-compute@developer.gserviceaccount.com`** instead of `...@cloudbuild...`. Grant that same role on each secret (or set the build to use the default Cloud Build service account in project settings / `cloudbuild.yaml` `options.serviceAccount` when appropriate).
+
 ## Local Docker build (optional)
 
 Pass build args (values from your local `.env.local` for dev only):
