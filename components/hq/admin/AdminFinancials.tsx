@@ -228,7 +228,7 @@ const AdminFinancials: React.FC = () => {
 
   return (
     <div className="max-w-6xl min-w-0 space-y-6">
-      <div>
+      <div data-tour="financials-header">
         <p className="text-xs font-mono uppercase text-zinc-500">Financials</p>
         <h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-zinc-900'}`}>
           Invoices, proposals, cash
@@ -244,7 +244,7 @@ const AdminFinancials: React.FC = () => {
         )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm min-w-0">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm min-w-0" data-tour="financials-kpis">
         <div className={`rounded-xl p-5 min-w-0 ${appKpiLinkClass(isDark, false)}`}>
           <p className="text-zinc-500 text-xs uppercase font-bold">Open AR</p>
           <p className={`text-3xl font-bold mt-1 ${isDark ? 'text-white' : 'text-zinc-900'}`}>
@@ -297,7 +297,7 @@ const AdminFinancials: React.FC = () => {
         </ResponsiveContainer>
       </div>
 
-      <div className="min-w-0">
+      <div className="min-w-0" data-tour="financials-proposals">
         <h3 className={`text-sm font-bold mb-2 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>Proposals</h3>
         <div className="space-y-2">
           {proposals.map((p) => (
@@ -351,7 +351,7 @@ const AdminFinancials: React.FC = () => {
           </button>
         </div>
 
-        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end min-w-0">
+        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end min-w-0" data-tour="financials-filters">
           <label className="flex flex-col gap-1 text-xs text-zinc-500 min-w-0 sm:min-w-[140px]">
             Status
             <select
@@ -431,7 +431,7 @@ const AdminFinancials: React.FC = () => {
           )}
         </div>
 
-        <div className={`rounded-xl overflow-x-auto min-w-0 ${appPanelClass(isDark)}`}>
+        <div className={`rounded-xl overflow-x-auto min-w-0 ${appPanelClass(isDark)}`} data-tour="financials-invoices">
           <table className="w-full text-sm min-w-[800px]">
             <thead
               className={`text-xs text-zinc-500 uppercase border-b ${

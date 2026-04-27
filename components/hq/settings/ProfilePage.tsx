@@ -20,6 +20,7 @@ import { uploadAvatar, type AvatarUploadProgress } from '../../../lib/avatarStor
 import { loadStoragePolicy } from '../../../data/storagePolicyRepository';
 import { updateProfile as updateAuthProfile } from 'firebase/auth';
 import { getFirebaseAuthInstance, isFirebaseConfigured } from '../../../lib/firebase';
+import { resetHqGuideTip } from '../../../lib/hqGuideTipStorage';
 
 interface ProfilePageProps {
   variant: 'admin' | 'staff';
@@ -336,6 +337,22 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ variant }) => {
                   {saving ? 'Saving…' : 'Save profile'}
                 </button>
               </div>
+            </section>
+
+            <section className={`rounded-xl p-4 ${appCardClass(isDark)} min-w-0`}>
+              <p className={`text-xs uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>
+                Product guide tips
+              </p>
+              <p className={`text-sm mt-1 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                Show the Command home reminder for the in-app walkthrough again.
+              </p>
+              <button
+                type="button"
+                onClick={() => resetHqGuideTip()}
+                className={`mt-3 ${appOutlineButtonClass(isDark)}`}
+              >
+                Reset product tips
+              </button>
             </section>
           </>
         )}

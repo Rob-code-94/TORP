@@ -81,8 +81,8 @@ const SettingsShell: React.FC<SettingsShellProps> = ({ title, subtitle, variant,
   const tabs = tabsForVariant(variant);
 
   return (
-    <div className="min-w-0 max-w-5xl space-y-4">
-      <header className="space-y-1 min-w-0">
+    <div className="min-w-0 max-w-5xl space-y-4" data-tour="settings-shell">
+      <header className="space-y-1 min-w-0" data-tour="settings-header">
         <p className={`text-xs font-mono uppercase ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>
           Settings
         </p>
@@ -93,6 +93,7 @@ const SettingsShell: React.FC<SettingsShellProps> = ({ title, subtitle, variant,
       </header>
 
       <nav
+        data-tour="settings-tabs"
         className={`md:hidden -mx-1 px-1 overflow-x-auto`}
         aria-label="Settings sections"
       >
@@ -133,7 +134,7 @@ const SettingsShell: React.FC<SettingsShellProps> = ({ title, subtitle, variant,
       </nav>
 
       <div className="grid grid-cols-1 md:grid-cols-[12rem_1fr] gap-4 min-w-0">
-        <aside className={`hidden md:block min-w-0`} aria-label="Settings sections">
+        <aside className={`hidden md:block min-w-0`} aria-label="Settings sections" data-tour="settings-tabs">
           <ul className={`rounded-xl p-1 space-y-0.5 ${appPanelClass(isDark)}`}>
             {tabs.map((tab) => {
               const active = isTabActive(pathname, tab);
@@ -183,7 +184,7 @@ const SettingsShell: React.FC<SettingsShellProps> = ({ title, subtitle, variant,
           </ul>
         </aside>
 
-        <div className="min-w-0">{children}</div>
+        <div className="min-w-0" data-tour="settings-content">{children}</div>
       </div>
     </div>
   );

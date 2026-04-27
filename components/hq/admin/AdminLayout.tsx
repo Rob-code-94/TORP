@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   Building2,
@@ -15,6 +15,7 @@ import {
   Moon,
   Sun,
   X,
+  CircleHelp,
 } from 'lucide-react';
 import { useAuth } from '../../../lib/auth';
 import { UserRole } from '../../../types';
@@ -22,6 +23,10 @@ import { useAdminTheme } from '../../../lib/adminTheme';
 import { canHqAdminAccessPathForUser, hqAdminNavIdsForUser } from '../../../lib/hqAccess';
 import { hqUserInitials } from '../../../lib/hqUserDisplay';
 import HqProfileMenuCluster from '../HqProfileMenu';
+import HqProductGuidePanel from '../HqProductGuidePanel';
+import { getGuideSectionsForContext } from '../../../lib/hqProductGuideFilter';
+import { startHqAdminShellTour } from '../../../lib/hqAdminTour';
+import { HQ_GUIDE_TIP_EVENT } from '../../../lib/hqGuideTipStorage';
 
 type NavItem = {
   id: string;
@@ -103,6 +108,10 @@ const AdminLayout: React.FC = () => {
   const { pathname } = useLocation();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [wideEnoughForTour, setWideEnoughForTour] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 640px)').matches
+  );
   const title = pageTitle(pathname);
   const isDark = theme === 'dark';
   const allowedNavIds = useMemo(() => new Set(hqAdminNavIdsForUser(user)), [user]);
@@ -110,6 +119,30 @@ const AdminLayout: React.FC = () => {
   const middleDockIds = new Set(['crew', 'clients']);
   const primaryNav = filteredNav.filter((item) => !middleDockIds.has(item.id));
   const middleDockNav = filteredNav.filter((item) => middleDockIds.has(item.id));
+
+  const staffInAdminProject = useMemo(
+    () => Boolean(user?.role === UserRole.STAFF && /^\/hq\/admin\/projects\/[^/]+\/?$/.test(pathname)),
+    [user?.role, pathname]
+  );
+
+  const guideSections = useMemo(
+    () => getGuideSectionsForContext({ surface: 'admin', user: user ?? null, staffInAdminProject }),
+    [user, staffInAdminProject]
+  );
+
+  useEffect(() => {
+    const onOpen = () => setGuideOpen(true);
+    window.addEventListener(HQ_GUIDE_TIP_EVENT, onOpen);
+    return () => window.removeEventListener(HQ_GUIDE_TIP_EVENT, onOpen);
+  }, []);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 640px)');
+    const onChange = () => setWideEnoughForTour(mq.matches);
+    onChange();
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
 
   if (user && !canHqAdminAccessPathForUser(pathname, user)) {
     return <Navigate to={user.role === UserRole.STAFF ? '/hq/staff' : '/hq/admin'} replace />;
@@ -129,6 +162,7 @@ const AdminLayout: React.FC = () => {
           to={item.to}
           end={item.to === '/hq/admin'}
           onClick={onNavigate}
+          data-tour={`hq-nav-${item.id}`}
           className={() =>
             [
               'flex items-center rounded-lg text-sm font-medium transition-colors',
@@ -153,6 +187,7 @@ const AdminLayout: React.FC = () => {
   return (
     <div className={`flex h-screen overflow-hidden font-sans ${isDark ? 'bg-zinc-950 text-white' : 'bg-zinc-50 text-zinc-900'}`}>
       <aside
+        id="hq-sidebar"
         className={[
           `hidden md:flex flex-col shrink-0 transition-all duration-200 border-r ${
             isDark ? 'border-zinc-800 bg-black/40' : 'border-zinc-200 bg-white'
@@ -184,10 +219,11 @@ const AdminLayout: React.FC = () => {
             sidebarCollapsed ? 'px-2' : 'px-3',
           ].join(' ')}
         >
-          {user?.role === UserRole.STAFF && (
+              {user?.role === UserRole.STAFF && (
             <div className={sidebarCollapsed ? 'mb-2 flex justify-center' : 'mb-3'}>
               <NavLink
                 to="/hq/staff"
+                data-tour="hq-staff-back"
                 className={({ isActive }) =>
                   `flex items-center gap-2 rounded-lg text-sm font-medium ${
                     sidebarCollapsed ? 'justify-center px-2 py-2' : 'px-3 py-2'
@@ -233,7 +269,7 @@ const AdminLayout: React.FC = () => {
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden" data-tour="admin-main">
         <header className={`h-14 flex items-center justify-between px-4 sm:px-6 border-b shrink-0 z-20 ${isDark ? 'border-zinc-800 bg-zinc-950/90' : 'border-zinc-200 bg-white/95'}`}>
           <div className="flex items-center gap-3">
             <button
@@ -262,6 +298,21 @@ const AdminLayout: React.FC = () => {
             </h1>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setGuideOpen(true)}
+              className={`inline-flex items-center justify-center w-9 h-9 rounded-md border shrink-0 ${
+                isDark
+                  ? 'border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
+                  : 'border-zinc-200 text-zinc-600 hover:text-zinc-900 hover:border-zinc-300'
+              }`}
+              data-tour="hq-header-guide"
+              aria-label="Open product guide"
+              title="Product guide"
+              aria-expanded={guideOpen}
+            >
+              <CircleHelp size={18} />
+            </button>
             <button
               type="button"
               onClick={toggleTheme}
@@ -309,6 +360,18 @@ const AdminLayout: React.FC = () => {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
+                  onClick={() => {
+                    setMobileNavOpen(false);
+                    setGuideOpen(true);
+                  }}
+                  className={`p-1.5 rounded-md border ${isDark ? 'border-zinc-800 text-zinc-400 hover:text-white' : 'border-zinc-200 text-zinc-600 hover:text-zinc-900'}`}
+                  aria-label="Open product guide"
+                  title="Product guide"
+                >
+                  <CircleHelp size={16} />
+                </button>
+                <button
+                  type="button"
                   onClick={toggleTheme}
                   className={`p-1.5 rounded-md border ${isDark ? 'border-zinc-800 text-zinc-400 hover:text-white' : 'border-zinc-200 text-zinc-600 hover:text-zinc-900'}`}
                   aria-label="Toggle admin theme"
@@ -326,7 +389,31 @@ const AdminLayout: React.FC = () => {
                 </button>
               </div>
             </div>
-            <nav className="flex-1 py-4 px-3 space-y-0.5 overflow-y-auto">
+            <nav className="flex-1 py-4 px-3 space-y-0.5 overflow-y-auto" aria-label="Main">
+              {user?.role === UserRole.STAFF && (
+                <div className="mb-2">
+                  <NavLink
+                    to="/hq/staff"
+                    data-tour="hq-staff-back"
+                    onClick={() => setMobileNavOpen(false)}
+                    className={({ isActive }) =>
+                      `flex items-center gap-2 rounded-lg text-sm font-medium px-3 py-2 ${
+                        isActive
+                          ? isDark
+                            ? 'bg-zinc-900 text-white'
+                            : 'bg-zinc-200 text-zinc-950'
+                          : isDark
+                            ? 'text-zinc-400 hover:text-white hover:bg-zinc-900/60'
+                            : 'text-zinc-600 hover:text-zinc-900 hover:bg-zinc-200'
+                      }`
+                    }
+                    title="Back to crew home"
+                  >
+                    <span aria-hidden>←</span>
+                    Crew home
+                  </NavLink>
+                </div>
+              )}
               {renderNavItems(primaryNav, false, () => setMobileNavOpen(false))}
             </nav>
             <div className="px-3 pb-3">
@@ -349,6 +436,27 @@ const AdminLayout: React.FC = () => {
           </aside>
         </div>
       )}
+
+      <HqProductGuidePanel
+        open={guideOpen}
+        onClose={() => setGuideOpen(false)}
+        sections={guideSections}
+        isDark={isDark}
+        canStartTour={wideEnoughForTour}
+        onStartTour={() => {
+          setGuideOpen(false);
+          if (!user) return;
+          window.setTimeout(
+            () =>
+              void startHqAdminShellTour({
+                pathname,
+                role: user.role,
+                allowedNavIds: Array.from(allowedNavIds),
+              }),
+            0
+          );
+        }}
+      />
     </div>
   );
 };

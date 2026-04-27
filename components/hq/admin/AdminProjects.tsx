@@ -220,13 +220,13 @@ const AdminProjects: React.FC = () => {
 
   return (
     <div className="max-w-6xl min-w-0 space-y-6 pb-8">
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4" data-tour="projects-header">
         <div>
           <p className={`text-xs font-mono uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>Projects</p>
           <h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-zinc-900'}`}>All project profiles</h2>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto sm:min-w-[420px]">
-          <div className="relative max-w-sm w-full">
+          <div className="relative max-w-sm w-full" data-tour="projects-search">
             <Search className={`absolute left-3 top-1/2 -translate-y-1/2 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`} size={16} aria-hidden />
             <input
               type="search"
@@ -255,7 +255,7 @@ const AdminProjects: React.FC = () => {
       </div>
 
       <div className={`rounded-xl border p-3 sm:p-4 space-y-3 ${isDark ? 'border-zinc-800 bg-zinc-900/30' : 'border-zinc-300 bg-white'}`}>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2" data-tour="projects-view-modes">
           <button
             type="button"
             onClick={() => setViewMode('list')}
@@ -413,7 +413,7 @@ const AdminProjects: React.FC = () => {
                     <td className={`px-4 py-3 text-right ${isDark ? 'text-zinc-200' : 'text-zinc-800'}`}>${p.budget.toLocaleString()}</td>
                     <td className={`px-4 py-3 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>{formatAdminDate(p.dueDate)}</td>
                     <td className={`px-4 py-3 ${isDark ? 'text-zinc-400' : 'text-zinc-700'}`}>{p.ownerName}</td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3 text-right" data-tour="projects-open-detail">
                       <Link
                         to={`/hq/admin/projects/${p.id}`}
                         className={`text-xs font-bold border rounded-md px-2.5 py-1 transition-colors ${
@@ -466,7 +466,10 @@ const AdminProjects: React.FC = () => {
       )}
 
       {viewMode === 'board' && (
-        <div className={`rounded-2xl border p-4 sm:p-5 min-w-0 ${isDark ? 'border-zinc-700/80 bg-zinc-900/40 shadow-[0_0_0_1px_rgba(63,63,70,0.35)]' : 'border-zinc-300 bg-white'}`}>
+        <div
+          className={`rounded-2xl border p-4 sm:p-5 min-w-0 ${isDark ? 'border-zinc-700/80 bg-zinc-900/40 shadow-[0_0_0_1px_rgba(63,63,70,0.35)]' : 'border-zinc-300 bg-white'}`}
+          data-tour="projects-stage-lanes"
+        >
           <div className="overflow-x-auto">
             <div
               className="grid gap-4"

@@ -1,11 +1,15 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { UserRole } from '../../types';
-import { LayoutDashboard, LogOut, Moon, Sun } from 'lucide-react';
+import { CircleHelp, LayoutDashboard, LogOut, Moon, Sun } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { useAdminTheme } from '../../lib/adminTheme';
 import { appPageBgClass } from '../../lib/appThemeClasses';
+import { getGuideSectionsForContext } from '../../lib/hqProductGuideFilter';
+import { HQ_GUIDE_TIP_EVENT } from '../../lib/hqGuideTipStorage';
+import { startHqAdminShellTour } from '../../lib/hqAdminTour';
 import { hqUserInitials } from '../../lib/hqUserDisplay';
+import HqProductGuidePanel from '../hq/HqProductGuidePanel';
 import HqProfileMenuCluster from '../hq/HqProfileMenu';
 
 interface DashboardLayoutProps {
@@ -22,6 +26,17 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ role, children, onLog
   const isDark = theme === 'dark';
   const { pathname } = useLocation();
   const initials = hqUserInitials(user);
+  const [guideOpen, setGuideOpen] = useState(false);
+  const guideSurface = role === UserRole.CLIENT ? 'client' : 'staff';
+  const guideSections = useMemo(
+    () => getGuideSectionsForContext({ surface: guideSurface, user: user ?? null }),
+    [guideSurface, user]
+  );
+  useEffect(() => {
+    const onOpen = () => setGuideOpen(true);
+    window.addEventListener(HQ_GUIDE_TIP_EVENT, onOpen);
+    return () => window.removeEventListener(HQ_GUIDE_TIP_EVENT, onOpen);
+  }, []);
 
   // Only render nav entries that route somewhere real. Modules without a
   // landing route (financials, gear check, approvals, etc.) live elsewhere
@@ -113,6 +128,21 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ role, children, onLog
           <div className="flex items-center gap-2 sm:gap-4 shrink-0">
             <button
               type="button"
+              onClick={() => setGuideOpen(true)}
+              className={`inline-flex items-center justify-center w-9 h-9 rounded-md border shrink-0 ${
+                isDark
+                  ? 'border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
+                  : 'border-zinc-300 text-zinc-600 hover:text-zinc-900'
+              }`}
+              data-tour="hq-dashboard-guide"
+              aria-label="Open product guide"
+              title="Product guide"
+              aria-expanded={guideOpen}
+            >
+              <CircleHelp size={18} />
+            </button>
+            <button
+              type="button"
               onClick={toggleTheme}
               className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-semibold transition-colors ${
                 isDark
@@ -146,6 +176,26 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ role, children, onLog
         </header>
         <div className="p-4 sm:p-8 min-w-0">{children}</div>
       </main>
+      <HqProductGuidePanel
+        open={guideOpen}
+        onClose={() => setGuideOpen(false)}
+        sections={guideSections}
+        isDark={isDark}
+        subtitle={role === UserRole.CLIENT ? 'Client suite' : 'Crew home'}
+        canStartTour={role === UserRole.STAFF}
+        onStartTour={() => {
+          if (!user || role !== UserRole.STAFF) return;
+          setGuideOpen(false);
+          window.setTimeout(
+            () =>
+              void startHqAdminShellTour({
+                pathname,
+                role: user.role,
+              }),
+            0
+          );
+        }}
+      />
     </div>
   );
 };

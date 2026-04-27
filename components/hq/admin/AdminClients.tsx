@@ -118,7 +118,7 @@ const AdminClients: React.FC = () => {
           </button>
         </div>
       )}
-      <div>
+      <div data-tour="clients-header">
         <p className="text-xs font-mono uppercase text-zinc-500">Clients</p>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between min-w-0">
           <h2 className={`text-xl font-bold min-w-0 ${isDark ? 'text-white' : 'text-zinc-900'}`}>Client profiles</h2>
@@ -136,7 +136,7 @@ const AdminClients: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end min-w-0">
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end min-w-0" data-tour="clients-filters">
         <input
           type="search"
           value={searchQuery}
@@ -178,7 +178,7 @@ const AdminClients: React.FC = () => {
 
       {error && !drawerOpen && <p className="text-sm text-rose-300">{error}</p>}
 
-      <ul className="space-y-3 min-w-0">
+      <ul className="space-y-3 min-w-0" data-tour="clients-list">
         {filteredClients.length === 0 ? (
           <li className="text-sm text-zinc-500">No clients match the current filters.</li>
         ) : (
@@ -231,6 +231,7 @@ const AdminClients: React.FC = () => {
           ))
         )}
       </ul>
+      <div data-tour="clients-drawer">
       <AdminFormDrawer
         open={drawerOpen}
         onClose={closeDrawer}
@@ -266,6 +267,7 @@ const AdminClients: React.FC = () => {
         <ClientProfileForm value={newClient} onChange={setNewClient} />
         {error && <p className="text-xs text-red-300">{error}</p>}
       </AdminFormDrawer>
+      </div>
     </div>
   );
 };

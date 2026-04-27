@@ -203,7 +203,7 @@ const AdminPlanner: React.FC = () => {
 
   return (
     <div className="max-w-[1200px] min-w-0 space-y-5">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between min-w-0">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between min-w-0" data-tour="planner-header">
         <div>
           <p className="text-xs font-mono uppercase text-zinc-500">Planner</p>
           <h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-zinc-900'}`}>All projects — tasks &amp; deliverables</h2>
@@ -212,6 +212,7 @@ const AdminPlanner: React.FC = () => {
           <button
             type="button"
             onClick={openCalendarQuick}
+            data-tour="planner-quick-calendar"
             className={`inline-flex items-center justify-center gap-1.5 rounded-md border px-3 py-2 text-xs font-bold uppercase tracking-wide w-full sm:w-auto ${
               isDark
                 ? 'border-zinc-600 bg-zinc-900 text-zinc-100 hover:bg-zinc-800'
@@ -222,6 +223,7 @@ const AdminPlanner: React.FC = () => {
             Quick add to calendar
           </button>
           <div
+            data-tour="planner-view-modes"
             className={`flex rounded-lg border p-0.5 w-full sm:w-fit min-w-0 overflow-x-auto ${
               isDark ? 'border-zinc-800 bg-zinc-950/80' : 'border-zinc-200 bg-zinc-100/80'
             }`}
@@ -252,7 +254,7 @@ const AdminPlanner: React.FC = () => {
       )}
 
       {view === 'list' && (
-        <div className={`rounded-xl overflow-x-auto min-w-0 ${appPanelClass(isDark)}`}>
+        <div className={`rounded-xl overflow-x-auto min-w-0 ${appPanelClass(isDark)}`} data-tour="planner-main-content">
           <table className="w-full text-sm min-w-[880px]">
             <thead
               className={`text-xs uppercase border-b ${
@@ -427,7 +429,7 @@ const AdminPlanner: React.FC = () => {
       )}
 
       {view === 'board' && (
-        <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-3 min-w-0">
+        <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-3 min-w-0" data-tour="planner-main-content">
           {COLUMNS.map((col) => (
             <div
               key={col}
@@ -488,7 +490,7 @@ const AdminPlanner: React.FC = () => {
                           ))}
                         </select>
                       </label>
-                      <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1" data-tour="planner-task-actions">
                         <button
                           type="button"
                           onClick={() => onAddPlannerToGoogle(t)}
@@ -523,13 +525,15 @@ const AdminPlanner: React.FC = () => {
       )}
 
       {view === 'calendar' && (
-        <PlannerCalendar
+        <div data-tour="planner-main-content">
+          <PlannerCalendar
           items={items}
           onAddToGoogle={onAddPlannerToGoogle}
           onOpenCalendarSheet={openCalendarForItem}
           initialMode={initialMode === 'month' || initialMode === 'week' || initialMode === 'day' ? initialMode : undefined}
           initialCursorYmd={initialDate || undefined}
-        />
+          />
+        </div>
       )}
 
       <CalendarEventSheet

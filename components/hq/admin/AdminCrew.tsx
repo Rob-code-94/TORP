@@ -363,7 +363,7 @@ const AdminCrew: React.FC = () => {
 
   return (
     <div className="max-w-4xl space-y-4">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-2" data-tour="crew-header">
         <div>
         <p className="text-xs font-mono uppercase text-zinc-500">Crew</p>
         <h2 className="text-xl font-bold text-white">Directory &amp; rates</h2>
@@ -379,7 +379,7 @@ const AdminCrew: React.FC = () => {
           </button>
         )}
       </div>
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end min-w-0">
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end min-w-0" data-tour="crew-filters">
         <input
           type="search"
           value={directoryQuery}
@@ -438,7 +438,7 @@ const AdminCrew: React.FC = () => {
           </button>
         )}
       </div>
-      <div className={`rounded-xl overflow-x-auto min-w-0 ${appPanelClass(isDark)}`}>
+      <div className={`rounded-xl overflow-x-auto min-w-0 ${appPanelClass(isDark)}`} data-tour="crew-list">
         <table className="w-full text-sm min-w-[720px]">
           <thead
             className={`text-xs uppercase border-b ${
@@ -507,6 +507,7 @@ const AdminCrew: React.FC = () => {
           </tbody>
         </table>
       </div>
+      <div data-tour="crew-editor">
       <AdminFormDrawer
         open={drawerOpen}
         onClose={closeDrawer}
@@ -894,6 +895,7 @@ const AdminCrew: React.FC = () => {
           {status && <p className={`text-xs ${statusTone === 'error' ? 'text-red-300' : 'text-emerald-300'}`}>{status}</p>}
         </div>
       </AdminFormDrawer>
+      </div>
     </div>
   );
 };

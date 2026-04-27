@@ -599,6 +599,7 @@ const AdminProjectDetail: React.FC = () => {
     <button
       type="button"
       onClick={() => setTab(id)}
+      data-tour={`project-tab-${id}`}
       className={`px-3 py-1.5 rounded-md text-xs font-bold uppercase tracking-wide border transition-colors ${
         tab === id
           ? 'bg-white text-black border-white'
@@ -645,6 +646,7 @@ const AdminProjectDetail: React.FC = () => {
         ].join(' ')}
       >
         <div
+          data-tour="project-header"
           className={[
             'rounded-xl border px-3 py-3 sm:px-4',
             isDark ? 'border-zinc-800 bg-zinc-900/40' : 'border-zinc-200 bg-white/80',
@@ -695,12 +697,16 @@ const AdminProjectDetail: React.FC = () => {
         </div>
         </div>
 
-        <div className="flex flex-wrap gap-2 min-w-0">
+        <div className="flex flex-wrap gap-2 min-w-0" data-tour="project-tabs">
           {(isStaff ? STAFF_PROJECT_TABS : ALL_PROJECT_TABS).map((id) => tabBtn(id, TAB_LABELS[id]))}
         </div>
       </div>
 
-      <div className="space-y-6 mt-6 min-w-0">
+      <div
+        className="space-y-6 mt-6 min-w-0"
+        data-tour="project-tab-content"
+        data-active-project-tab={tab}
+      >
       {feedback && (
         <div
           className={`rounded-xl border px-3 py-2 text-xs ${
@@ -2008,7 +2014,7 @@ const AdminProjectDetail: React.FC = () => {
       ))}
 
       {tab === 'controls' && withState('controls', true, (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4" data-tour="project-tab-controls">
           <div className={`rounded-xl p-4 min-w-0 ${appPanelClass(isDark)}`}>
             <div className="mb-3 flex items-center justify-between gap-2">
               <h3 className="text-xs uppercase tracking-widest text-zinc-500 font-bold">Risks</h3>

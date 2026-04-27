@@ -271,7 +271,7 @@ const StaffView: React.FC = () => {
 
   return (
     <div className="max-w-4xl min-w-0 space-y-10">
-      <div>
+      <div data-tour="staff-home-header">
         <h2 className={`text-2xl font-bold mb-2 ${isDark ? 'text-white' : 'text-zinc-900'}`}>Crew home</h2>
         <p className={`text-sm ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>
           Call sheets, project links, and your planner assignments in one place.
@@ -322,7 +322,7 @@ const StaffView: React.FC = () => {
       )}
 
       {crewProfile && (
-        <section className={`rounded-xl p-5 min-w-0 ${appPanelClass(isDark)}`}>
+        <section className={`rounded-xl p-5 min-w-0 ${appPanelClass(isDark)}`} data-tour="staff-profile">
           <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500 mb-3 flex items-center gap-2">
             <User size={14} /> Profile
           </h3>
@@ -350,7 +350,7 @@ const StaffView: React.FC = () => {
       )}
 
       {crewId && avDraft && (
-        <section className={`rounded-xl p-5 min-w-0 ${appPanelClass(isDark)}`}>
+        <section className={`rounded-xl p-5 min-w-0 ${appPanelClass(isDark)}`} data-tour="staff-availability">
           <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500 mb-3">Availability</h3>
           {availabilityBlocked ? (
             <p className="text-sm text-amber-200/90 break-words">
@@ -457,7 +457,7 @@ const StaffView: React.FC = () => {
       )}
 
       {crewId && (
-        <section className="min-w-0">
+        <section className="min-w-0" data-tour="staff-assignments">
           <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500 mb-3 flex items-center gap-2">
             <ClipboardList size={14} /> My assignments
           </h3>
@@ -517,7 +517,7 @@ const StaffView: React.FC = () => {
       )}
 
       {crewId && myProjects.length > 0 && (
-        <section className="min-w-0">
+        <section className="min-w-0" data-tour="staff-projects">
           <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500 mb-3">My projects</h3>
           <ul className="space-y-2">
             {myProjects.map((p) => (
@@ -540,7 +540,7 @@ const StaffView: React.FC = () => {
         </section>
       )}
 
-      <div className="min-w-0">
+      <div className="min-w-0" data-tour="staff-shoots">
         <h3 className={`text-xl font-bold mb-1 ${isDark ? 'text-white' : 'text-zinc-900'}`}>Call sheets</h3>
         <p className={`text-sm mb-6 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>
           Shoots where you are on the team, from production scheduling.

@@ -35,8 +35,14 @@ import { getFinanceDashboardMetrics } from '../../../data/financeApi';
 import { useAdminTheme } from '../../../lib/adminTheme';
 import { useAuth } from '../../../lib/auth';
 import { hasHqFeatureAccess } from '../../../lib/hqAccess';
+import {
+  dismissHqGuideTip,
+  dispatchOpenProductGuide,
+  isHqGuideTipDismissed,
+  HQ_GUIDE_TIP_RESET_EVENT,
+} from '../../../lib/hqGuideTipStorage';
 import { hqUserGreetingName } from '../../../lib/hqUserDisplay';
-import type { AdminProject, PlannerItemPriority } from '../../../types';
+import { UserRole, type AdminProject, type PlannerItemPriority } from '../../../types';
 import {
   appErrorBannerClass,
   appIconWellClass,
@@ -90,6 +96,7 @@ const AdminCommand: React.FC = () => {
   const [clientOpen, setClientOpen] = useState(false);
   const [taskOpen, setTaskOpen] = useState(false);
   const [shootOpen, setShootOpen] = useState(false);
+  const [guideTipVisible, setGuideTipVisible] = useState(!isHqGuideTipDismissed());
 
   const activeProjects = useMemo(
     () => MOCK_ADMIN_PROJECTS.filter((p) => p.status === 'active'),
@@ -127,6 +134,12 @@ const AdminCommand: React.FC = () => {
   useEffect(() => {
     const timer = window.setTimeout(() => setLoading(false), 250);
     return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const onReset = () => setGuideTipVisible(true);
+    window.addEventListener(HQ_GUIDE_TIP_RESET_EVENT, onReset);
+    return () => window.removeEventListener(HQ_GUIDE_TIP_RESET_EVENT, onReset);
   }, []);
 
   useEffect(() => {
@@ -323,6 +336,20 @@ const AdminCommand: React.FC = () => {
     setStatus({ tone: 'ok', message: 'Retry queued and logged.' });
   };
 
+  const showCommandGuideTip =
+    guideTipVisible && (user?.role === UserRole.ADMIN || user?.role === UserRole.PROJECT_MANAGER);
+
+  const onDismissCommandGuide = () => {
+    dismissHqGuideTip();
+    setGuideTipVisible(false);
+  };
+
+  const onOpenCommandGuide = () => {
+    dispatchOpenProductGuide();
+    dismissHqGuideTip();
+    setGuideTipVisible(false);
+  };
+
   const onRevokeStorageLink = (eventId: string) => {
     const result = revokeStorageOpsLink(eventId, user?.displayName || user?.email || 'Admin');
     if (!result.ok) {
@@ -341,6 +368,42 @@ const AdminCommand: React.FC = () => {
 
   return (
     <div className="space-y-8 max-w-7xl min-w-0">
+      {showCommandGuideTip && (
+        <div
+          className={[
+            'rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 min-w-0 border',
+            isDark ? 'border-zinc-700 bg-zinc-900/50' : 'border-zinc-200 bg-zinc-100',
+          ].join(' ')}
+          role="region"
+          aria-label="Product guide tip"
+        >
+          <p className={`text-sm min-w-0 ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
+            <span className="font-semibold">In-app walkthrough.</span> Open the product guide (?) in the header to see what
+            every tab does—filtered for your role.
+          </p>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={onOpenCommandGuide}
+              className={[
+                'px-3 py-1.5 rounded-md text-sm font-semibold',
+                isDark
+                  ? 'bg-white text-black hover:bg-zinc-200'
+                  : 'bg-zinc-900 text-white hover:bg-zinc-800',
+              ].join(' ')}
+            >
+              Open guide
+            </button>
+            <button
+              type="button"
+              onClick={onDismissCommandGuide}
+              className={appOutlineButtonClass(isDark)}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
       <p className={`text-sm min-w-0 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
         Hello, {hqUserGreetingName(user ?? null)}
       </p>
@@ -364,7 +427,7 @@ const AdminCommand: React.FC = () => {
         </div>
       )}
 
-      <div className={`rounded-xl p-4 sm:p-5 min-w-0 ${appPanelClass(isDark)}`}>
+      <div className={`rounded-xl p-4 sm:p-5 min-w-0 ${appPanelClass(isDark)}`} data-tour="command-quick-actions">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-zinc-900'}`}>Quick actions</h3>
           {(!canQuickTaskShoot || !canQuickClient || !canCreateProject) && (
@@ -433,7 +496,7 @@ const AdminCommand: React.FC = () => {
         )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4" data-tour="command-kpis">
         {canFinancialsPage ? (
           <Link to="/hq/admin/financials" className={`p-5 rounded-xl transition-colors block ${appKpiLinkClass(isDark)}`}>
             <div className="flex items-start justify-between">
@@ -512,7 +575,10 @@ const AdminCommand: React.FC = () => {
         </Link>
       </div>
 
-      <div className={`rounded-xl p-4 sm:p-5 min-w-0 ${isDark ? 'bg-zinc-900/40 border border-zinc-800' : 'bg-white border border-zinc-200'}`}>
+      <div
+        className={`rounded-xl p-4 sm:p-5 min-w-0 ${isDark ? 'bg-zinc-900/40 border border-zinc-800' : 'bg-white border border-zinc-200'}`}
+        data-tour="command-priority-feed"
+      >
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className={`text-sm font-semibold flex items-center gap-2 ${isDark ? 'text-white' : 'text-zinc-900'}`}>
             <Calendar size={16} className={isDark ? 'text-zinc-400' : 'text-zinc-500'} /> This week
@@ -760,7 +826,7 @@ const AdminCommand: React.FC = () => {
         </div>
       </div>
 
-      <div className={`rounded-xl p-4 min-w-0 ${appPanelClass(isDark)}`}>
+      <div className={`rounded-xl p-4 min-w-0 ${appPanelClass(isDark)}`} data-tour="command-storage-ops">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
           <h3 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-zinc-900'}`}>Storage ops lite</h3>
           <p className={`text-xs ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>
