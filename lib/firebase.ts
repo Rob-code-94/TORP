@@ -1,6 +1,8 @@
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
 import { connectAuthEmulator, getAuth, type Auth } from 'firebase/auth';
 import { connectFunctionsEmulator, getFunctions, type Functions } from 'firebase/functions';
+import { connectStorageEmulator, getStorage, type FirebaseStorage } from 'firebase/storage';
+import { connectFirestoreEmulator, getFirestore, type Firestore } from 'firebase/firestore';
 
 const apiKey = import.meta.env.VITE_FIREBASE_API_KEY as string | undefined;
 const authDomain = import.meta.env.VITE_FIREBASE_AUTH_DOMAIN as string | undefined;
@@ -11,8 +13,12 @@ const useEmulator = import.meta.env.VITE_FIREBASE_USE_EMULATOR === 'true';
 let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
 let functions: Functions | null = null;
+let storage: FirebaseStorage | null = null;
+let firestore: Firestore | null = null;
 let authEmulatorConnected = false;
 let functionsEmulatorConnected = false;
+let storageEmulatorConnected = false;
+let firestoreEmulatorConnected = false;
 
 export function isFirebaseConfigured(): boolean {
   return Boolean(apiKey && authDomain && projectId);
@@ -70,5 +76,35 @@ export function getFirebaseFunctionsInstance(): Functions {
     functionsEmulatorConnected = true;
   }
   functions = f;
+  return f;
+}
+
+export function getFirebaseStorageInstance(): FirebaseStorage {
+  if (storage) return storage;
+  const s = getStorage(getFirebaseApp());
+  if (useEmulator && typeof window !== 'undefined' && !storageEmulatorConnected) {
+    try {
+      connectStorageEmulator(s, '127.0.0.1', 9199);
+    } catch {
+      // Re-entry
+    }
+    storageEmulatorConnected = true;
+  }
+  storage = s;
+  return s;
+}
+
+export function getFirebaseFirestoreInstance(): Firestore {
+  if (firestore) return firestore;
+  const f = getFirestore(getFirebaseApp());
+  if (useEmulator && typeof window !== 'undefined' && !firestoreEmulatorConnected) {
+    try {
+      connectFirestoreEmulator(f, '127.0.0.1', 8080);
+    } catch {
+      // Re-entry
+    }
+    firestoreEmulatorConnected = true;
+  }
+  firestore = f;
   return f;
 }

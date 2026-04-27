@@ -27,12 +27,29 @@ service cloud.firestore {
         && request.auth.token.tenantId == tid;
     }
 
+    // Showcase content under /tenants/{tid}/showcase/* is publicly readable so
+    // unauthenticated visitors can render the Landing reel. Writes still require
+    // a tenant-matched admin token (enforced by the rule above + admin check in
+    // server-side callables).
+    match /tenants/{tid}/showcase/{docId} {
+      allow read: if true;
+    }
+
     // Example: collection with a tenantId field (adjust collection id to your app)
     match /shared_collections/{docId} {
       allow read, update, delete: if isSignedIn() && sameTenantInDoc();
       allow create: if hasTenant()
         && 'tenantId' in request.resource.data
         && request.resource.data.tenantId == request.auth.token.tenantId;
+    }
+
+    // Storage delivery audit log (top-level so server-side functions can write
+    // signed URL events without joining tenant paths). Reads are tenant-scoped
+    // via the doc's `tenantId` field. Writes are server-only (Cloud Functions
+    // run as admin and bypass these rules).
+    match /storageDeliveryLinks/{linkId} {
+      allow read: if isSignedIn() && sameTenantInDoc();
+      allow write: if false;
     }
 
     // Default deny

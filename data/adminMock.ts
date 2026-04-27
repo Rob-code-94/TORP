@@ -20,6 +20,7 @@ import type {
   ProjectStage,
   ProjectStageTransition,
   RiskItem,
+  StorageOpsEvent,
 } from '../types';
 import { UserRole } from '../types';
 import { getProjectAssetStorageAdapter } from '../lib/projectAssetStorage';
@@ -654,6 +655,28 @@ export const MOCK_ACTIVITY: ActivityEntry[] = [
     actorName: 'M. Reyes',
     action: 'moved to In production',
     createdAt: '2025-03-20T14:00:00Z',
+  },
+];
+
+export const MOCK_STORAGE_OPS_EVENTS: StorageOpsEvent[] = [
+  {
+    id: 'ops-1',
+    eventType: 'link_issued',
+    assetId: 'a1',
+    actorName: 'A. Vance',
+    tenantId: 'torp-default',
+    timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+    details: 'Issued deliverable link for Blacktop master.',
+  },
+  {
+    id: 'ops-2',
+    eventType: 'upload_failed',
+    assetId: 'a3',
+    actorName: 'System',
+    tenantId: 'torp-default',
+    timestamp: new Date(Date.now() - 1000 * 60 * 80).toISOString(),
+    errorCode: 'network-timeout',
+    details: 'Upload stalled during processing.',
   },
 ];
 
@@ -1485,6 +1508,40 @@ export function updatePlannerTask(taskId: string, patch: Partial<PlannerItem>, a
   return { ok: true };
 }
 
+export function attachAssetToPlannerItem(taskId: string, assetId: string, actorName: string): { ok: boolean; error?: string } {
+  const item = MOCK_PLANNER.find((t) => t.id === taskId);
+  if (!item) return { ok: false, error: 'Planner item not found.' };
+  const asset = MOCK_ASSETS.find((a) => a.id === assetId);
+  if (!asset || asset.projectId !== item.projectId) {
+    return { ok: false, error: 'Asset must exist on the same project.' };
+  }
+  const existing = new Set(item.attachmentAssetIds || []);
+  existing.add(assetId);
+  item.attachmentAssetIds = [...existing];
+  pushActivity({
+    projectId: item.projectId,
+    entityType: 'planner',
+    entityLabel: item.title,
+    actorName,
+    action: `attached asset ${asset.label}`,
+  });
+  return { ok: true };
+}
+
+export function removeAssetFromPlannerItem(taskId: string, assetId: string, actorName: string): { ok: boolean; error?: string } {
+  const item = MOCK_PLANNER.find((t) => t.id === taskId);
+  if (!item) return { ok: false, error: 'Planner item not found.' };
+  item.attachmentAssetIds = (item.attachmentAssetIds || []).filter((id) => id !== assetId);
+  pushActivity({
+    projectId: item.projectId,
+    entityType: 'planner',
+    entityLabel: item.title,
+    actorName,
+    action: `detached asset ${assetId}`,
+  });
+  return { ok: true };
+}
+
 export function deletePlannerTask(taskId: string, actorName: string): { ok: boolean } {
   const idx = MOCK_PLANNER.findIndex((t) => t.id === taskId);
   if (idx < 0) return { ok: false };
@@ -1716,9 +1773,14 @@ export function createProjectAsset(input: Omit<ProjectAsset, 'id' | 'updatedAt' 
         filename: normalizedFile,
         sourceType,
       }),
+      // Preserve any caller-provided values (path/url/mime/size/filename)
+      // so real Firebase uploads keep the actual storage object reference
+      // they wrote to instead of getting a synthetic adapter path back.
+      ...(input.storage?.path ? { path: input.storage.path } : {}),
+      ...(input.storage?.url ? { url: input.storage.url } : {}),
       mimeType: input.storage?.mimeType,
       sizeBytes: input.storage?.sizeBytes,
-      filename: normalizedFile,
+      filename: input.storage?.filename || normalizedFile,
     }
     : undefined;
   const trimmedRef = input.sourceUrl?.trim();
@@ -1921,6 +1983,97 @@ export function updateInvoice(id: string, patch: Partial<AdminInvoice>, actorNam
   if (!item) return { ok: false };
   Object.assign(item, patch);
   pushActivity({ projectId: item.projectId, entityType: 'invoice', entityLabel: item.id, actorName, action: 'updated invoice' });
+  return { ok: true };
+}
+
+export function attachAssetToInvoice(invoiceId: string, assetId: string, actorName: string): { ok: boolean; error?: string } {
+  const invoice = MOCK_INVOICES_ADMIN.find((i) => i.id === invoiceId);
+  if (!invoice) return { ok: false, error: 'Invoice not found.' };
+  const project = getProjectById(invoice.projectId);
+  if (!project) return { ok: false, error: 'Project not found.' };
+  const asset = MOCK_ASSETS.find((a) => a.id === assetId);
+  if (!asset || asset.projectId !== invoice.projectId) {
+    return { ok: false, error: 'Asset must exist on the invoice project.' };
+  }
+  const existing = new Set(invoice.attachmentAssetIds || []);
+  existing.add(assetId);
+  invoice.attachmentAssetIds = [...existing];
+  pushActivity({
+    projectId: invoice.projectId,
+    entityType: 'invoice',
+    entityLabel: invoice.id,
+    actorName,
+    action: `attached ${asset.label}`,
+  });
+  return { ok: true };
+}
+
+export function attachMediaToCrewProfile(crewId: string, assetId: string): { ok: boolean; error?: string } {
+  const crew = MOCK_CREW.find((item) => item.id === crewId);
+  if (!crew) return { ok: false, error: 'Crew member not found.' };
+  const existing = new Set(crew.mediaAssetIds || []);
+  existing.add(assetId);
+  crew.mediaAssetIds = [...existing];
+  return { ok: true };
+}
+
+export function upsertCrewMediaPolicy(
+  crewId: string,
+  policy: {
+    assetId: string;
+    visibility: 'internal' | 'client' | 'hidden';
+    usageRights: 'licensed' | 'owned' | 'restricted';
+    expiresAt?: string;
+  }
+): { ok: boolean; error?: string } {
+  const crew = MOCK_CREW.find((item) => item.id === crewId);
+  if (!crew) return { ok: false, error: 'Crew member not found.' };
+  const next = [...(crew.mediaPolicies || [])];
+  const idx = next.findIndex((item) => item.assetId === policy.assetId);
+  if (idx >= 0) {
+    next[idx] = policy;
+  } else {
+    next.push(policy);
+  }
+  crew.mediaPolicies = next;
+  return { ok: true };
+}
+
+export function recordStorageOpsEvent(
+  event: Omit<StorageOpsEvent, 'id' | 'timestamp'>
+): StorageOpsEvent {
+  const created: StorageOpsEvent = {
+    id: `ops-${Date.now()}`,
+    timestamp: new Date().toISOString(),
+    ...event,
+  };
+  MOCK_STORAGE_OPS_EVENTS.unshift(created);
+  return created;
+}
+
+export function retryStorageOperation(eventId: string, actorName: string): { ok: boolean; error?: string } {
+  const source = MOCK_STORAGE_OPS_EVENTS.find((event) => event.id === eventId);
+  if (!source) return { ok: false, error: 'Storage event not found.' };
+  recordStorageOpsEvent({
+    eventType: 'retry',
+    assetId: source.assetId,
+    actorName,
+    tenantId: source.tenantId,
+    details: `Retry triggered for ${source.eventType}`,
+  });
+  return { ok: true };
+}
+
+export function revokeStorageOpsLink(eventId: string, actorName: string): { ok: boolean; error?: string } {
+  const source = MOCK_STORAGE_OPS_EVENTS.find((event) => event.id === eventId);
+  if (!source) return { ok: false, error: 'Storage event not found.' };
+  recordStorageOpsEvent({
+    eventType: 'link_revoked',
+    assetId: source.assetId,
+    actorName,
+    tenantId: source.tenantId,
+    details: `Revoked from ops console for source ${eventId}`,
+  });
   return { ok: true };
 }
 

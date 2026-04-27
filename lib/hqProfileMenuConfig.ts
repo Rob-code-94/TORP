@@ -20,10 +20,10 @@ export function showStaffSettingsLink(role: UserRole | undefined): boolean {
 export function settingsLandingPathForRole(role: UserRole | undefined): string | null {
   switch (role) {
     case UserRole.ADMIN:
-      return '/hq/admin/settings';
+      return '/hq/admin/settings/profile';
     case UserRole.PROJECT_MANAGER:
     case UserRole.STAFF:
-      return '/hq/staff/settings/integrations';
+      return '/hq/staff/settings/profile';
     default:
       return null;
   }

@@ -1,13 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import {
-  createInvoice,
-  MOCK_INVOICES_ADMIN,
   MOCK_ADMIN_PROJECTS,
-  MOCK_PROPOSALS,
-  updateInvoice,
 } from '../../../data/adminMock';
+import { getFinanceRepository } from '../../../data/financeRepository';
+import { setInvoiceLockStatus } from '../../../data/financeApi';
 import { useAuth } from '../../../lib/auth';
 import { useAdminTheme } from '../../../lib/adminTheme';
 import {
@@ -18,18 +16,9 @@ import {
   rechartsAxisStroke,
   rechartsTooltipProps,
 } from '../../../lib/appThemeClasses';
-import type { AdminInvoiceStatus, AdminProject } from '../../../types';
+import type { AdminInvoice, AdminInvoiceStatus, AdminProject } from '../../../types';
 import AdminFormDrawer from './AdminFormDrawer';
 import { formatAdminDate, invoiceStatusClassForTheme, proposalStatusClassForTheme } from './adminFormat';
-
-const chart = [
-  { name: 'Jan', revenue: 40000 },
-  { name: 'Feb', revenue: 30000 },
-  { name: 'Mar', revenue: 55000 },
-  { name: 'Apr', revenue: 48000 },
-  { name: 'May', revenue: 70000 },
-  { name: 'Jun', revenue: 62000 },
-];
 
 const INVOICE_STATUS_FILTERS: Array<{ value: 'all' | AdminInvoiceStatus; label: string }> = [
   { value: 'all', label: 'All statuses' },
@@ -45,9 +34,7 @@ const AdminFinancials: React.FC = () => {
   const { theme } = useAdminTheme();
   const isDark = theme === 'dark';
   const { user } = useAuth();
-  const actorName = user?.displayName?.trim() || user?.email || 'HQ';
-
-  const [refresh, setRefresh] = useState(0);
+  const canOverrideLock = user?.role === 'ADMIN';
   const [statusFilter, setStatusFilter] = useState<'all' | AdminInvoiceStatus>('all');
   const [projectFilter, setProjectFilter] = useState<'all' | string>('all');
   const [dueFrom, setDueFrom] = useState('');
@@ -60,6 +47,62 @@ const AdminFinancials: React.FC = () => {
   const [newIssued, setNewIssued] = useState(() => new Date().toISOString().slice(0, 10));
   const [newDue, setNewDue] = useState(() => new Date().toISOString().slice(0, 10));
   const [drawerError, setDrawerError] = useState<string | null>(null);
+  const [editDrawerOpen, setEditDrawerOpen] = useState(false);
+  const [editInvoiceId, setEditInvoiceId] = useState<string | null>(null);
+  const [editProjectId, setEditProjectId] = useState('');
+  const [editClientName, setEditClientName] = useState('');
+  const [editAmount, setEditAmount] = useState('');
+  const [editAmountPaid, setEditAmountPaid] = useState('');
+  const [editIssuedDate, setEditIssuedDate] = useState('');
+  const [editDueDate, setEditDueDate] = useState('');
+  const [editStatus, setEditStatus] = useState<AdminInvoiceStatus>('draft');
+  const [editAttachmentInput, setEditAttachmentInput] = useState('');
+  const [editAttachmentIds, setEditAttachmentIds] = useState<string[]>([]);
+  const [editDrawerError, setEditDrawerError] = useState<string | null>(null);
+  const [financeStatus, setFinanceStatus] = useState<'loading' | 'error' | 'success'>('loading');
+  const [financeError, setFinanceError] = useState<string | null>(null);
+  const [reloadTick, setReloadTick] = useState(0);
+
+  const financeRepo = useMemo(() => getFinanceRepository(), []);
+  const invoices = useMemo(() => {
+    try {
+      return financeRepo.listInvoices();
+    } catch {
+      return [];
+    }
+  }, [financeRepo, reloadTick]);
+  const proposals = useMemo(() => {
+    try {
+      return financeRepo.listProposals();
+    } catch {
+      return [];
+    }
+  }, [financeRepo, reloadTick]);
+  const metrics = useMemo(() => {
+    try {
+      return financeRepo.getMetrics();
+    } catch {
+      return {
+        openArTotal: 0,
+        outstandingInvoiceCount: 0,
+        overdueInvoiceCount: 0,
+        overdueInvoices: [],
+        revenueYtd: 0,
+        monthlyRevenue: [],
+      };
+    }
+  }, [financeRepo, reloadTick]);
+
+  useEffect(() => {
+    try {
+      financeRepo.listInvoices();
+      setFinanceStatus('success');
+      setFinanceError(null);
+    } catch (error) {
+      setFinanceStatus('error');
+      setFinanceError(error instanceof Error ? error.message : 'Could not load financial records.');
+    }
+  }, [financeRepo, reloadTick]);
 
   const projectsById = useMemo(() => {
     const m = new Map<string, AdminProject>();
@@ -78,39 +121,34 @@ const AdminFinancials: React.FC = () => {
   };
 
   const outstanding = useMemo(
-    () => MOCK_INVOICES_ADMIN.filter((i) => i.status !== 'paid' && i.status !== 'void'),
-    [refresh]
+    () => invoices.filter((i) => i.status !== 'paid' && i.status !== 'void'),
+    [invoices]
   );
-  const openTotal = useMemo(
-    () => outstanding.reduce((s, i) => s + (i.amount - i.amountPaid), 0),
-    [outstanding]
-  );
+  const openTotal = useMemo(() => outstanding.reduce((s, i) => s + (i.amount - i.amountPaid), 0), [outstanding]);
 
   const filteredInvoices = useMemo(() => {
-    return MOCK_INVOICES_ADMIN.filter((i) => {
+    return invoices.filter((i) => {
       if (statusFilter !== 'all' && i.status !== statusFilter) return false;
       if (projectFilter !== 'all' && i.projectId !== projectFilter) return false;
       if (dueFrom && i.dueDate < dueFrom) return false;
       if (dueTo && i.dueDate > dueTo) return false;
       return true;
     });
-  }, [statusFilter, projectFilter, dueFrom, dueTo, refresh]);
+  }, [statusFilter, projectFilter, dueFrom, dueTo, invoices]);
 
-  const bump = () => setRefresh((n) => n + 1);
+  const bump = () => {
+    setReloadTick((n) => n + 1);
+  };
 
   const onMarkSent = (id: string) => {
-    const r = updateInvoice(id, { status: 'sent' }, actorName);
+    const r = financeRepo.updateInvoice(id, { status: 'sent' });
     if (r.ok) bump();
   };
 
   const onMarkPaid = (id: string) => {
-    const item = MOCK_INVOICES_ADMIN.find((i) => i.id === id);
+    const item = invoices.find((i) => i.id === id);
     if (!item) return;
-    const r = updateInvoice(
-      id,
-      { status: 'paid', amountPaid: item.amount, amount: item.amount },
-      actorName
-    );
+    const r = financeRepo.updateInvoice(id, { status: 'paid', amountPaid: item.amount, amount: item.amount });
     if (r.ok) bump();
   };
 
@@ -119,7 +157,7 @@ const AdminFinancials: React.FC = () => {
     const project = projectsById.get(newProjectId);
     const amount = Number(newAmount || '0');
     try {
-      createInvoice(
+      financeRepo.createInvoice(
         {
           projectId: newProjectId,
           clientName: (newClientName.trim() || project?.clientName || '').trim(),
@@ -128,14 +166,64 @@ const AdminFinancials: React.FC = () => {
           status: 'draft',
           issuedDate: newIssued,
           dueDate: newDue,
-        },
-        actorName
+        }
       );
       setDrawerOpen(false);
       bump();
     } catch (e) {
       setDrawerError(e instanceof Error ? e.message : 'Could not create invoice.');
     }
+  };
+
+  const openEditInvoice = (invoice: AdminInvoice) => {
+    setEditInvoiceId(invoice.id);
+    setEditProjectId(invoice.projectId);
+    setEditClientName(invoice.clientName);
+    setEditAmount(String(invoice.amount));
+    setEditAmountPaid(String(invoice.amountPaid));
+    setEditIssuedDate(invoice.issuedDate);
+    setEditDueDate(invoice.dueDate);
+    setEditStatus(invoice.status);
+    setEditAttachmentIds(invoice.attachmentAssetIds || []);
+    setEditAttachmentInput('');
+    setEditDrawerError(null);
+    setEditDrawerOpen(true);
+  };
+
+  const saveEditedInvoice = () => {
+    if (!editInvoiceId) return;
+    setEditDrawerError(null);
+    try {
+      const existing = invoices.find((invoice) => invoice.id === editInvoiceId);
+      if (existing?.lockStatus === 'locked' && !canOverrideLock) {
+        setEditDrawerError('This invoice is locked. Only an admin can unlock and edit it.');
+        return;
+      }
+      const result = financeRepo.updateInvoice(editInvoiceId, {
+        projectId: editProjectId,
+        clientName: editClientName.trim(),
+        amount: Number(editAmount || '0'),
+        amountPaid: Number(editAmountPaid || '0'),
+        issuedDate: editIssuedDate,
+        dueDate: editDueDate,
+        status: editStatus,
+        attachmentAssetIds: editAttachmentIds,
+      });
+      if (!result.ok) {
+        setEditDrawerError('Invoice could not be updated.');
+        return;
+      }
+      setEditDrawerOpen(false);
+      bump();
+    } catch (error) {
+      setEditDrawerError(error instanceof Error ? error.message : 'Could not update invoice.');
+    }
+  };
+
+  const toggleInvoiceLock = (invoiceId: string, lockStatus: 'locked' | 'unlocked') => {
+    const result = setInvoiceLockStatus(invoiceId, lockStatus, user?.email || user?.displayName || 'admin');
+    if (!result.ok) return;
+    bump();
   };
 
   return (
@@ -148,6 +236,12 @@ const AdminFinancials: React.FC = () => {
         <p className={`text-sm mt-1 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>
           Filters apply to the invoice list. Summary cards use all open invoices.
         </p>
+        {financeStatus === 'loading' && (
+          <p className={`text-xs mt-2 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>Loading financial records...</p>
+        )}
+        {financeStatus === 'error' && (
+          <p className="text-xs mt-2 text-rose-400">{financeError || 'Could not load financial records.'}</p>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm min-w-0">
@@ -167,10 +261,10 @@ const AdminFinancials: React.FC = () => {
 
       <div className={`rounded-xl p-4 h-80 min-w-0 ${appPanelClass(isDark)}`}>
         <h3 className={`text-sm font-semibold mb-2 ${isDark ? 'text-white' : 'text-zinc-900'}`}>
-          Revenue (sample series)
+          Revenue (actual)
         </h3>
         <ResponsiveContainer width="100%" height="88%">
-          <AreaChart data={chart}>
+          <AreaChart data={metrics.monthlyRevenue}>
             <defs>
               <linearGradient id="fRev" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#d4d4d8" stopOpacity={0.1} />
@@ -206,7 +300,7 @@ const AdminFinancials: React.FC = () => {
       <div className="min-w-0">
         <h3 className={`text-sm font-bold mb-2 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>Proposals</h3>
         <div className="space-y-2">
-          {MOCK_PROPOSALS.map((p) => (
+          {proposals.map((p) => (
             <div
               key={p.id}
               className={`rounded-lg px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 min-w-0 ${appPanelClass(
@@ -242,7 +336,12 @@ const AdminFinancials: React.FC = () => {
 
       <div className="min-w-0">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between mb-2">
-          <h3 className={`text-sm font-bold ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>Invoices</h3>
+          <div>
+            <h3 className={`text-sm font-bold ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>Invoices</h3>
+            <p className={`text-xs mt-1 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>
+              Click an invoice row to open and edit it.
+            </p>
+          </div>
           <button
             type="button"
             onClick={openCreateDrawer}
@@ -345,6 +444,7 @@ const AdminFinancials: React.FC = () => {
                 <th className="text-right px-3 py-2">Open</th>
                 <th className="text-left px-3 py-2">Due</th>
                 <th className="text-left px-3 py-2">Status</th>
+                <th className="text-left px-3 py-2">Lock</th>
                 <th className="text-left px-3 py-2">Actions</th>
                 <th className="text-left px-3 py-2" />
               </tr>
@@ -352,7 +452,7 @@ const AdminFinancials: React.FC = () => {
             <tbody className={isDark ? 'divide-y divide-zinc-800/80' : 'divide-y divide-zinc-200'}>
               {filteredInvoices.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-3 py-4 text-sm text-zinc-500">
+                  <td colSpan={8} className="px-3 py-4 text-sm text-zinc-500">
                     No invoices match the current filters.
                   </td>
                 </tr>
@@ -363,7 +463,8 @@ const AdminFinancials: React.FC = () => {
                   return (
                     <tr
                       key={i.id}
-                      className={isDark ? 'hover:bg-zinc-900/20' : 'hover:bg-zinc-100/80'}
+                      className={`cursor-pointer ${isDark ? 'hover:bg-zinc-900/20' : 'hover:bg-zinc-100/80'}`}
+                      onClick={() => openEditInvoice(i)}
                     >
                       <td
                         className={`px-3 py-2.5 font-mono ${isDark ? 'text-zinc-300' : 'text-zinc-600'}`}
@@ -399,11 +500,29 @@ const AdminFinancials: React.FC = () => {
                         </span>
                       </td>
                       <td className="px-3 py-2.5">
+                        <span
+                          className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${
+                            i.lockStatus === 'locked'
+                              ? isDark
+                                ? 'bg-rose-950 text-rose-300'
+                                : 'bg-rose-100 text-rose-800'
+                              : isDark
+                                ? 'bg-zinc-800 text-zinc-300'
+                                : 'bg-zinc-100 text-zinc-700'
+                          }`}
+                        >
+                          {i.lockStatus === 'locked' ? 'Locked' : 'Unlocked'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5">
                         <div className="flex flex-wrap gap-1.5">
                           <button
                             type="button"
                             disabled={!canMarkSent}
-                            onClick={() => onMarkSent(i.id)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onMarkSent(i.id);
+                            }}
                             className={
                               isDark
                                 ? 'rounded border border-zinc-600 bg-zinc-900 px-2 py-0.5 text-[11px] text-zinc-200 hover:border-zinc-500 disabled:opacity-40'
@@ -415,7 +534,10 @@ const AdminFinancials: React.FC = () => {
                           <button
                             type="button"
                             disabled={!canMarkPaid}
-                            onClick={() => onMarkPaid(i.id)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onMarkPaid(i.id);
+                            }}
                             className={
                               isDark
                                 ? 'rounded border border-zinc-600 bg-zinc-900 px-2 py-0.5 text-[11px] text-zinc-200 hover:border-zinc-500 disabled:opacity-40'
@@ -424,11 +546,27 @@ const AdminFinancials: React.FC = () => {
                           >
                             Mark paid
                           </button>
+                          <button
+                            type="button"
+                            disabled={!canOverrideLock}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              toggleInvoiceLock(i.id, i.lockStatus === 'locked' ? 'unlocked' : 'locked');
+                            }}
+                            className={
+                              isDark
+                                ? 'rounded border border-zinc-600 bg-zinc-900 px-2 py-0.5 text-[11px] text-zinc-200 hover:border-zinc-500 disabled:opacity-40'
+                                : 'rounded border border-zinc-300 bg-white px-2 py-0.5 text-[11px] text-zinc-800 hover:border-zinc-400 disabled:opacity-40'
+                            }
+                          >
+                            {i.lockStatus === 'locked' ? 'Unlock' : 'Lock'}
+                          </button>
                         </div>
                       </td>
                       <td className="px-3 py-2.5 text-right whitespace-nowrap">
                         <Link
                           to={`/hq/admin/projects/${i.projectId}`}
+                          onClick={(event) => event.stopPropagation()}
                           className={`text-xs ${appLinkMutedClass(isDark)}`}
                         >
                           Project
@@ -469,6 +607,11 @@ const AdminFinancials: React.FC = () => {
       >
         {drawerError && <p className="text-sm text-rose-400 mb-3">{drawerError}</p>}
         <div className="space-y-3 text-sm min-w-0">
+          {invoices.find((invoice) => invoice.id === editInvoiceId)?.lockStatus === 'locked' && (
+            <p className="text-xs text-rose-300">
+              This invoice is locked. {!canOverrideLock ? 'Only admin can unlock it.' : 'Unlock to edit protected fields.'}
+            </p>
+          )}
           <label className="block text-xs text-zinc-500">
             Project
             <select
@@ -525,6 +668,159 @@ const AdminFinancials: React.FC = () => {
                 className={`mt-1 ${appInputClass(isDark)}`}
               />
             </label>
+          </div>
+        </div>
+      </AdminFormDrawer>
+
+      <AdminFormDrawer
+        open={editDrawerOpen}
+        onClose={() => setEditDrawerOpen(false)}
+        title="Edit invoice"
+        subtitle={editInvoiceId ? `Invoice ${editInvoiceId}` : 'Update invoice fields and status.'}
+        footer={
+          <div className="flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setEditDrawerOpen(false)}
+              className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={saveEditedInvoice}
+              className="rounded-md border border-zinc-600 bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-900"
+            >
+              Save invoice
+            </button>
+          </div>
+        }
+      >
+        {editDrawerError && <p className="text-sm text-rose-400 mb-3">{editDrawerError}</p>}
+        <div className="space-y-3 text-sm min-w-0">
+          <label className="block text-xs text-zinc-500">
+            Project
+            <select
+              value={editProjectId}
+              onChange={(e) => setEditProjectId(e.target.value)}
+              className={`mt-1 ${appInputClass(isDark)}`}
+            >
+              {MOCK_ADMIN_PROJECTS.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.title} ({p.id})
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-xs text-zinc-500">
+            Client
+            <input
+              value={editClientName}
+              onChange={(e) => setEditClientName(e.target.value)}
+              className={`mt-1 ${appInputClass(isDark)}`}
+            />
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label className="block text-xs text-zinc-500">
+              Amount (USD)
+              <input
+                type="number"
+                min={0}
+                value={editAmount}
+                onChange={(e) => setEditAmount(e.target.value)}
+                className={`mt-1 ${appInputClass(isDark)}`}
+              />
+            </label>
+            <label className="block text-xs text-zinc-500">
+              Amount paid (USD)
+              <input
+                type="number"
+                min={0}
+                value={editAmountPaid}
+                onChange={(e) => setEditAmountPaid(e.target.value)}
+                className={`mt-1 ${appInputClass(isDark)}`}
+              />
+            </label>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label className="block text-xs text-zinc-500">
+              Issued
+              <input
+                type="date"
+                value={editIssuedDate}
+                onChange={(e) => setEditIssuedDate(e.target.value)}
+                className={`mt-1 ${appInputClass(isDark)}`}
+              />
+            </label>
+            <label className="block text-xs text-zinc-500">
+              Due
+              <input
+                type="date"
+                value={editDueDate}
+                onChange={(e) => setEditDueDate(e.target.value)}
+                className={`mt-1 ${appInputClass(isDark)}`}
+              />
+            </label>
+          </div>
+          <label className="block text-xs text-zinc-500">
+            Status
+            <select
+              value={editStatus}
+              onChange={(e) => setEditStatus(e.target.value as AdminInvoiceStatus)}
+              className={`mt-1 ${appInputClass(isDark)}`}
+            >
+              {INVOICE_STATUS_FILTERS.filter((item) => item.value !== 'all').map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="rounded-md border border-zinc-700/70 p-2 min-w-0">
+            <p className="text-[11px] uppercase tracking-wide text-zinc-500 mb-2">Attachments</p>
+            <div className="flex flex-col sm:flex-row gap-2 min-w-0">
+              <input
+                value={editAttachmentInput}
+                onChange={(e) => setEditAttachmentInput(e.target.value)}
+                placeholder="Attachment asset or document ID"
+                disabled={invoices.find((invoice) => invoice.id === editInvoiceId)?.lockStatus === 'locked' && !canOverrideLock}
+                className={`${appInputClass(isDark)} min-w-0`}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const value = editAttachmentInput.trim();
+                  if (!value) return;
+                  if (!editAttachmentIds.includes(value)) {
+                    setEditAttachmentIds((current) => [...current, value]);
+                  }
+                  setEditAttachmentInput('');
+                }}
+                disabled={invoices.find((invoice) => invoice.id === editInvoiceId)?.lockStatus === 'locked' && !canOverrideLock}
+                className="rounded-md border border-zinc-700 px-3 py-2 text-xs font-bold uppercase tracking-wide text-zinc-200 disabled:opacity-50"
+              >
+                Add
+              </button>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {editAttachmentIds.length === 0 ? (
+                <p className="text-xs text-zinc-500">No attachments.</p>
+              ) : (
+                editAttachmentIds.map((attachmentId) => (
+                  <button
+                    key={attachmentId}
+                    type="button"
+                    onClick={() =>
+                      setEditAttachmentIds((current) => current.filter((id) => id !== attachmentId))
+                    }
+                    disabled={invoices.find((invoice) => invoice.id === editInvoiceId)?.lockStatus === 'locked' && !canOverrideLock}
+                    className="rounded border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-300 disabled:opacity-50"
+                  >
+                    {attachmentId} ×
+                  </button>
+                ))
+              )}
+            </div>
           </div>
         </div>
       </AdminFormDrawer>

@@ -2,7 +2,8 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { getIdTokenResult, onAuthStateChanged, signOut, updateProfile } from 'firebase/auth';
 import { UserRole } from '../types';
 import { authUserFromFirebase } from './firebaseAuthUser';
-import { getFirebaseAuthInstance, isFirebaseConfigured } from './firebase';
+import { getFirebaseAuthInstance, getFirebaseFunctionsInstance, isFirebaseConfigured } from './firebase';
+import { httpsCallable } from 'firebase/functions';
 
 /** Logged-in roles only (PUBLIC is represented by `user === null`). */
 export type AuthRole = UserRole.ADMIN | UserRole.PROJECT_MANAGER | UserRole.STAFF | UserRole.CLIENT;
@@ -15,6 +16,12 @@ export interface AuthUser {
   displayName?: string;
   email?: string;
   crewId?: string;
+  /**
+   * Tenant scope from the `tenantId` custom claim. Required for
+   * Firestore/Storage rules to evaluate true. May be undefined for legacy demo
+   * sessions or while the first `ensureTenantClaim` call is in flight.
+   */
+  tenantId?: string;
 }
 
 interface AuthContextValue {
@@ -105,7 +112,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const auth = getFirebaseAuthInstance();
     const unsub = onAuthStateChanged(auth, async (next) => {
       if (next) {
-        const token = await getIdTokenResult(next);
+        let token = await getIdTokenResult(next);
+        const tokenClaims = token.claims as Record<string, unknown>;
+        const hasTenant = typeof tokenClaims.tenantId === 'string' && tokenClaims.tenantId.length > 0;
+        if (!hasTenant) {
+          try {
+            const functions = getFirebaseFunctionsInstance();
+            const ensure = httpsCallable<Record<string, never>, { refreshed?: boolean }>(
+              functions,
+              'ensureTenantClaim',
+            );
+            const res = await ensure({});
+            if (res.data?.refreshed) {
+              await next.getIdToken(true);
+              token = await getIdTokenResult(next);
+            }
+          } catch (err) {
+            // Non-fatal: rules will still deny tenant data, but the rest of the
+            // app (sign-in UI, calendar) keeps working. Surface in console for ops.
+            console.warn('[torp.auth] ensureTenantClaim failed', err);
+          }
+        }
         setUser(authUserFromFirebase(next, token));
         if (typeof window !== 'undefined') {
           sessionStorage.removeItem(HQ_SESSION_KEY);

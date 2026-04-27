@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { MOCK_CREW } from '../../../data/adminMock';
+import { attachMediaToCrewProfile, MOCK_ASSETS, MOCK_CREW, upsertCrewMediaPolicy } from '../../../data/adminMock';
 import { createCrew, deleteCrew, sendCrewResetLink, setCrewPassword, updateCrew } from '../../../data/adminProjectsApi';
 import { useAuth } from '../../../lib/auth';
 import { isFirebaseConfigured } from '../../../lib/firebase';
@@ -85,6 +85,7 @@ const AdminCrew: React.FC = () => {
   const [status, setStatus] = useState<string | null>(null);
   const [statusTone, setStatusTone] = useState<'ok' | 'error'>('ok');
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [mediaAssetToAttach, setMediaAssetToAttach] = useState('');
   const [directoryQuery, setDirectoryQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<'all' | CrewProfile['role']>('all');
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('all');
@@ -215,6 +216,40 @@ const AdminCrew: React.FC = () => {
     }
     setListVersion((n) => n + 1);
     closeDrawer();
+  };
+
+  const attachMedia = () => {
+    if (!editingCrewId || !mediaAssetToAttach) return;
+    const result = attachMediaToCrewProfile(editingCrewId, mediaAssetToAttach);
+    if (!result.ok) {
+      setStatus(result.error || 'Could not attach media.');
+      setStatusTone('error');
+      return;
+    }
+    setStatus('Media attached to crew profile.');
+    setStatusTone('ok');
+    setMediaAssetToAttach('');
+    setListVersion((n) => n + 1);
+  };
+
+  const updateMediaPolicy = (
+    assetId: string,
+    patch: Partial<{ visibility: 'internal' | 'client' | 'hidden'; usageRights: 'licensed' | 'owned' | 'restricted'; expiresAt?: string }>
+  ) => {
+    if (!editingCrewId || !editingCrew) return;
+    const existing = editingCrew.mediaPolicies?.find((item) => item.assetId === assetId);
+    const result = upsertCrewMediaPolicy(editingCrewId, {
+      assetId,
+      visibility: patch.visibility || existing?.visibility || 'internal',
+      usageRights: patch.usageRights || existing?.usageRights || 'owned',
+      expiresAt: patch.expiresAt !== undefined ? patch.expiresAt : existing?.expiresAt,
+    });
+    if (!result.ok) {
+      setStatus(result.error || 'Could not update media rights.');
+      setStatusTone('error');
+      return;
+    }
+    setListVersion((n) => n + 1);
   };
 
   const sendResetLink = async () => {
@@ -771,6 +806,89 @@ const AdminCrew: React.FC = () => {
                   Temp password set: {new Date(editingCrew.lastTempPasswordSetAt).toLocaleString()}
                 </p>
               )}
+            </div>
+          )}
+          {editingCrew && (
+            <div className={`rounded-lg p-3 min-w-0 ${appPanelClass(isDark)}`}>
+              <p className="text-xs uppercase tracking-wide text-zinc-500 mb-2">Crew media</p>
+              <div className="flex flex-col sm:flex-row gap-2 min-w-0">
+                <select
+                  value={mediaAssetToAttach}
+                  onChange={(e) => setMediaAssetToAttach(e.target.value)}
+                  className={`${appInputClass(isDark)} min-w-0`}
+                >
+                  <option value="">Select project asset to attach</option>
+                  {MOCK_ASSETS.filter((asset) => editingCrew.assignedProjectIds.includes(asset.projectId)).map((asset) => (
+                    <option key={asset.id} value={asset.id}>
+                      {asset.label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={attachMedia}
+                  disabled={crewReadOnly || !mediaAssetToAttach}
+                  className="rounded-md border border-zinc-700 px-3 py-2 text-xs font-bold uppercase tracking-wide text-zinc-200 disabled:opacity-50"
+                >
+                  Attach media
+                </button>
+              </div>
+              <div className="mt-3 space-y-2">
+                {(editingCrew.mediaAssetIds || []).length === 0 ? (
+                  <p className="text-xs text-zinc-500">No media attached.</p>
+                ) : (
+                  (editingCrew.mediaAssetIds || []).map((assetId) => {
+                    const asset = MOCK_ASSETS.find((item) => item.id === assetId);
+                    const policy = editingCrew.mediaPolicies?.find((item) => item.assetId === assetId);
+                    const expired = policy?.expiresAt ? new Date(policy.expiresAt).getTime() < Date.now() : false;
+                    return (
+                      <div key={assetId} className={`rounded-md border p-2 ${isDark ? 'border-zinc-800' : 'border-zinc-200'}`}>
+                        <p className={`text-xs font-semibold ${isDark ? 'text-zinc-200' : 'text-zinc-900'}`}>
+                          {asset?.label || `Unknown asset ${assetId}`}
+                        </p>
+                        <div className="mt-1 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          <select
+                            disabled={crewReadOnly}
+                            value={policy?.visibility || 'internal'}
+                            onChange={(e) =>
+                              updateMediaPolicy(assetId, { visibility: e.target.value as 'internal' | 'client' | 'hidden' })
+                            }
+                            className={appInputClass(isDark)}
+                          >
+                            <option value="internal">Internal</option>
+                            <option value="client">Client</option>
+                            <option value="hidden">Hidden</option>
+                          </select>
+                          <select
+                            disabled={crewReadOnly}
+                            value={policy?.usageRights || 'owned'}
+                            onChange={(e) =>
+                              updateMediaPolicy(assetId, { usageRights: e.target.value as 'licensed' | 'owned' | 'restricted' })
+                            }
+                            className={appInputClass(isDark)}
+                          >
+                            <option value="owned">Owned</option>
+                            <option value="licensed">Licensed</option>
+                            <option value="restricted">Restricted</option>
+                          </select>
+                          <input
+                            type="date"
+                            disabled={crewReadOnly}
+                            value={policy?.expiresAt || ''}
+                            onChange={(e) => updateMediaPolicy(assetId, { expiresAt: e.target.value || undefined })}
+                            className={appInputClass(isDark)}
+                          />
+                        </div>
+                        {expired && (
+                          <p className="text-[11px] text-rose-300 mt-1">
+                            Rights expired. This media should not be client-visible.
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             </div>
           )}
           {status && <p className={`text-xs ${statusTone === 'error' ? 'text-red-300' : 'text-emerald-300'}`}>{status}</p>}

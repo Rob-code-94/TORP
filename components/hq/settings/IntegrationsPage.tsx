@@ -18,7 +18,11 @@ interface IntegrationsPageProps {
 const PLANNED: { name: string; blurb: string; icon: React.ReactNode }[] = [
   { name: 'Microsoft Outlook', blurb: 'Two-way calendar via Microsoft Graph.', icon: <Calendar size={14} /> },
   { name: 'Slack', blurb: 'Project channel notifications and approvals.', icon: <MessageSquare size={14} /> },
-  { name: 'Stripe', blurb: 'Invoices, deposits, and payment events.', icon: <CreditCard size={14} /> },
+  {
+    name: 'Square (coming soon)',
+    blurb: 'Planned for payment sync. Manual invoice and payment updates stay active in Financials for now.',
+    icon: <CreditCard size={14} />,
+  },
   { name: 'Google Drive', blurb: 'Asset deliverables and folder syncing.', icon: <Folder size={14} /> },
   { name: 'Email digest', blurb: 'Per-user weekly summary email.', icon: <Mail size={14} /> },
 ];

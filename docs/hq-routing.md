@@ -11,7 +11,7 @@
 | `/hq/admin/projects` | Project list |
 | `/hq/admin/projects/:projectId` | Project profile (tabs) |
 | `/hq/admin/planner` | Cross-project planner (list / board / calendar) |
-| `/hq/admin/financials` | Invoices & proposals (mock) |
+| `/hq/admin/financials` | Invoices & proposals (manual entry, persisted) |
 | `/hq/admin/crew` | Crew directory (mock) |
 | `/hq/admin/clients` | Client profiles (mock) |
 | `/hq/admin/settings` | Admin & org settings (placeholders) |

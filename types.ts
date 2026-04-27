@@ -154,6 +154,24 @@ export interface CrewProfile {
   lastTempPasswordSetAt?: string;
   lastTempPasswordSetBy?: string;
   forcePasswordChange?: boolean;
+  mediaAssetIds?: string[];
+  mediaPolicies?: Array<{
+    assetId: string;
+    visibility: 'internal' | 'client' | 'hidden';
+    usageRights: 'licensed' | 'owned' | 'restricted';
+    expiresAt?: string;
+  }>;
+}
+
+export interface StorageOpsEvent {
+  id: string;
+  eventType: 'upload_failed' | 'link_issued' | 'link_revoked' | 'retry';
+  assetId?: string;
+  actorName: string;
+  tenantId: string;
+  timestamp: string;
+  errorCode?: string;
+  details?: string;
 }
 
 export interface AdminProject {
@@ -220,12 +238,67 @@ export interface PlannerItem {
   notes?: string;
   description?: string;
   referenceLink?: string;
+  attachmentAssetIds?: string[];
 }
 
 export type ProjectAssetType = 'video' | 'still' | 'doc' | 'audio';
 
 export type ProjectAssetStatus = 'internal' | 'client_review' | 'approved' | 'delivered';
 export type ProjectAssetSourceType = 'upload' | 'external_link';
+
+export type StorageModuleTag = 'projects' | 'deliverables' | 'planner' | 'finance' | 'crew';
+export type AssetVisibility = 'internal' | 'project_team' | 'client_approved';
+export type AssetLifecycleStatus =
+  | 'queued'
+  | 'uploading'
+  | 'processing'
+  | 'ready'
+  | 'failed'
+  | 'archived';
+
+export interface AssetVersion {
+  id: string;
+  label: string;
+  storagePath: string;
+  downloadUrl?: string;
+  createdAt: string;
+  createdBy: string;
+  mimeType?: string;
+  sizeBytes?: number;
+  checksumSha256?: string;
+  isProxy?: boolean;
+}
+
+export interface AssetRef {
+  id: string;
+  tenantId: string;
+  module: StorageModuleTag;
+  projectId?: string;
+  entityId?: string;
+  ownerId: string;
+  label: string;
+  status: AssetLifecycleStatus;
+  visibility: AssetVisibility;
+  retentionClass?: 'default' | 'finance' | 'legal_hold';
+  legalHold?: boolean;
+  activeVersionId?: string;
+  versions: AssetVersion[];
+  createdAt: string;
+  updatedAt: string;
+  lastError?: string;
+}
+
+export interface StorageDeliveryLink {
+  id: string;
+  tenantId: string;
+  assetId: string;
+  versionId: string;
+  expiresAt: string;
+  createdAt: string;
+  createdBy: string;
+  revokedAt?: string;
+  revokedBy?: string;
+}
 
 export interface ProjectAssetStorageMetadata {
   path?: string;
@@ -253,6 +326,7 @@ export interface ProjectAsset {
 }
 
 export type AdminInvoiceStatus = 'draft' | 'sent' | 'partial' | 'paid' | 'overdue' | 'void';
+export type FinancialLockStatus = 'unlocked' | 'locked';
 
 export interface AdminInvoice {
   id: string;
@@ -265,6 +339,10 @@ export interface AdminInvoice {
   /** ISO date */
   dueDate: string;
   status: AdminInvoiceStatus;
+  attachmentAssetIds?: string[];
+  lockStatus?: FinancialLockStatus;
+  lockedAt?: string;
+  lockedBy?: string;
 }
 
 export type ProposalContractStatus = 'draft' | 'sent' | 'viewed' | 'signed' | 'declined';
@@ -281,6 +359,31 @@ export interface AdminProposal {
   depositPercent: number;
   /** For mock “viewed / signed / paid” tracking. */
   lastEvent?: string;
+  attachmentAssetIds?: string[];
+}
+
+export interface StoragePolicy {
+  tenantId: string;
+  roleScopeMap: {
+    ADMIN: { canIssueDeliveryLinks: boolean };
+    PROJECT_MANAGER: { canIssueDeliveryLinks: boolean };
+    STAFF: { canIssueDeliveryLinks: boolean };
+    CLIENT: { canIssueDeliveryLinks: boolean };
+  };
+  maxSizeByMimeGroup: {
+    videoMb: number;
+    imageMb: number;
+    documentMb: number;
+    audioMb: number;
+  };
+  retentionDaysByClass: {
+    default: number;
+    finance: number;
+    legal_hold: number;
+  };
+  legalHoldDefault: boolean;
+  updatedAt: string;
+  updatedBy: string;
 }
 
 export interface ActivityEntry {
@@ -362,6 +465,10 @@ export interface ProjectDeliverable {
   referenceLink?: string;
   acceptanceCriteria?: string;
   notes?: string;
+  approvedAssetVersionId?: string;
+  deliveryLinkIds?: string[];
+  deliveryLinkExpiresAt?: string;
+  deliveryLinkRevokedAt?: string;
 }
 
 export interface RiskItem {

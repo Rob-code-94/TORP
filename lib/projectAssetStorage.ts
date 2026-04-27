@@ -1,6 +1,8 @@
 import type { ProjectAssetSourceType } from '../types';
+import { buildStoragePath, resolveActiveTenantId } from './storagePaths';
 
 export interface ResolveAssetStorageInput {
+  tenantId?: string;
   projectId: string;
   assetId: string;
   filename: string;
@@ -16,17 +18,27 @@ export interface ProjectAssetStorageAdapter {
   resolveStorage(input: ResolveAssetStorageInput): ResolveAssetStorageResult;
 }
 
-function sanitizePathSegment(segment: string): string {
-  return segment.trim().replace(/[^a-zA-Z0-9._-]/g, '-');
-}
-
 export function buildProjectAssetStoragePath(projectId: string, assetId: string, filename: string): string {
-  return `projects/${sanitizePathSegment(projectId)}/assets/${sanitizePathSegment(assetId)}/${sanitizePathSegment(filename)}`;
+  return buildStoragePath({
+    tenantId: resolveActiveTenantId(),
+    module: 'projects',
+    projectId,
+    entityId: assetId,
+    version: 'v1',
+    filename,
+  });
 }
 
 const mockStorageAdapter: ProjectAssetStorageAdapter = {
   resolveStorage(input) {
-    const path = buildProjectAssetStoragePath(input.projectId, input.assetId, input.filename);
+    const path = buildStoragePath({
+      tenantId: input.tenantId || resolveActiveTenantId(),
+      module: 'projects',
+      projectId: input.projectId,
+      entityId: input.assetId,
+      version: 'v1',
+      filename: input.filename,
+    });
     return {
       path,
       url: input.sourceType === 'upload' ? `mock://storage/${path}` : undefined,

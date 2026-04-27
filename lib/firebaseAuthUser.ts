@@ -14,11 +14,13 @@ export function authUserFromFirebase(user: User, token: IdTokenResult): AuthUser
   const roleRaw = claimString(claims, 'role') || UserRole.STAFF;
   const role = isAuthRole(roleRaw) ? roleRaw : UserRole.STAFF;
   const crewId = claimString(claims, 'crewId');
+  const tenantId = claimString(claims, 'tenantId');
   return {
     role,
     displayName: user.displayName || user.email?.split('@')[0] || undefined,
     email: user.email || undefined,
     crewId: role === UserRole.STAFF ? crewId : undefined,
+    tenantId,
   };
 }
 

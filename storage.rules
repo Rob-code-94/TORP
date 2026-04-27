@@ -1,12 +1,23 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucketId}/o {
-    match /{tenantId}/{allPaths=**} {
+    match /tenants/{tenantId}/{allPaths=**} {
       allow read, write: if request.auth != null
         && 'tenantId' in request.auth.token
         && request.auth.token.tenantId == tenantId
         && request.auth.token.tenantId.size() > 0;
     }
+
+    // Showcase content rendered on the marketing landing page. Reads are
+    // public so unauthenticated visitors can load the reel; writes require an
+    // admin token (the role claim is set by `auth/tenantClaim.ts` and locked
+    // by Cloud Function callables for production usage).
+    match /public/showcase/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && request.auth.token.role == 'ADMIN';
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }

@@ -22,13 +22,18 @@ import AdminCrew from './components/hq/admin/AdminCrew';
 import AdminClients from './components/hq/admin/AdminClients';
 import AdminSettings from './components/hq/admin/AdminSettings';
 import IntegrationsPage from './components/hq/settings/IntegrationsPage';
+import ProfilePage from './components/hq/settings/ProfilePage';
+import NotificationsPage from './components/hq/settings/NotificationsPage';
+import SecurityPage from './components/hq/settings/SecurityPage';
 import ThemedAppShell from './components/ThemedAppShell';
+import { initializeStorageRuntime } from './lib/storageRuntime';
 
 /**
  * Router shell: `/` = public marketing; `/hq/*` = internal HQ; `/portal/*` = client.
  * Non-landing routes use ThemedAppShell for shared light/dark (AdminThemeProvider).
  */
 const App: React.FC = () => {
+  initializeStorageRuntime();
   return (
     <BrowserRouter>
       <AuthProvider>
@@ -57,6 +62,18 @@ const App: React.FC = () => {
                 path="settings/integrations"
                 element={<IntegrationsPage variant="admin" />}
               />
+              <Route
+                path="settings/profile"
+                element={<ProfilePage variant="admin" />}
+              />
+              <Route
+                path="settings/notifications"
+                element={<NotificationsPage variant="admin" />}
+              />
+              <Route
+                path="settings/security"
+                element={<SecurityPage variant="admin" />}
+              />
             </Route>
             <Route
               path="/hq/staff"
@@ -83,7 +100,7 @@ const App: React.FC = () => {
                   roles={[UserRole.STAFF, UserRole.PROJECT_MANAGER]}
                   redirectTo="/hq/login"
                 >
-                  <Navigate to="/hq/staff/settings/integrations" replace />
+                  <Navigate to="/hq/staff/settings/profile" replace />
                 </RequireAuth>
               }
             />
@@ -96,6 +113,45 @@ const App: React.FC = () => {
                 >
                   <HQShell role={UserRole.STAFF}>
                     <IntegrationsPage variant="staff" />
+                  </HQShell>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/hq/staff/settings/profile"
+              element={
+                <RequireAuth
+                  roles={[UserRole.STAFF, UserRole.PROJECT_MANAGER]}
+                  redirectTo="/hq/login"
+                >
+                  <HQShell role={UserRole.STAFF}>
+                    <ProfilePage variant="staff" />
+                  </HQShell>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/hq/staff/settings/notifications"
+              element={
+                <RequireAuth
+                  roles={[UserRole.STAFF, UserRole.PROJECT_MANAGER]}
+                  redirectTo="/hq/login"
+                >
+                  <HQShell role={UserRole.STAFF}>
+                    <NotificationsPage variant="staff" />
+                  </HQShell>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/hq/staff/settings/security"
+              element={
+                <RequireAuth
+                  roles={[UserRole.STAFF, UserRole.PROJECT_MANAGER]}
+                  redirectTo="/hq/login"
+                >
+                  <HQShell role={UserRole.STAFF}>
+                    <SecurityPage variant="staff" />
                   </HQShell>
                 </RequireAuth>
               }

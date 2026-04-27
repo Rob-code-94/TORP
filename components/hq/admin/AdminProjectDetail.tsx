@@ -8,8 +8,6 @@ import {
   createBlocker,
   createDeliverable,
   createDependency,
-  createExpense,
-  createInvoice,
   createPlannerTask,
   createProjectAsset,
   createRisk,
@@ -26,10 +24,7 @@ import {
   getDependenciesByProject,
   getActivityByProject,
   getAssetsByProject,
-  getExpensesByProject,
-  getInvoicesByProject,
   getPlannerByProject,
-  getProposalByProject,
   getProjectById,
   getRisksByProject,
   getShootsByProject,
@@ -43,13 +38,20 @@ import {
   updateBlocker,
   updateDeliverable,
   updateDependency,
-  updateInvoice,
   updatePlannerTask,
   updateProjectAsset,
   updateRisk,
   updateShoot,
   updateMeeting,
 } from '../../../data/adminMock';
+import {
+  createExpense,
+  createInvoice,
+  getExpensesByProject,
+  getInvoicesByProject,
+  getProposalByProject,
+  updateInvoice,
+} from '../../../data/financeApi';
 import { saveProjectNarrative } from '../../../data/adminProjectsApi';
 import { openGoogleCalendarInNewTab, payloadFromAdminMeeting, payloadFromAdminShoot } from '../../../lib/calendarEvent';
 import { useAuth } from '../../../lib/auth';
@@ -57,6 +59,7 @@ import { adminDateTimeInputProps, useAdminTheme } from '../../../lib/adminTheme'
 import { appInputClass, appPanelClass } from '../../../lib/appThemeClasses';
 import { staffCanViewProject } from '../../../lib/hqAccess';
 import { hasProjectCapability, isProjectRole } from '../../../lib/projectPermissions';
+import { createStorageDeliveryLink, revokeStorageDeliveryLink } from '../../../lib/storageDelivery';
 import type {
   AdminInvoiceStatus,
   AdminMeeting,
@@ -82,6 +85,8 @@ import {
 } from './adminFormat';
 import AdminFormDrawer from './AdminFormDrawer';
 import CalendarEventSheet from './CalendarEventSheet';
+import ProjectAssetUploader from './ProjectAssetUploader';
+import DeliveryLinksPanel from './DeliveryLinksPanel';
 
 type Tab = 'overview' | 'brief' | 'planner' | 'schedule' | 'assets' | 'deliverables' | 'controls' | 'financials' | 'activity';
 const STAFF_PROJECT_TABS: Tab[] = ['overview', 'brief', 'planner', 'schedule', 'assets', 'deliverables'];
@@ -187,6 +192,7 @@ const AdminProjectDetail: React.FC = () => {
   const [openDeliverableId, setOpenDeliverableId] = useState<string | null>(null);
   const [deliverableDrawerBusy, setDeliverableDrawerBusy] = useState(false);
   const [deliverableDrawerStatus, setDeliverableDrawerStatus] = useState<DrawerStatus>(null);
+  const [deliveryActionBusyById, setDeliveryActionBusyById] = useState<Record<string, boolean>>({});
   const [deliverableDraft, setDeliverableDraft] = useState({
     label: '',
     ownerCrewId: '',
@@ -272,6 +278,7 @@ const AdminProjectDetail: React.FC = () => {
   const canApproveFinance = hasProjectCapability(user?.role, 'project.financial.approve');
   const canRequestChangeOrder = hasProjectCapability(user?.role, 'project.changeOrder.request');
   const canEditAssetDeliverables = isProjectRole(user?.role);
+  const canIssueDeliveryLinks = user?.role === UserRole.ADMIN || user?.role === UserRole.PROJECT_MANAGER;
   const actorName = user?.displayName || 'System';
   const dateTimeInput = adminDateTimeInputProps(theme);
   const appOrigin = typeof window !== 'undefined' ? window.location.origin : '';
@@ -471,6 +478,85 @@ const AdminProjectDetail: React.FC = () => {
         ? current.linkedAssetIds.filter((id) => id !== assetId)
         : [...current.linkedAssetIds, assetId],
     }));
+  };
+
+  const issueClientLink = async (deliverableId: string) => {
+    if (!canIssueDeliveryLinks) {
+      setMessage('Only admin or project managers can issue client links.', 'error');
+      return;
+    }
+    const deliverable = deliverables.find((item) => item.id === deliverableId);
+    if (!deliverable) {
+      setMessage('Deliverable not found.', 'error');
+      return;
+    }
+    if (deliverable.status !== 'approved' && deliverable.status !== 'delivered') {
+      setMessage('Deliverable must be approved before generating a client link.', 'error');
+      return;
+    }
+    const linkedAssets = assets.filter((asset) => deliverable.linkedAssetIds.includes(asset.id));
+    const approvedAsset = linkedAssets.find((asset) => asset.status === 'approved' || asset.status === 'delivered');
+    if (!approvedAsset?.storage?.path) {
+      setMessage('An approved linked asset with a storage path is required.', 'error');
+      return;
+    }
+    setDeliveryActionBusyById((current) => ({ ...current, [deliverableId]: true }));
+    try {
+      const result = await createStorageDeliveryLink({
+        path: approvedAsset.storage.path,
+        assetId: approvedAsset.id,
+        versionId: approvedAsset.version,
+        expiresInMinutes: 60,
+      });
+      const deliveryLinkIds = [...(deliverable.deliveryLinkIds || []), result.id];
+      updateDeliverable(
+        deliverableId,
+        {
+          referenceLink: result.url,
+          deliveryLinkIds,
+          approvedAssetVersionId: approvedAsset.version,
+          deliveryLinkExpiresAt: result.expiresAt,
+          deliveryLinkRevokedAt: undefined,
+        },
+        actorName
+      );
+      setRefreshTick((value) => value + 1);
+      setMessage('Client link generated.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Could not generate client link.', 'error');
+    } finally {
+      setDeliveryActionBusyById((current) => ({ ...current, [deliverableId]: false }));
+    }
+  };
+
+  const revokeClientLink = async (deliverableId: string) => {
+    if (!canIssueDeliveryLinks) {
+      setMessage('Only admin or project managers can revoke client links.', 'error');
+      return;
+    }
+    const deliverable = deliverables.find((item) => item.id === deliverableId);
+    const linkId = deliverable?.deliveryLinkIds?.[deliverable.deliveryLinkIds.length - 1];
+    if (!deliverable || !linkId) {
+      setMessage('No active delivery link found for this deliverable.', 'error');
+      return;
+    }
+    setDeliveryActionBusyById((current) => ({ ...current, [deliverableId]: true }));
+    try {
+      await revokeStorageDeliveryLink(linkId);
+      updateDeliverable(
+        deliverableId,
+        {
+          deliveryLinkRevokedAt: new Date().toISOString(),
+        },
+        actorName
+      );
+      setRefreshTick((value) => value + 1);
+      setMessage('Client link revoked.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Could not revoke link.', 'error');
+    } finally {
+      setDeliveryActionBusyById((current) => ({ ...current, [deliverableId]: false }));
+    }
   };
 
   const openDeliverableEditor = (deliverableId: string | '__new__') => {
@@ -1381,6 +1467,13 @@ const AdminProjectDetail: React.FC = () => {
               Quick Add Asset
             </button>
           </div>
+          {projectId && (
+            <ProjectAssetUploader
+              projectId={projectId}
+              canUpload={canEditAssetDeliverables}
+              onComplete={() => setRefreshTick((value) => value + 1)}
+            />
+          )}
           <div
             className={`rounded-xl divide-y ${
               isDark ? 'divide-zinc-800/80' : 'divide-zinc-200'
@@ -1647,10 +1740,43 @@ const AdminProjectDetail: React.FC = () => {
                       ) : (
                         d.referenceLink
                       )}
+                      {/^https?:\/\//i.test(d.referenceLink) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void navigator.clipboard?.writeText(d.referenceLink || '').then(() => {
+                              setMessage('Client link copied to clipboard.');
+                            });
+                          }}
+                          className="ml-2 text-[11px] underline text-zinc-300"
+                        >
+                          Copy
+                        </button>
+                      )}
                     </p>
                   )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2 min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void issueClientLink(d.id);
+                    }}
+                    disabled={!canIssueDeliveryLinks || deliveryActionBusyById[d.id]}
+                    className="rounded-md border border-zinc-700 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-zinc-100 disabled:opacity-50"
+                  >
+                    {deliveryActionBusyById[d.id] ? 'Working...' : 'Generate Client Link'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void revokeClientLink(d.id);
+                    }}
+                    disabled={!canIssueDeliveryLinks || !d.deliveryLinkIds?.length || deliveryActionBusyById[d.id]}
+                    className="rounded-md border border-red-800/70 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-red-300 disabled:opacity-50"
+                  >
+                    Revoke Link
+                  </button>
                   <select
                     value={d.status}
                     onChange={(e) => {
@@ -1707,6 +1833,30 @@ const AdminProjectDetail: React.FC = () => {
                   >
                     Delete
                   </button>
+                </div>
+                <div className="w-full min-w-0">
+                  {d.referenceLink && (
+                    <p className="text-[11px] text-zinc-500 break-all mt-1">
+                      Client link {d.deliveryLinkRevokedAt ? 'revoked' : 'active'}.
+                      {d.deliveryLinkExpiresAt ? ` Expires ${formatAdminDateTime(d.deliveryLinkExpiresAt)}.` : ''}
+                    </p>
+                  )}
+                  {(() => {
+                    const approvedAssetId = (d.linkedAssetIds || [])
+                      .map((id) => assets.find((a) => a.id === id))
+                      .find((a) => a && (a.status === 'approved' || a.status === 'delivered'))?.id;
+                    if (!approvedAssetId) return null;
+                    return (
+                      <div className="mt-2">
+                        <DeliveryLinksPanel
+                          assetId={approvedAssetId}
+                          versionId={d.approvedAssetVersionId}
+                          canRevoke={canIssueDeliveryLinks}
+                          refreshKey={refreshTick}
+                        />
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             ))

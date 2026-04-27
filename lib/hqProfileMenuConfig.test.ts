@@ -31,14 +31,14 @@ describe('showStaffSettingsLink', () => {
 });
 
 describe('settingsLandingPathForRole', () => {
-  it('routes admins to org settings root', () => {
-    expect(settingsLandingPathForRole(UserRole.ADMIN)).toBe('/hq/admin/settings');
+  it('routes admins to their profile sub-page', () => {
+    expect(settingsLandingPathForRole(UserRole.ADMIN)).toBe('/hq/admin/settings/profile');
   });
 
-  it('routes staff and project managers to integrations under staff settings', () => {
-    expect(settingsLandingPathForRole(UserRole.STAFF)).toBe('/hq/staff/settings/integrations');
+  it('routes staff and project managers to their profile sub-page', () => {
+    expect(settingsLandingPathForRole(UserRole.STAFF)).toBe('/hq/staff/settings/profile');
     expect(settingsLandingPathForRole(UserRole.PROJECT_MANAGER)).toBe(
-      '/hq/staff/settings/integrations',
+      '/hq/staff/settings/profile',
     );
   });
 

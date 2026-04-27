@@ -2,11 +2,15 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { CalendarPlus, Share2 } from 'lucide-react';
 import {
+  attachAssetToPlannerItem,
+  createProjectAsset,
   getProjectById,
+  getAssetsByProject,
   MOCK_ADMIN_PROJECTS,
   MOCK_PLANNER,
   PLANNER_COLUMN_LABEL,
   plannerStatusFromItem,
+  removeAssetFromPlannerItem,
   updatePlannerTask,
 } from '../../../data/adminMock';
 import { openGoogleCalendarInNewTab, payloadFromPlannerItem } from '../../../lib/calendarEvent';
@@ -18,6 +22,7 @@ import CalendarEventSheet from './CalendarEventSheet';
 import type { CalendarProjectOption } from './CalendarEventSheet';
 import PlannerCalendar from './PlannerCalendar';
 import type { PlannerBoardColumn, PlannerItem, PlannerTaskStatus } from '../../../types';
+import { createDefaultStoragePolicy } from '../../../lib/storagePolicy';
 
 const COLUMNS: PlannerBoardColumn[] = ['queue', 'active', 'post', 'client_review', 'complete'];
 
@@ -45,6 +50,7 @@ const AdminPlanner: React.FC = () => {
     initialView === 'list' || initialView === 'board' || initialView === 'calendar' ? initialView : 'calendar'
   );
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [attachmentMessage, setAttachmentMessage] = useState<string | null>(null);
   const [calendarContext, setCalendarContext] = useState<CalendarProjectOption | undefined>();
   const [calendarInitial, setCalendarInitial] = useState<{
     title?: string;
@@ -105,6 +111,7 @@ const AdminPlanner: React.FC = () => {
   }, []);
 
   const items = MOCK_PLANNER;
+  const defaultPolicy = createDefaultStoragePolicy(actorName);
 
   const board = useMemo(() => {
     const out: Record<PlannerBoardColumn, PlannerItem[]> = {
@@ -132,6 +139,67 @@ const AdminPlanner: React.FC = () => {
     },
     [actorName]
   );
+
+  const onAttachExisting = (task: PlannerItem, assetId: string) => {
+    const result = attachAssetToPlannerItem(task.id, assetId, actorName);
+    if (result.ok) {
+      setPlannerVersion((n) => n + 1);
+      setAttachmentMessage('Asset attached to planner item.');
+    } else {
+      setAttachmentMessage(result.error || 'Could not attach asset.');
+    }
+  };
+
+  const onDetachExisting = (task: PlannerItem, assetId: string) => {
+    const result = removeAssetFromPlannerItem(task.id, assetId, actorName);
+    if (result.ok) {
+      setPlannerVersion((n) => n + 1);
+      setAttachmentMessage('Attachment removed.');
+    } else {
+      setAttachmentMessage(result.error || 'Could not remove attachment.');
+    }
+  };
+
+  const onUploadLightweight = async (task: PlannerItem, file: File | null) => {
+    if (!file) return;
+    const isImage = file.type.startsWith('image/');
+    const isDoc = file.type.startsWith('application/') || file.type === 'text/plain';
+    if (!isImage && !isDoc) {
+      setAttachmentMessage('Only lightweight image or document uploads are supported here.');
+      return;
+    }
+    const maxMb = isImage ? defaultPolicy.maxSizeByMimeGroup.imageMb : defaultPolicy.maxSizeByMimeGroup.documentMb;
+    const sizeMb = file.size / (1024 * 1024);
+    if (sizeMb > maxMb) {
+      setAttachmentMessage(`File exceeds policy limit (${maxMb}MB).`);
+      return;
+    }
+    const created = createProjectAsset(
+      {
+        projectId: task.projectId,
+        label: file.name,
+        version: 'v0.1',
+        type: isImage ? 'still' : 'doc',
+        sourceType: 'upload',
+        status: 'internal',
+        clientVisible: false,
+        notes: 'Planner lightweight upload',
+        storage: {
+          filename: file.name,
+          mimeType: file.type,
+          sizeBytes: file.size,
+        },
+      },
+      actorName
+    );
+    const attachResult = attachAssetToPlannerItem(task.id, created.id, actorName);
+    if (attachResult.ok) {
+      setPlannerVersion((n) => n + 1);
+      setAttachmentMessage('Lightweight attachment uploaded and linked.');
+    } else {
+      setAttachmentMessage(attachResult.error || 'Uploaded but could not attach file.');
+    }
+  };
 
   return (
     <div className="max-w-[1200px] min-w-0 space-y-5">
@@ -179,6 +247,9 @@ const AdminPlanner: React.FC = () => {
           </div>
         </div>
       </div>
+      {attachmentMessage && (
+        <p className={`text-xs ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>{attachmentMessage}</p>
+      )}
 
       {view === 'list' && (
         <div className={`rounded-xl overflow-x-auto min-w-0 ${appPanelClass(isDark)}`}>
@@ -198,6 +269,7 @@ const AdminPlanner: React.FC = () => {
                 <th className="text-left px-3 py-2">Assignee</th>
                 <th className="text-left px-3 py-2">Due</th>
                 <th className="text-left px-3 py-2">Priority</th>
+                <th className="text-left px-3 py-2">Attachments</th>
                 <th className="text-left px-3 py-2 whitespace-nowrap">Calendar</th>
               </tr>
             </thead>
@@ -265,6 +337,63 @@ const AdminPlanner: React.FC = () => {
                     }`}
                   >
                     {t.priority}
+                  </td>
+                  <td className="px-3 py-2.5 min-w-0">
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap gap-1">
+                        {(t.attachmentAssetIds || []).map((assetId) => {
+                          const asset = getAssetsByProject(t.projectId).find((item) => item.id === assetId);
+                          return (
+                            <button
+                              key={assetId}
+                              type="button"
+                              onClick={() => onDetachExisting(t, assetId)}
+                              className={`text-[10px] rounded px-1.5 py-0.5 border ${
+                                asset
+                                  ? isDark
+                                    ? 'border-zinc-700 text-zinc-300'
+                                    : 'border-zinc-300 text-zinc-700'
+                                  : 'border-rose-600 text-rose-400'
+                              }`}
+                              title={asset ? 'Remove attachment' : 'Stale reference. Click to remove.'}
+                            >
+                              {asset ? asset.label : `Stale ${assetId}`}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        <select
+                          onChange={(e) => {
+                            const id = e.target.value;
+                            if (!id) return;
+                            onAttachExisting(t, id);
+                            e.currentTarget.value = '';
+                          }}
+                          className={
+                            isDark
+                              ? 'rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-200'
+                              : 'rounded border border-zinc-300 bg-white px-1.5 py-0.5 text-[10px] text-zinc-900'
+                          }
+                        >
+                          <option value="">Attach existing</option>
+                          {getAssetsByProject(t.projectId).map((asset) => (
+                            <option key={asset.id} value={asset.id}>
+                              {asset.label}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          type="file"
+                          accept=".pdf,.doc,.docx,.txt,image/*"
+                          onChange={(e) => {
+                            void onUploadLightweight(t, e.target.files?.[0] || null);
+                            e.currentTarget.value = '';
+                          }}
+                          className="text-[10px] max-w-[180px]"
+                        />
+                      </div>
+                    </div>
                   </td>
                   <td className={`px-3 py-2.5 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>
                     <div className="flex flex-wrap items-center gap-1">

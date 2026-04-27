@@ -17,18 +17,21 @@ import {
 } from 'lucide-react';
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import {
+  MOCK_STORAGE_OPS_EVENTS,
   createPlannerTask,
   createShoot,
-  getCommandStats,
   MOCK_ADMIN_PROJECTS,
   MOCK_ACTIVITY,
   MOCK_ASSETS,
   MOCK_CREW,
-  MOCK_INVOICES_ADMIN,
   MOCK_PLANNER,
   MOCK_SHOOTS_ADMIN,
+  retryStorageOperation,
+  revokeStorageOpsLink,
+  recordStorageOpsEvent,
 } from '../../../data/adminMock';
 import { createClient } from '../../../data/adminProjectsApi';
+import { getFinanceDashboardMetrics } from '../../../data/financeApi';
 import { useAdminTheme } from '../../../lib/adminTheme';
 import { useAuth } from '../../../lib/auth';
 import { hasHqFeatureAccess } from '../../../lib/hqAccess';
@@ -51,15 +54,6 @@ import { columnLabel, formatAdminDate, formatAdminDateTime } from './adminFormat
 import AdminProjectWizard from './AdminProjectWizard';
 import AdminFormDrawer from './AdminFormDrawer';
 import ClientProfileForm, { EMPTY_CLIENT_PROFILE_DRAFT, type ClientProfileDraft } from './ClientProfileForm';
-
-const revenueData = [
-  { name: 'Jan', revenue: 40000 },
-  { name: 'Feb', revenue: 30000 },
-  { name: 'Mar', revenue: 55000 },
-  { name: 'Apr', revenue: 48000 },
-  { name: 'May', revenue: 70000 },
-  { name: 'Jun', revenue: 62000 },
-];
 
 const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
@@ -157,7 +151,17 @@ const AdminCommand: React.FC = () => {
     return () => window.clearTimeout(timer);
   }, [status]);
 
-  const stats = getCommandStats();
+  const financeMetrics = useMemo(() => getFinanceDashboardMetrics(), [refreshTick]);
+  const stats = useMemo(
+    () => ({
+      activeProjects: MOCK_ADMIN_PROJECTS.filter((project) => project.status === 'active').length,
+      revenueYtd: financeMetrics.revenueYtd,
+      outstanding: financeMetrics.openArTotal,
+      pendingApprovals: MOCK_ASSETS.filter((asset) => asset.status === 'client_review').length,
+      urgentTasks: MOCK_PLANNER.filter((task) => !task.done && task.priority === 'urgent').length,
+    }),
+    [financeMetrics, refreshTick]
+  );
 
   const urgent = useMemo(
     () => MOCK_PLANNER.filter((t) => !t.done && t.priority === 'urgent').slice(0, 4),
@@ -174,7 +178,18 @@ const AdminCommand: React.FC = () => {
     [refreshTick]
   );
 
-  const overdue = useMemo(() => MOCK_INVOICES_ADMIN.filter((i) => i.status === 'overdue'), [refreshTick]);
+  const overdue = useMemo(() => financeMetrics.overdueInvoices, [financeMetrics]);
+  const storageOpsEvents = useMemo(() => MOCK_STORAGE_OPS_EVENTS.slice(0, 8), [refreshTick]);
+  const quotaSnapshot = useMemo(
+    () => ({
+      projectsGb: 412,
+      deliverablesGb: 96,
+      plannerGb: 8,
+      financeGb: 24,
+      crewGb: 11,
+    }),
+    []
+  );
 
   const weekData = useMemo(() => {
     const start = startOfWeekSun(new Date());
@@ -298,6 +313,32 @@ const AdminCommand: React.FC = () => {
     }
   };
 
+  const onRetryStorageEvent = (eventId: string) => {
+    const result = retryStorageOperation(eventId, user?.displayName || user?.email || 'Admin');
+    if (!result.ok) {
+      setStatus({ tone: 'error', message: result.error || 'Could not retry storage operation.' });
+      return;
+    }
+    setRefreshTick((value) => value + 1);
+    setStatus({ tone: 'ok', message: 'Retry queued and logged.' });
+  };
+
+  const onRevokeStorageLink = (eventId: string) => {
+    const result = revokeStorageOpsLink(eventId, user?.displayName || user?.email || 'Admin');
+    if (!result.ok) {
+      setStatus({ tone: 'error', message: result.error || 'Could not revoke link.' });
+      return;
+    }
+    recordStorageOpsEvent({
+      eventType: 'link_revoked',
+      actorName: user?.displayName || user?.email || 'Admin',
+      tenantId: 'torp-default',
+      details: `Manual revoke from command center for ${eventId}`,
+    });
+    setRefreshTick((value) => value + 1);
+    setStatus({ tone: 'ok', message: 'Link revoke action logged.' });
+  };
+
   return (
     <div className="space-y-8 max-w-7xl min-w-0">
       <p className={`text-sm min-w-0 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
@@ -397,7 +438,7 @@ const AdminCommand: React.FC = () => {
           <Link to="/hq/admin/financials" className={`p-5 rounded-xl transition-colors block ${appKpiLinkClass(isDark)}`}>
             <div className="flex items-start justify-between">
               <div>
-                <p className={`text-xs mb-1 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>Revenue (YTD, sample)</p>
+                <p className={`text-xs mb-1 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>Revenue (YTD)</p>
                 <p className={appKpiValueClass(isDark)}>${(stats.revenueYtd / 1000).toFixed(0)}k</p>
               </div>
               <div className={appIconWellClass(isDark)}>
@@ -412,7 +453,7 @@ const AdminCommand: React.FC = () => {
           <div className={`p-5 rounded-xl opacity-60 ${appKpiLinkClass(isDark, false)}`}>
             <div className="flex items-start justify-between">
               <div>
-                <p className={`text-xs mb-1 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>Revenue (YTD, sample)</p>
+                <p className={`text-xs mb-1 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>Revenue (YTD)</p>
                 <p className={appKpiValueClass(isDark)}>${(stats.revenueYtd / 1000).toFixed(0)}k</p>
               </div>
               <div className={appIconWellClass(isDark)}>
@@ -539,10 +580,10 @@ const AdminCommand: React.FC = () => {
           className={`rounded-xl p-5 h-72 ${isDark ? 'bg-zinc-900/40 border border-zinc-800' : 'bg-white border border-zinc-200'}`}
         >
           <h3 className={`text-sm font-semibold mb-4 ${isDark ? 'text-white' : 'text-zinc-900'}`}>
-            Revenue trajectory (sample)
+            Revenue trajectory
           </h3>
           <ResponsiveContainer width="100%" height="85%">
-            <AreaChart data={revenueData}>
+            <AreaChart data={financeMetrics.monthlyRevenue}>
               <defs>
                 <linearGradient id="cRev" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#e4e4e7" stopOpacity={0.12} />
@@ -716,6 +757,78 @@ const AdminCommand: React.FC = () => {
               </span>
             </Link>
           ))}
+        </div>
+      </div>
+
+      <div className={`rounded-xl p-4 min-w-0 ${appPanelClass(isDark)}`}>
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+          <h3 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-zinc-900'}`}>Storage ops lite</h3>
+          <p className={`text-xs ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>
+            Quota snapshot and recent storage events.
+          </p>
+        </div>
+        <div className="mt-3 grid grid-cols-2 md:grid-cols-5 gap-2 min-w-0">
+          <div className={`rounded-md p-2 ${isDark ? 'bg-zinc-950/70' : 'bg-zinc-100'}`}>
+            <p className="text-[10px] uppercase text-zinc-500">Projects</p>
+            <p className={`text-sm font-bold ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>{quotaSnapshot.projectsGb} GB</p>
+          </div>
+          <div className={`rounded-md p-2 ${isDark ? 'bg-zinc-950/70' : 'bg-zinc-100'}`}>
+            <p className="text-[10px] uppercase text-zinc-500">Deliverables</p>
+            <p className={`text-sm font-bold ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>{quotaSnapshot.deliverablesGb} GB</p>
+          </div>
+          <div className={`rounded-md p-2 ${isDark ? 'bg-zinc-950/70' : 'bg-zinc-100'}`}>
+            <p className="text-[10px] uppercase text-zinc-500">Planner</p>
+            <p className={`text-sm font-bold ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>{quotaSnapshot.plannerGb} GB</p>
+          </div>
+          <div className={`rounded-md p-2 ${isDark ? 'bg-zinc-950/70' : 'bg-zinc-100'}`}>
+            <p className="text-[10px] uppercase text-zinc-500">Finance</p>
+            <p className={`text-sm font-bold ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>{quotaSnapshot.financeGb} GB</p>
+          </div>
+          <div className={`rounded-md p-2 ${isDark ? 'bg-zinc-950/70' : 'bg-zinc-100'}`}>
+            <p className="text-[10px] uppercase text-zinc-500">Crew</p>
+            <p className={`text-sm font-bold ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>{quotaSnapshot.crewGb} GB</p>
+          </div>
+        </div>
+        <div className={`mt-3 rounded-lg overflow-x-auto ${isDark ? 'border border-zinc-800' : 'border border-zinc-200'}`}>
+          <table className="w-full min-w-[760px] text-xs">
+            <thead className={isDark ? 'bg-zinc-950/60 text-zinc-500' : 'bg-zinc-100 text-zinc-600'}>
+              <tr>
+                <th className="text-left px-2 py-1.5">Type</th>
+                <th className="text-left px-2 py-1.5">Asset</th>
+                <th className="text-left px-2 py-1.5">Details</th>
+                <th className="text-left px-2 py-1.5">Timestamp</th>
+                <th className="text-left px-2 py-1.5">Actions</th>
+              </tr>
+            </thead>
+            <tbody className={isDark ? 'divide-y divide-zinc-800/80' : 'divide-y divide-zinc-200'}>
+              {storageOpsEvents.map((event) => (
+                <tr key={event.id}>
+                  <td className="px-2 py-1.5">{event.eventType}</td>
+                  <td className="px-2 py-1.5">{event.assetId || '—'}</td>
+                  <td className="px-2 py-1.5">{event.details || event.errorCode || '—'}</td>
+                  <td className="px-2 py-1.5">{formatAdminDateTime(event.timestamp)}</td>
+                  <td className="px-2 py-1.5">
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => onRetryStorageEvent(event.id)}
+                        className="rounded border border-zinc-700 px-1.5 py-0.5"
+                      >
+                        Retry
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onRevokeStorageLink(event.id)}
+                        className="rounded border border-red-800/70 px-1.5 py-0.5 text-red-300"
+                      >
+                        Revoke
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 

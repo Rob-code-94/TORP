@@ -20,6 +20,17 @@ const ClientView: React.FC = () => {
     ? 'bg-zinc-950 p-3 rounded border border-zinc-800'
     : 'bg-zinc-100 p-3 rounded border border-zinc-200';
   const commentText = isDark ? 'text-sm text-zinc-300' : 'text-sm text-zinc-700';
+  const deliveryStates: Array<{
+    id: string;
+    label: string;
+    version: string;
+    state: 'loading' | 'accessible' | 'expired' | 'revoked' | 'not-authorized';
+    expiresAt?: string;
+  }> = [
+    { id: 'd-active', label: 'Blacktop 60s Master', version: 'v1.2', state: 'accessible', expiresAt: '2026-04-30T16:00:00Z' },
+    { id: 'd-expired', label: 'Social Cutdown 15s', version: 'v1.0', state: 'expired', expiresAt: '2026-04-20T11:00:00Z' },
+    { id: 'd-revoked', label: 'Podcast Promo Set', version: 'v2.1', state: 'revoked' },
+  ];
 
   return (
     <div className="max-w-5xl min-w-0">
@@ -45,7 +56,43 @@ const ClientView: React.FC = () => {
       </div>
 
       {activeTab === 'approvals' ? (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 min-w-0">
+        <div className="space-y-6 min-w-0">
+          <section className={`rounded-lg p-4 min-w-0 ${appPanelClass(isDark)}`}>
+            <h3 className={`text-sm font-bold ${isDark ? 'text-white' : 'text-zinc-900'}`}>Delivery access</h3>
+            <p className={`mt-1 text-xs ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+              Signed links are time-bound. If a link is expired or revoked, request a new share from your producer.
+            </p>
+            <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 min-w-0">
+              {deliveryStates.map((item) => (
+                <div key={item.id} className={`rounded-md border p-3 min-w-0 ${
+                  isDark ? 'border-zinc-800 bg-zinc-900/40' : 'border-zinc-200 bg-zinc-50'
+                }`}>
+                  <p className={`text-sm font-semibold break-words ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>{item.label}</p>
+                  <p className="text-xs text-zinc-500 mt-1">Version {item.version}</p>
+                  <p className={`text-xs mt-2 ${
+                    item.state === 'accessible'
+                      ? 'text-emerald-400'
+                      : item.state === 'expired'
+                        ? 'text-amber-400'
+                        : item.state === 'revoked'
+                          ? 'text-rose-400'
+                          : 'text-zinc-400'
+                  }`}>
+                    {item.state === 'accessible' && 'Accessible'}
+                    {item.state === 'expired' && 'Expired'}
+                    {item.state === 'revoked' && 'Revoked'}
+                    {item.state === 'loading' && 'Loading'}
+                    {item.state === 'not-authorized' && 'Not authorized'}
+                  </p>
+                  {item.expiresAt && (
+                    <p className="text-[11px] text-zinc-500 mt-1">Expires {new Date(item.expiresAt).toLocaleString()}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 min-w-0">
           <div className="lg:col-span-2 space-y-4 min-w-0">
             <div
               className={`relative aspect-video bg-black rounded-lg overflow-hidden group border shadow-2xl ${
@@ -132,6 +179,7 @@ const ClientView: React.FC = () => {
               </button>
             </div>
           </div>
+        </div>
         </div>
       ) : (
         <div className="space-y-4 min-w-0">

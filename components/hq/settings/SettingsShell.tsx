@@ -39,24 +39,21 @@ function tabsForVariant(variant: SettingsShellProps['variant']): SettingsTab[] {
       label: 'Profile',
       to: `${root}/profile`,
       icon: <User size={16} className="shrink-0" />,
-      available: false,
-      badge: 'Coming soon',
+      available: true,
     },
     {
       id: 'notifications',
       label: 'Notifications',
       to: `${root}/notifications`,
       icon: <Bell size={16} className="shrink-0" />,
-      available: false,
-      badge: 'Coming soon',
+      available: true,
     },
     {
       id: 'security',
       label: 'Security',
       to: `${root}/security`,
       icon: <Shield size={16} className="shrink-0" />,
-      available: false,
-      badge: 'Coming soon',
+      available: true,
     },
     ...(isAdmin
       ? [

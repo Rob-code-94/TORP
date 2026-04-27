@@ -6,7 +6,9 @@ import TrustTicker from './TrustTicker';
 import WorkGrid from './WorkGrid';
 import ProjectDetail from './ProjectDetail';
 import ContactModal from './ContactModal';
+import ShowcaseStrip from './ShowcaseStrip';
 import { PROJECTS } from '../../constants';
+import { listShowcaseAssets, type ShowcaseAsset } from '../../data/showcaseRepository';
 
 function getWorkSlugFromHash(): string | null {
   const raw = window.location.hash.replace(/^#/, '');
@@ -18,6 +20,7 @@ function getWorkSlugFromHash(): string | null {
 const Landing: React.FC = () => {
   const [showContact, setShowContact] = useState(false);
   const [, setHashTick] = useState(0);
+  const [showcaseItems, setShowcaseItems] = useState<ShowcaseAsset[]>([]);
 
   useEffect(() => {
     const onHash = () => setHashTick((n) => n + 1);
@@ -54,6 +57,22 @@ const Landing: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    let mounted = true;
+    void listShowcaseAssets('torp-default')
+      .then((rows) => {
+        if (!mounted) return;
+        setShowcaseItems(rows.filter((row) => row.visible));
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setShowcaseItems([]);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 selection:bg-white selection:text-black">
       {activeWork && (
@@ -68,6 +87,7 @@ const Landing: React.FC = () => {
       <div className={activeWork ? 'hidden' : ''} aria-hidden={!!activeWork}>
         <Hero />
         <TrustTicker />
+        <ShowcaseStrip items={showcaseItems} />
         <WorkGrid onSelect={openWork} />
 
         <section className="py-32 px-4 md:px-12 bg-zinc-950 border-t border-zinc-900">
