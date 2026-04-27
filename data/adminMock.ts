@@ -332,6 +332,9 @@ export const MOCK_PLANNER: PlannerItem[] = [
     column: 'client_review',
     priority: 'urgent',
     dueDate: '2025-04-01',
+    startTime: '13:00',
+    endTime: '14:30',
+    allDay: false,
     assigneeCrewId: 'cr-3',
     assigneeName: 'J. Park',
     done: false,
@@ -361,6 +364,9 @@ export const MOCK_PLANNER: PlannerItem[] = [
     column: 'active',
     priority: 'high',
     dueDate: '2025-04-10',
+    startTime: '09:00',
+    endTime: '11:00',
+    allDay: false,
     assigneeCrewId: 'cr-2',
     assigneeName: 'M. Reyes',
     done: false,
@@ -403,6 +409,9 @@ export const MOCK_PLANNER: PlannerItem[] = [
     column: 'queue',
     priority: 'high',
     dueDate: '2025-04-12',
+    startTime: '15:30',
+    endTime: '16:00',
+    allDay: false,
     assigneeCrewId: 'cr-1',
     assigneeName: 'A. Vance',
     done: false,
@@ -566,6 +575,7 @@ export const MOCK_SHOOTS_ADMIN: AdminShoot[] = [
     title: 'Court night 1',
     date: '2025-04-20',
     callTime: '17:00',
+    endTime: '23:00',
     location: 'Exterior blacktop, Chicago',
     crew: ['M. Reyes', 'A. Vance'],
     crewIds: ['cr-2', 'cr-1'],
@@ -579,6 +589,7 @@ export const MOCK_SHOOTS_ADMIN: AdminShoot[] = [
     title: 'B-roll: neighborhoods',
     date: '2025-04-10',
     callTime: '08:00',
+    endTime: '15:00',
     location: 'Downtown + suburbs',
     crew: ['M. Reyes', 'J. Park'],
     crewIds: ['cr-2', 'cr-3'],
@@ -1497,14 +1508,39 @@ export function updatePlannerTask(taskId: string, patch: Partial<PlannerItem>, a
     nextPatch.column = mapped.column;
     nextPatch.done = mapped.done;
   }
+  /** Detect schedule-only changes so the activity feed can show a focused entry. */
+  const scheduleKeys: (keyof PlannerItem)[] = ['dueDate', 'startTime', 'endTime', 'allDay'];
+  const beforeSchedule = {
+    dueDate: item.dueDate,
+    startTime: item.startTime,
+    endTime: item.endTime,
+    allDay: item.allDay,
+  };
   Object.assign(item, nextPatch);
-  pushActivity({
-    projectId: item.projectId,
-    entityType: 'planner',
-    entityLabel: item.title,
-    actorName,
-    action: 'updated task',
-  });
+  const scheduleChanged = scheduleKeys.some((k) => k in nextPatch && nextPatch[k] !== beforeSchedule[k as keyof typeof beforeSchedule]);
+  const onlyScheduleChanged =
+    scheduleChanged &&
+    Object.keys(nextPatch).every((k) => (scheduleKeys as string[]).includes(k));
+  if (onlyScheduleChanged) {
+    const action = item.allDay || !item.startTime
+      ? `planner.itemRescheduled · all day · ${item.dueDate}`
+      : `planner.itemRescheduled · ${item.startTime}${item.endTime ? '–' + item.endTime : ''} · ${item.dueDate}`;
+    pushActivity({
+      projectId: item.projectId,
+      entityType: 'planner',
+      entityLabel: item.title,
+      actorName,
+      action,
+    });
+  } else {
+    pushActivity({
+      projectId: item.projectId,
+      entityType: 'planner',
+      entityLabel: item.title,
+      actorName,
+      action: scheduleChanged ? 'updated task and rescheduled' : 'updated task',
+    });
+  }
   return { ok: true };
 }
 

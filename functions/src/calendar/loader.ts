@@ -38,6 +38,9 @@ interface PlannerDoc {
   projectTitle?: string;
   title?: string;
   dueDate?: string;
+  startTime?: string;
+  endTime?: string;
+  allDay?: boolean;
   assigneeCrewIds?: string[];
   type?: string;
 }
@@ -144,17 +147,42 @@ export async function loadCrewEvents(uid: string): Promise<SyncEventPayload[]> {
     for (const snap of planner.docs) {
       const p = snap.data() as PlannerDoc;
       if (!p.dueDate) continue;
-      const startIso = isoFromYmdHm(p.dueDate, '00:00');
-      const end = new Date(startIso);
-      end.setUTCDate(end.getUTCDate() + 1);
-      events.push({
-        title: p.title ?? 'Task',
-        startIso,
-        endIso: end.toISOString(),
-        allDay: true,
-        description: [p.projectTitle, p.type].filter(Boolean).join(' · '),
-        torpEntityKey: `planner:${snap.id}`,
-      });
+      const isTimed = !p.allDay && Boolean(p.startTime);
+      if (isTimed && p.startTime) {
+        const startIso = isoFromYmdHm(p.dueDate, p.startTime);
+        const endIso = p.endTime
+          ? (() => {
+              const start = new Date(startIso);
+              const [eh, em] = p.endTime.split(':').map((s) => Number.parseInt(s, 10));
+              start.setUTCHours(eh || 0, em || 0, 0, 0);
+              return start.toISOString();
+            })()
+          : (() => {
+              const start = new Date(startIso);
+              start.setUTCMinutes(start.getUTCMinutes() + 30);
+              return start.toISOString();
+            })();
+        events.push({
+          title: p.title ?? 'Task',
+          startIso,
+          endIso,
+          allDay: false,
+          description: [p.projectTitle, p.type].filter(Boolean).join(' · '),
+          torpEntityKey: `planner:${snap.id}`,
+        });
+      } else {
+        const startIso = isoFromYmdHm(p.dueDate, '00:00');
+        const end = new Date(startIso);
+        end.setUTCDate(end.getUTCDate() + 1);
+        events.push({
+          title: p.title ?? 'Task',
+          startIso,
+          endIso: end.toISOString(),
+          allDay: true,
+          description: [p.projectTitle, p.type].filter(Boolean).join(' · '),
+          torpEntityKey: `planner:${snap.id}`,
+        });
+      }
     }
   }
 

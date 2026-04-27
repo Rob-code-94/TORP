@@ -107,6 +107,35 @@ function meetingPayload(id: string, data: Record<string, unknown>): SyncEventPay
 function plannerPayload(id: string, data: Record<string, unknown>): SyncEventPayload | null {
   const due = data.dueDate as string | undefined;
   if (!due) return null;
+  const startTime = data.startTime as string | undefined;
+  const endTime = data.endTime as string | undefined;
+  const allDay = Boolean(data.allDay);
+  const isTimed = !allDay && Boolean(startTime);
+  const description = [data.projectTitle as string | undefined, data.type as string | undefined]
+    .filter(Boolean)
+    .join(' · ');
+  if (isTimed && startTime) {
+    const startIso = isoFromYmdHm(due, startTime);
+    let endIso: string;
+    if (endTime) {
+      const e = new Date(startIso);
+      const [eh, em] = endTime.split(':').map((s) => Number.parseInt(s, 10));
+      e.setUTCHours(eh || 0, em || 0, 0, 0);
+      endIso = e.toISOString();
+    } else {
+      const e = new Date(startIso);
+      e.setUTCMinutes(e.getUTCMinutes() + 30);
+      endIso = e.toISOString();
+    }
+    return {
+      title: (data.title as string | undefined) ?? 'Task',
+      startIso,
+      endIso,
+      allDay: false,
+      description,
+      torpEntityKey: `planner:${id}`,
+    };
+  }
   const startIso = isoFromYmdHm(due, '00:00');
   const end = new Date(startIso);
   end.setUTCDate(end.getUTCDate() + 1);
@@ -115,9 +144,7 @@ function plannerPayload(id: string, data: Record<string, unknown>): SyncEventPay
     startIso,
     endIso: end.toISOString(),
     allDay: true,
-    description: [data.projectTitle as string | undefined, data.type as string | undefined]
-      .filter(Boolean)
-      .join(' · '),
+    description,
     torpEntityKey: `planner:${id}`,
   };
 }

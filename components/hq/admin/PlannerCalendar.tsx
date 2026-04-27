@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CalendarPlus, ChevronLeft, ChevronRight } from 'lucide-react';
-import type { PlannerItem } from '../../../types';
+import type { AdminMeeting, AdminShoot, PlannerItem } from '../../../types';
 import { useAdminTheme } from '../../../lib/adminTheme';
 import { columnLabel, formatAdminDate, typeLabel } from './adminFormat';
 import {
@@ -71,16 +71,81 @@ function monthTitle(d: Date) {
 
 interface PlannerCalendarProps {
   items: PlannerItem[];
+  /** Shoots to render in the day-view gutter as positioned blocks. */
+  shoots?: AdminShoot[];
+  /** Meetings to render in the day-view gutter as positioned blocks. */
+  meetings?: AdminMeeting[];
   onAddToGoogle?: (item: PlannerItem) => void;
   onOpenCalendarSheet?: (item: PlannerItem) => void;
+  /** Open the time drawer for a planner task. Use this for click + mobile entry. */
+  onScheduleItem?: (item: PlannerItem) => void;
+  /** Optional drag-to-reschedule. When set, gated on `canEditPlannerItem` upstream. */
+  onRescheduleItem?: (
+    item: PlannerItem,
+    next: { dueDate: string; startTime?: string; endTime?: string; allDay?: boolean }
+  ) => void;
   initialMode?: CalMode;
   initialCursorYmd?: string;
 }
 
+type GutterEventKind = 'shoot' | 'meeting' | 'task';
+
+interface GutterEvent {
+  id: string;
+  kind: GutterEventKind;
+  startMin: number;
+  endMin: number;
+  title: string;
+  subtitle?: string;
+  /** When set, hovering the block exposes a follow-link target. */
+  href?: string;
+  /** Used for drag-to-reschedule. */
+  task?: PlannerItem;
+}
+
+function hmToMinutes(hm: string | undefined | null): number | null {
+  if (!hm) return null;
+  const [h, m] = hm.split(':').map((s) => Number.parseInt(s, 10));
+  if (!Number.isFinite(h)) return null;
+  const minutes = (h || 0) * 60 + (Number.isFinite(m) ? m : 0);
+  if (minutes < 0 || minutes > 24 * 60) return null;
+  return minutes;
+}
+
+function minutesToHm(min: number): string {
+  const clamped = Math.max(0, Math.min(24 * 60 - 1, Math.round(min)));
+  const h = Math.floor(clamped / 60);
+  const m = clamped % 60;
+  return `${pad2(h)}:${pad2(m)}`;
+}
+
+function formatHourLabel(hour: number): string {
+  if (hour === 0) return '12am';
+  if (hour < 12) return `${hour}am`;
+  if (hour === 12) return '12pm';
+  return `${hour - 12}pm`;
+}
+
+function formatTimeRange(startMin: number, endMin: number): string {
+  return `${formatTime(startMin)} – ${formatTime(endMin)}`;
+}
+
+function formatTime(min: number): string {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  const hour12 = ((h + 11) % 12) + 1;
+  const ampm = h < 12 ? 'a' : 'p';
+  return m === 0 ? `${hour12}${ampm}` : `${hour12}:${pad2(m)}${ampm}`;
+}
+
 const PlannerCalendar: React.FC<PlannerCalendarProps> = ({
   items,
+  shoots,
+  meetings,
   onAddToGoogle,
   onOpenCalendarSheet,
+  onScheduleItem,
+  onRescheduleItem,
   initialMode,
   initialCursorYmd,
 }) => {
@@ -239,15 +304,236 @@ const PlannerCalendar: React.FC<PlannerCalendarProps> = ({
           })()
         : longTitle(cursor);
 
-  const HOURS = useMemo(
-    () => Array.from({ length: 12 }, (_, i) => 8 + i), // 8:00 – 19:00 visual slot end
-    []
+  const cursorYmd = toYMD(startOfDay(cursor));
+
+  /** Build positioned gutter events for the visible day from items + shoots + meetings. */
+  const gutterEvents = useMemo<GutterEvent[]>(() => {
+    if (mode !== 'day') return [];
+    const out: GutterEvent[] = [];
+    const DEFAULT_SHOOT_MIN = 8 * 60;
+    const DEFAULT_MEETING_MIN = 60;
+    const DEFAULT_TASK_MIN = 30;
+    for (const s of shoots ?? []) {
+      if (s.date !== cursorYmd) continue;
+      const start = hmToMinutes(s.callTime);
+      if (start == null) continue;
+      const end = Math.min(24 * 60, hmToMinutes(s.endTime) ?? start + DEFAULT_SHOOT_MIN);
+      out.push({
+        id: `shoot:${s.id}`,
+        kind: 'shoot',
+        startMin: start,
+        endMin: Math.max(end, start + 30),
+        title: s.title,
+        subtitle: s.projectTitle,
+        href: `/hq/admin/projects/${s.projectId}`,
+      });
+    }
+    for (const m of meetings ?? []) {
+      if (m.date !== cursorYmd) continue;
+      const start = hmToMinutes(m.startTime);
+      if (start == null) continue;
+      const end = Math.min(24 * 60, hmToMinutes(m.endTime) ?? start + DEFAULT_MEETING_MIN);
+      out.push({
+        id: `meeting:${m.id}`,
+        kind: 'meeting',
+        startMin: start,
+        endMin: Math.max(end, start + 15),
+        title: m.title,
+        subtitle: m.projectTitle,
+        href: `/hq/admin/projects/${m.projectId}`,
+      });
+    }
+    for (const t of items) {
+      if (t.dueDate !== cursorYmd) continue;
+      if (t.allDay) continue;
+      const start = hmToMinutes(t.startTime);
+      if (start == null) continue;
+      const end = Math.min(24 * 60, hmToMinutes(t.endTime) ?? start + DEFAULT_TASK_MIN);
+      out.push({
+        id: `task:${t.id}`,
+        kind: 'task',
+        startMin: start,
+        endMin: Math.max(end, start + 15),
+        title: t.title,
+        subtitle: t.projectTitle,
+        href: `/hq/admin/projects/${t.projectId}`,
+        task: t,
+      });
+    }
+    return out.sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
+  }, [mode, cursorYmd, items, shoots, meetings]);
+
+  /** Hour window auto-extends around event extents and Google busy bands; clamped 6am–11pm. */
+  const dayBusy = useMemo(
+    () => (mode === 'day' ? dayBusyForYmd(cursorYmd) : []),
+    [mode, cursorYmd, busyIntervals]
   );
+
+  const { startHour, endHour } = useMemo(() => {
+    const baseStart = 8;
+    const baseEnd = 19;
+    if (mode !== 'day') return { startHour: baseStart, endHour: baseEnd };
+    let minMin = baseStart * 60;
+    let maxMin = baseEnd * 60;
+    for (const e of gutterEvents) {
+      minMin = Math.min(minMin, e.startMin);
+      maxMin = Math.max(maxMin, e.endMin);
+    }
+    for (const b of dayBusy) {
+      const startOfDayMs = startOfDay(parseYMD(cursorYmd)).getTime();
+      const sMin = Math.max(0, Math.round((b.startMs - startOfDayMs) / 60000));
+      const eMin = Math.min(24 * 60, Math.round((b.endMs - startOfDayMs) / 60000));
+      minMin = Math.min(minMin, sMin);
+      maxMin = Math.max(maxMin, eMin);
+    }
+    return {
+      startHour: Math.max(6, Math.floor(minMin / 60) - 1),
+      endHour: Math.min(23, Math.ceil(maxMin / 60) + 1),
+    };
+  }, [mode, gutterEvents, dayBusy, cursorYmd]);
+
+  const HOURS = useMemo(() => {
+    if (mode !== 'day') return Array.from({ length: 12 }, (_, i) => 8 + i);
+    const span = Math.max(1, endHour - startHour);
+    return Array.from({ length: span }, (_, i) => startHour + i);
+  }, [mode, startHour, endHour]);
+
+  /** Lay out blocks in non-overlapping columns; returns a column index per event. */
+  const gutterLayout = useMemo(() => {
+    const map = new Map<string, { column: number; columns: number }>();
+    if (gutterEvents.length === 0) return map;
+    type Active = { id: string; endMin: number; column: number };
+    const sorted = [...gutterEvents].sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
+    let cluster: GutterEvent[] = [];
+    let active: Active[] = [];
+    let clusterMaxColumns = 0;
+    const flush = () => {
+      for (const ev of cluster) {
+        const existing = map.get(ev.id);
+        if (existing) map.set(ev.id, { column: existing.column, columns: clusterMaxColumns });
+      }
+      cluster = [];
+      clusterMaxColumns = 0;
+      active = [];
+    };
+    for (const ev of sorted) {
+      active = active.filter((a) => a.endMin > ev.startMin);
+      if (active.length === 0 && cluster.length > 0) flush();
+      const usedColumns = new Set(active.map((a) => a.column));
+      let column = 0;
+      while (usedColumns.has(column)) column += 1;
+      active.push({ id: ev.id, endMin: ev.endMin, column });
+      cluster.push(ev);
+      clusterMaxColumns = Math.max(clusterMaxColumns, column + 1);
+      map.set(ev.id, { column, columns: clusterMaxColumns });
+    }
+    flush();
+    return map;
+  }, [gutterEvents]);
+
+  /** Now-line position. Pauses when tab is hidden so we don't wake on minute boundaries needlessly. */
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    if (mode !== 'day') return;
+    let interval: ReturnType<typeof setInterval> | null = null;
+    const start = () => {
+      if (interval) return;
+      setNow(new Date());
+      interval = setInterval(() => setNow(new Date()), 60_000);
+    };
+    const stop = () => {
+      if (interval) clearInterval(interval);
+      interval = null;
+    };
+    const onVisibility = () => {
+      if (typeof document === 'undefined') return;
+      if (document.visibilityState === 'visible') start();
+      else stop();
+    };
+    if (typeof document === 'undefined' || document.visibilityState === 'visible') start();
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', onVisibility);
+    }
+    return () => {
+      stop();
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', onVisibility);
+      }
+    };
+  }, [mode]);
+
+  const isViewingToday = cursorYmd === todayYMD;
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const nowVisible =
+    mode === 'day' && isViewingToday && nowMin >= startHour * 60 && nowMin <= endHour * 60;
+
+  /** All-day strip = items dated for `cursor` with no startTime (or allDay=true). */
+  const allDayItems = useMemo(() => {
+    if (mode !== 'day') return [];
+    return items.filter(
+      (t) => t.dueDate === cursorYmd && (t.allDay || !t.startTime)
+    );
+  }, [mode, cursorYmd, items]);
+
+  /** Drag-to-reschedule (desktop only). */
+  const gutterRef = useRef<HTMLDivElement | null>(null);
+  const [dragState, setDragState] = useState<{
+    eventId: string;
+    durationMin: number;
+    proposedStartMin: number;
+  } | null>(null);
+
+  const beginDragTask = (ev: GutterEvent, pointerEvent: React.PointerEvent<HTMLElement>) => {
+    if (!onRescheduleItem || ev.kind !== 'task' || !ev.task) return;
+    if (pointerEvent.pointerType === 'touch') return;
+    pointerEvent.preventDefault();
+    const target = pointerEvent.currentTarget as HTMLElement;
+    target.setPointerCapture?.(pointerEvent.pointerId);
+    const duration = Math.max(15, ev.endMin - ev.startMin);
+    setDragState({ eventId: ev.id, durationMin: duration, proposedStartMin: ev.startMin });
+  };
+
+  const updateDragFromPointer = (clientY: number) => {
+    if (!dragState || !gutterRef.current) return;
+    const rect = gutterRef.current.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
+    const totalSpan = (endHour - startHour) * 60;
+    const rawMin = startHour * 60 + ratio * totalSpan;
+    const snapped = Math.round(rawMin / 15) * 15;
+    const clamped = Math.max(startHour * 60, Math.min(endHour * 60 - dragState.durationMin, snapped));
+    setDragState((prev) => (prev ? { ...prev, proposedStartMin: clamped } : prev));
+  };
+
+  const completeDrag = () => {
+    if (!dragState || !onRescheduleItem) {
+      setDragState(null);
+      return;
+    }
+    const event = gutterEvents.find((e) => e.id === dragState.eventId);
+    if (!event?.task) {
+      setDragState(null);
+      return;
+    }
+    const newStart = dragState.proposedStartMin;
+    const newEnd = newStart + dragState.durationMin;
+    if (newStart === event.startMin && newEnd === event.endMin) {
+      setDragState(null);
+      return;
+    }
+    onRescheduleItem(event.task, {
+      dueDate: event.task.dueDate,
+      startTime: minutesToHm(newStart),
+      endTime: minutesToHm(newEnd),
+    });
+    setDragState(null);
+  };
+
+  const cancelDrag = () => setDragState(null);
 
   return (
     <div className="space-y-4 w-full min-w-0 max-w-6xl overflow-x-hidden">
       <p className={`text-sm ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>
-        Month, week, and day grids — items are placed on their due date. Task times can be added in a later phase.
+        Month, week, and day grids — shoots and meetings render at their call/start time. Tasks with a time appear in the day schedule; date-only tasks live on the all-day strip.
       </p>
 
       <div
@@ -579,8 +865,23 @@ const PlannerCalendar: React.FC<PlannerCalendarProps> = ({
       )}
 
       {mode === 'day' && (() => {
-        const ymd = toYMD(startOfDay(cursor));
+        const ymd = cursorYmd;
         const list = getItemsForYmd(ymd);
+        const timedTaskIds = new Set(
+          gutterEvents.filter((e) => e.kind === 'task').map((e) => e.task?.id).filter(Boolean) as string[]
+        );
+        const totalSpanMin = (endHour - startHour) * 60;
+        const minutesToTopPct = (m: number) => ((m - startHour * 60) / totalSpanMin) * 100;
+        const draggedEvent = dragState
+          ? gutterEvents.find((e) => e.id === dragState.eventId)
+          : undefined;
+        const overlaysBusyBand = (s: number, e: number) =>
+          dayBusy.some((b) => {
+            const dayStartMs = startOfDay(parseYMD(ymd)).getTime();
+            const bs = Math.round((b.startMs - dayStartMs) / 60000);
+            const be = Math.round((b.endMs - dayStartMs) / 60000);
+            return s < be && bs < e;
+          });
         return (
           <div
             className={`border rounded-xl overflow-hidden ${
@@ -588,118 +889,362 @@ const PlannerCalendar: React.FC<PlannerCalendarProps> = ({
             }`}
           >
             <div
-              className={`px-4 py-2 border-b text-sm font-mono ${
+              className={`flex flex-wrap items-center justify-between gap-2 px-4 py-2 border-b text-sm font-mono ${
                 isDark
                   ? 'border-zinc-800/80 text-zinc-300 bg-zinc-900/30'
                   : 'border-zinc-200 text-zinc-800 bg-zinc-50'
               }`}
             >
-              {formatAdminDate(ymd)} · {getItemsForYmd(ymd).length} item(s)
+              <span>{formatAdminDate(ymd)} · {list.length} item(s)</span>
+              {gutterEvents.length > 0 && (
+                <span className={`text-[10px] uppercase tracking-wide font-semibold ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>
+                  {gutterEvents.length} scheduled
+                </span>
+              )}
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-[1fr,120px]">
+
+            {allDayItems.length > 0 && (
+              <div
+                className={`px-3 py-2 border-b ${
+                  isDark ? 'border-zinc-800/80 bg-zinc-900/20' : 'border-zinc-200 bg-zinc-50'
+                }`}
+              >
+                <div className="flex items-start gap-2 min-w-0">
+                  <span
+                    className={`text-[9px] font-bold uppercase tracking-widest shrink-0 pt-1 ${
+                      isDark ? 'text-zinc-500' : 'text-zinc-500'
+                    }`}
+                  >
+                    All day
+                  </span>
+                  <div className="flex flex-wrap gap-1.5 min-w-0">
+                    {allDayItems.slice(0, 6).map((t) => (
+                      <Link
+                        key={t.id}
+                        to={`/hq/admin/projects/${t.projectId}`}
+                        className={
+                          isDark
+                            ? 'inline-flex max-w-full items-center gap-1 rounded border border-zinc-700 bg-zinc-900/70 px-1.5 py-0.5 text-[10px] text-zinc-200 hover:border-zinc-500'
+                            : 'inline-flex max-w-full items-center gap-1 rounded border border-zinc-200 bg-white px-1.5 py-0.5 text-[10px] text-zinc-800 hover:border-zinc-400 shadow-sm'
+                        }
+                        title={`${t.title} · ${t.projectTitle}`}
+                      >
+                        <span className="truncate">{t.title}</span>
+                        <span className={`shrink-0 text-[9px] ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>
+                          · {t.projectTitle.split(':')[0]}
+                        </span>
+                      </Link>
+                    ))}
+                    {allDayItems.length > 6 && (
+                      <span className={`text-[10px] ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>
+                        +{allDayItems.length - 6} more
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(260px,320px)]">
               <div
                 className={`border-b md:border-b-0 md:border-r ${
                   isDark ? 'border-zinc-800/80' : 'border-zinc-200'
                 }`}
               >
                 {list.length === 0 && (
-                  <p className="p-4 text-sm text-zinc-500">No items due on this day.</p>
+                  <p className={`p-4 text-sm ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>
+                    No items due on this day.
+                  </p>
                 )}
-                <ul className="divide-y divide-zinc-800/80">
-                  {list.map((t) => (
-                    <li key={t.id} className="p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 min-w-0">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-white">{t.title}</p>
-                        <p className="text-xs text-zinc-500">
-                          <Link to={`/hq/admin/projects/${t.projectId}`} className="hover:underline text-zinc-300">
-                            {t.projectTitle}
-                          </Link>
-                        </p>
-                        <p className="text-[10px] text-zinc-600 mt-0.5">
-                          {t.assigneeName} · {t.priority}
-                        </p>
-                      </div>
-                      <div className="flex flex-col items-end gap-1 shrink-0 text-right">
-                        <div className="text-[10px] text-zinc-500">
-                          {typeLabel(t.type)}
-                          <br />
-                          {columnLabel(t.column)}
-                        </div>
-                        <div className="flex items-center gap-1">
-                          {onAddToGoogle && (
-                            <button
-                              type="button"
-                              onClick={() => onAddToGoogle(t)}
-                              className="inline-flex items-center gap-0.5 rounded border border-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-300 hover:bg-zinc-800"
+                <ul className={isDark ? 'divide-y divide-zinc-800/80' : 'divide-y divide-zinc-200'}>
+                  {list.map((t) => {
+                    const timed = timedTaskIds.has(t.id);
+                    return (
+                      <li key={t.id} className="p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 min-w-0">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                            <p className={`text-sm font-medium ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+                              {t.title}
+                            </p>
+                            {timed && (
+                              <span
+                                className={`text-[9px] font-bold uppercase tracking-wide rounded px-1 py-0.5 ${
+                                  isDark
+                                    ? 'border border-zinc-700 bg-zinc-900 text-zinc-300'
+                                    : 'border border-zinc-300 bg-white text-zinc-700'
+                                }`}
+                              >
+                                {t.startTime}
+                                {t.endTime ? `–${t.endTime}` : ''}
+                              </span>
+                            )}
+                            {!timed && (t.allDay || !t.startTime) && (
+                              <span
+                                className={`text-[9px] font-semibold uppercase tracking-wide rounded px-1 py-0.5 ${
+                                  isDark ? 'text-zinc-500' : 'text-zinc-500'
+                                }`}
+                              >
+                                All day
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-zinc-500">
+                            <Link
+                              to={`/hq/admin/projects/${t.projectId}`}
+                              className={isDark ? 'hover:underline text-zinc-300' : 'hover:underline text-zinc-700'}
                             >
-                              <CalendarPlus size={10} />
-                              GCal
-                            </button>
-                          )}
-                          {onOpenCalendarSheet && (
-                            <button
-                              type="button"
-                              onClick={() => onOpenCalendarSheet(t)}
-                              className="rounded border border-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-300 hover:bg-zinc-800"
-                            >
-                              Invite
-                            </button>
-                          )}
+                              {t.projectTitle}
+                            </Link>
+                          </p>
+                          <p className={`text-[10px] mt-0.5 ${isDark ? 'text-zinc-600' : 'text-zinc-500'}`}>
+                            {t.assigneeName} · {t.priority}
+                          </p>
                         </div>
-                      </div>
-                    </li>
-                  ))}
+                        <div className="flex flex-col items-start sm:items-end gap-1 shrink-0 text-left sm:text-right">
+                          <div className={`text-[10px] ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>
+                            {typeLabel(t.type)}
+                            <br />
+                            {columnLabel(t.column)}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            {onScheduleItem && (
+                              <button
+                                type="button"
+                                onClick={() => onScheduleItem(t)}
+                                className={
+                                  isDark
+                                    ? 'rounded border border-zinc-700 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-200 hover:bg-zinc-800'
+                                    : 'rounded border border-zinc-300 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-800 hover:bg-zinc-100'
+                                }
+                              >
+                                {timed ? 'Edit time' : 'Schedule'}
+                              </button>
+                            )}
+                            {onAddToGoogle && (
+                              <button
+                                type="button"
+                                onClick={() => onAddToGoogle(t)}
+                                className={
+                                  isDark
+                                    ? 'inline-flex items-center gap-0.5 rounded border border-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-300 hover:bg-zinc-800'
+                                    : 'inline-flex items-center gap-0.5 rounded border border-zinc-300 px-1.5 py-0.5 text-[10px] text-zinc-700 hover:bg-zinc-100'
+                                }
+                              >
+                                <CalendarPlus size={10} />
+                                GCal
+                              </button>
+                            )}
+                            {onOpenCalendarSheet && (
+                              <button
+                                type="button"
+                                onClick={() => onOpenCalendarSheet(t)}
+                                className={
+                                  isDark
+                                    ? 'rounded border border-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-300 hover:bg-zinc-800'
+                                    : 'rounded border border-zinc-300 px-1.5 py-0.5 text-[10px] text-zinc-700 hover:bg-zinc-100'
+                                }
+                              >
+                                Invite
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
-              <div className="bg-zinc-950/40 p-2">
-                <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest mb-1 px-1">Time (preview)</p>
-                <div className="relative">
+
+              <div className={isDark ? 'bg-zinc-950/40 p-2' : 'bg-zinc-50/60 p-2'}>
+                <div className="flex items-baseline justify-between mb-1 px-1">
+                  <p className={`text-[9px] font-bold uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>
+                    Schedule
+                  </p>
+                  {gutterEvents.length === 0 && (
+                    <span className={`text-[9px] ${isDark ? 'text-zinc-600' : 'text-zinc-500'}`}>—</span>
+                  )}
+                </div>
+                <div
+                  ref={gutterRef}
+                  className="relative"
+                  onPointerMove={(e) => {
+                    if (!dragState) return;
+                    e.preventDefault();
+                    updateDragFromPointer(e.clientY);
+                  }}
+                  onPointerUp={() => {
+                    if (dragState) completeDrag();
+                  }}
+                  onPointerCancel={cancelDrag}
+                >
                   <div className="space-y-0">
                     {HOURS.map((h) => (
                       <div
                         key={h}
-                        className="flex border-b border-zinc-800/40 h-9 sm:h-10 text-[9px] text-zinc-600"
+                        className={`flex h-9 sm:h-10 text-[9px] border-b ${
+                          isDark ? 'text-zinc-600 border-zinc-800/40' : 'text-zinc-500 border-zinc-200'
+                        }`}
                       >
-                        <div className="w-8 shrink-0 pr-1 text-right text-zinc-500 pt-0.5">
-                          {h > 12 ? `${h - 12}pm` : h === 12 ? '12pm' : `${h}am`}
+                        <div
+                          className={`w-9 shrink-0 pr-1 text-right pt-0.5 ${
+                            isDark ? 'text-zinc-500' : 'text-zinc-500'
+                          }`}
+                        >
+                          {formatHourLabel(h)}
                         </div>
-                        <div className="flex-1 border-l border-dashed border-zinc-800/50" />
+                        <div
+                          className={`flex-1 border-l border-dashed ${
+                            isDark ? 'border-zinc-800/50' : 'border-zinc-300'
+                          }`}
+                        />
                       </div>
                     ))}
                   </div>
-                  {/* Busy bands. The gutter shows the 8h–19h window; bands outside
-                      that range are clamped or hidden. */}
-                  {(() => {
-                    const slotMinutes = HOURS.length * 60;
-                    const baseHourPct = (h: number) => ((h - HOURS[0]) / HOURS.length) * 100;
-                    return dayBusyForYmd(ymd).map((b, i) => {
-                      const start = new Date(b.startMs);
-                      const end = new Date(b.endMs);
-                      const startMin = start.getHours() * 60 + start.getMinutes();
-                      const endMin = end.getHours() * 60 + end.getMinutes();
-                      const fromMin = Math.max(HOURS[0] * 60, startMin);
-                      const toMin = Math.min((HOURS[0] + HOURS.length) * 60, endMin);
-                      if (toMin <= fromMin) return null;
-                      const topPct = baseHourPct(fromMin / 60);
-                      const heightPct = ((toMin - fromMin) / slotMinutes) * 100;
-                      return (
-                        <div
-                          key={i}
-                          className={`absolute left-9 right-1 rounded ${
-                            isDark
-                              ? 'bg-amber-500/20 border border-amber-500/40'
-                              : 'bg-amber-200/70 border border-amber-400'
-                          }`}
-                          style={{ top: `${topPct}%`, height: `${heightPct}%` }}
-                          title="Busy on Google Calendar"
-                          aria-hidden
-                        />
-                      );
-                    });
-                  })()}
+
+                  {/* Busy bands (Google free/busy) — clamped to visible window. */}
+                  {dayBusy.map((b, i) => {
+                    const dayStartMs = startOfDay(parseYMD(ymd)).getTime();
+                    const sMin = Math.max(startHour * 60, Math.round((b.startMs - dayStartMs) / 60000));
+                    const eMin = Math.min(endHour * 60, Math.round((b.endMs - dayStartMs) / 60000));
+                    if (eMin <= sMin) return null;
+                    return (
+                      <div
+                        key={`busy-${i}`}
+                        className={`absolute left-9 right-1 rounded pointer-events-none ${
+                          isDark
+                            ? 'bg-amber-500/15 border border-amber-500/40'
+                            : 'bg-amber-200/70 border border-amber-400'
+                        }`}
+                        style={{
+                          top: `${minutesToTopPct(sMin)}%`,
+                          height: `${((eMin - sMin) / totalSpanMin) * 100}%`,
+                        }}
+                        title="Busy on Google Calendar"
+                        aria-hidden
+                      />
+                    );
+                  })}
+
+                  {/* Gutter events: shoots, meetings, timed tasks. */}
+                  {gutterEvents.map((ev) => {
+                    const layout = gutterLayout.get(ev.id);
+                    const columns = layout?.columns ?? 1;
+                    const column = layout?.column ?? 0;
+                    const isDragging = dragState?.eventId === ev.id;
+                    const startMin = isDragging && dragState ? dragState.proposedStartMin : ev.startMin;
+                    const duration = ev.endMin - ev.startMin;
+                    const endMin = startMin + duration;
+                    const sClamp = Math.max(startHour * 60, startMin);
+                    const eClamp = Math.min(endHour * 60, endMin);
+                    if (eClamp <= sClamp) return null;
+                    const topPct = minutesToTopPct(sClamp);
+                    const heightPct = ((eClamp - sClamp) / totalSpanMin) * 100;
+                    const widthPct = 100 / columns;
+                    const leftPct = column * widthPct;
+                    const conflict = ev.kind === 'task' && overlaysBusyBand(startMin, endMin);
+                    const baseToneDark =
+                      ev.kind === 'shoot'
+                        ? 'border-zinc-500/70 bg-zinc-800/80 text-white'
+                        : ev.kind === 'meeting'
+                          ? 'border-zinc-400/60 bg-zinc-900 text-zinc-100'
+                          : 'border-dashed border-zinc-400/70 bg-zinc-900/70 text-zinc-100';
+                    const baseToneLight =
+                      ev.kind === 'shoot'
+                        ? 'border-zinc-700 bg-zinc-100 text-zinc-900'
+                        : ev.kind === 'meeting'
+                          ? 'border-zinc-400 bg-white text-zinc-900'
+                          : 'border-dashed border-zinc-500 bg-white text-zinc-900';
+                    const conflictTone = conflict ? (isDark ? 'ring-1 ring-amber-400/70' : 'ring-1 ring-amber-500') : '';
+                    const isDraggable = ev.kind === 'task' && Boolean(onRescheduleItem);
+                    const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+                      if (isDraggable) beginDragTask(ev, e);
+                    };
+                    const handleClick = () => {
+                      if (!ev.task) return;
+                      if (onScheduleItem) onScheduleItem(ev.task);
+                      else if (onOpenCalendarSheet) onOpenCalendarSheet(ev.task);
+                    };
+                    return (
+                      <div
+                        key={ev.id}
+                        role={ev.task ? 'button' : undefined}
+                        tabIndex={ev.task ? 0 : undefined}
+                        onClick={ev.task ? handleClick : undefined}
+                        onKeyDown={(e) => {
+                          if (!ev.task) return;
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            handleClick();
+                          }
+                        }}
+                        onPointerDown={handlePointerDown}
+                        className={[
+                          'absolute rounded-md border px-1.5 py-1 text-[10px] leading-tight overflow-hidden min-w-0',
+                          isDark ? baseToneDark : baseToneLight,
+                          conflictTone,
+                          isDraggable ? 'cursor-grab active:cursor-grabbing select-none' : ev.task ? 'cursor-pointer' : '',
+                          isDragging ? 'opacity-90 shadow-lg z-30' : 'z-10',
+                        ].filter(Boolean).join(' ')}
+                        style={{
+                          top: `${topPct}%`,
+                          height: `${Math.max(heightPct, 3)}%`,
+                          left: `calc(2.25rem + (100% - 2.5rem) * ${leftPct / 100})`,
+                          width: `calc((100% - 2.5rem) * ${widthPct / 100} - 2px)`,
+                        }}
+                        title={`${ev.title}${ev.subtitle ? ' — ' + ev.subtitle : ''} · ${formatTimeRange(startMin, endMin)}`}
+                      >
+                        <p className="font-semibold truncate">{ev.title}</p>
+                        {ev.subtitle && (
+                          <p className={`truncate ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                            {ev.subtitle}
+                          </p>
+                        )}
+                        <p className={`text-[9px] ${isDark ? 'text-zinc-500' : 'text-zinc-500'} mt-0.5`}>
+                          {formatTime(startMin)}–{formatTime(endMin)}
+                          {conflict ? ' · busy' : ''}
+                        </p>
+                      </div>
+                    );
+                  })}
+
+                  {/* Now-line (today only). */}
+                  {nowVisible && (
+                    <div
+                      className="absolute left-9 right-1 z-40 pointer-events-none"
+                      style={{ top: `${minutesToTopPct(nowMin)}%` }}
+                      aria-hidden
+                    >
+                      <div
+                        className={`absolute -left-1.5 -top-[3px] h-1.5 w-1.5 rounded-full ${
+                          isDark ? 'bg-rose-400' : 'bg-rose-500'
+                        }`}
+                      />
+                      <div
+                        className={`h-[1px] ${isDark ? 'bg-rose-400/80' : 'bg-rose-500/80'}`}
+                      />
+                    </div>
+                  )}
+
+                  {/* Drag preview tooltip. */}
+                  {dragState && draggedEvent && (
+                    <div
+                      className={`absolute left-9 right-1 z-50 pointer-events-none text-[9px] font-mono ${
+                        isDark ? 'text-zinc-200' : 'text-zinc-900'
+                      }`}
+                      style={{
+                        top: `calc(${minutesToTopPct(dragState.proposedStartMin)}% - 14px)`,
+                      }}
+                    >
+                      <span className={isDark ? 'rounded bg-zinc-900 px-1 py-0.5 border border-zinc-700' : 'rounded bg-white px-1 py-0.5 border border-zinc-300 shadow-sm'}>
+                        {minutesToHm(dragState.proposedStartMin)} – {minutesToHm(dragState.proposedStartMin + dragState.durationMin)}
+                      </span>
+                    </div>
+                  )}
                 </div>
-                <p className="text-[9px] text-zinc-600 mt-2 px-1">
-                  Tasks are date-only for now; time blocks are for layout until time-of-day is stored on each task.
+                <p className={`text-[9px] mt-2 px-1 ${isDark ? 'text-zinc-600' : 'text-zinc-500'}`}>
+                  {onRescheduleItem
+                    ? 'Drag a task block to reschedule (15-min snap). Use the drawer on touch.'
+                    : 'Open a task to set or change its time.'}
                 </p>
               </div>
             </div>

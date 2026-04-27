@@ -239,6 +239,12 @@ export interface PlannerItem {
   description?: string;
   referenceLink?: string;
   attachmentAssetIds?: string[];
+  /** Time-of-day "HH:mm" in viewer TZ. When set, the task is timed and renders on the day gutter. */
+  startTime?: string;
+  /** Time-of-day "HH:mm" in viewer TZ. Optional; defaults to startTime + 30min for rendering/sync. */
+  endTime?: string;
+  /** True → shown on the all-day strip; ignored when both startTime and allDay=true (allDay wins). */
+  allDay?: boolean;
 }
 
 export type ProjectAssetType = 'video' | 'still' | 'doc' | 'audio';
@@ -401,6 +407,8 @@ export interface ActivityEntry {
 export interface AdminShoot extends Shoot {
   projectId: string;
   callTime: string;
+  /** Optional wrap/end time "HH:mm". When omitted the planner gutter assumes ~8h. */
+  endTime?: string;
   projectTitle: string;
   gearSummary: string;
   /** Optional per-shoot gear checklist (mock; future: Firestore). */
@@ -416,6 +424,8 @@ export interface AdminMeeting {
   title: string;
   date: string;
   startTime: string;
+  /** Optional end time "HH:mm". When omitted the planner gutter assumes 60 minutes. */
+  endTime?: string;
   location: string;
   participants: string[];
   participantCrewIds?: string[];

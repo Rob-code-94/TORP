@@ -7,7 +7,9 @@ import {
   getProjectById,
   getAssetsByProject,
   MOCK_ADMIN_PROJECTS,
+  MOCK_MEETINGS_ADMIN,
   MOCK_PLANNER,
+  MOCK_SHOOTS_ADMIN,
   PLANNER_COLUMN_LABEL,
   plannerStatusFromItem,
   removeAssetFromPlannerItem,
@@ -17,10 +19,12 @@ import { openGoogleCalendarInNewTab, payloadFromPlannerItem } from '../../../lib
 import { useAuth } from '../../../lib/auth';
 import { useAdminTheme } from '../../../lib/adminTheme';
 import { appLinkMutedClass, appPanelClass } from '../../../lib/appThemeClasses';
+import { canEditPlannerItem } from '../../../lib/projectPermissions';
 import { columnLabel, formatAdminDate, typeLabel } from './adminFormat';
 import CalendarEventSheet from './CalendarEventSheet';
 import type { CalendarProjectOption } from './CalendarEventSheet';
 import PlannerCalendar from './PlannerCalendar';
+import PlannerTaskTimeDrawer from './PlannerTaskTimeDrawer';
 import type { PlannerBoardColumn, PlannerItem, PlannerTaskStatus } from '../../../types';
 import { createDefaultStoragePolicy } from '../../../lib/storagePolicy';
 
@@ -51,6 +55,7 @@ const AdminPlanner: React.FC = () => {
   );
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [attachmentMessage, setAttachmentMessage] = useState<string | null>(null);
+  const [scheduleTask, setScheduleTask] = useState<PlannerItem | null>(null);
   const [calendarContext, setCalendarContext] = useState<CalendarProjectOption | undefined>();
   const [calendarInitial, setCalendarInitial] = useState<{
     title?: string;
@@ -140,6 +145,39 @@ const AdminPlanner: React.FC = () => {
     [actorName]
   );
 
+  const onRescheduleItem = useCallback(
+    (
+      task: PlannerItem,
+      next: { dueDate: string; startTime?: string; endTime?: string; allDay?: boolean }
+    ) => {
+      if (!canEditPlannerItem(user?.role, task, { crewId: user?.crewId })) {
+        setAttachmentMessage('You do not have permission to reschedule this task.');
+        return;
+      }
+      const allDay = next.allDay ?? !next.startTime;
+      const patch: Partial<PlannerItem> = {
+        dueDate: next.dueDate,
+        startTime: allDay ? undefined : next.startTime,
+        endTime: allDay ? undefined : next.endTime,
+        allDay,
+      };
+      const result = updatePlannerTask(task.id, patch, actorName);
+      if (result.ok) {
+        setPlannerVersion((n) => n + 1);
+        setAttachmentMessage(
+          `Rescheduled "${task.title}" to ${
+            allDay ? 'all day' : `${next.startTime}${next.endTime ? '–' + next.endTime : ''}`
+          } on ${next.dueDate}.`
+        );
+      }
+    },
+    [actorName, user?.role, user?.crewId]
+  );
+
+  const openScheduleDrawer = useCallback((task: PlannerItem) => {
+    setScheduleTask(task);
+  }, []);
+
   const onAttachExisting = (task: PlannerItem, assetId: string) => {
     const result = attachAssetToPlannerItem(task.id, assetId, actorName);
     if (result.ok) {
@@ -200,6 +238,10 @@ const AdminPlanner: React.FC = () => {
       setAttachmentMessage(attachResult.error || 'Uploaded but could not attach file.');
     }
   };
+
+  const canEditScheduleTask = scheduleTask
+    ? canEditPlannerItem(user?.role, scheduleTask, { crewId: user?.crewId })
+    : false;
 
   return (
     <div className="max-w-[1200px] min-w-0 space-y-5">
@@ -527,11 +569,15 @@ const AdminPlanner: React.FC = () => {
       {view === 'calendar' && (
         <div data-tour="planner-main-content">
           <PlannerCalendar
-          items={items}
-          onAddToGoogle={onAddPlannerToGoogle}
-          onOpenCalendarSheet={openCalendarForItem}
-          initialMode={initialMode === 'month' || initialMode === 'week' || initialMode === 'day' ? initialMode : undefined}
-          initialCursorYmd={initialDate || undefined}
+            items={items}
+            shoots={MOCK_SHOOTS_ADMIN}
+            meetings={MOCK_MEETINGS_ADMIN}
+            onAddToGoogle={onAddPlannerToGoogle}
+            onOpenCalendarSheet={openCalendarForItem}
+            onScheduleItem={openScheduleDrawer}
+            onRescheduleItem={onRescheduleItem}
+            initialMode={initialMode === 'month' || initialMode === 'week' || initialMode === 'day' ? initialMode : undefined}
+            initialCursorYmd={initialDate || undefined}
           />
         </div>
       )}
@@ -545,6 +591,14 @@ const AdminPlanner: React.FC = () => {
         projectContext={calendarContext}
         initial={calendarInitial}
         projectOptions={projectOptions}
+      />
+
+      <PlannerTaskTimeDrawer
+        open={Boolean(scheduleTask)}
+        task={scheduleTask}
+        canEdit={canEditScheduleTask}
+        onClose={() => setScheduleTask(null)}
+        onSave={(task, next) => onRescheduleItem(task, next)}
       />
     </div>
   );

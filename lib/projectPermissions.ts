@@ -1,4 +1,4 @@
-import { UserRole, type ProjectCapability } from '../types';
+import { UserRole, type PlannerItem, type ProjectCapability } from '../types';
 import { capabilitiesForRole } from '../data/adminMock';
 
 type ProjectRole = UserRole.ADMIN | UserRole.PROJECT_MANAGER;
@@ -15,4 +15,26 @@ export function hasProjectCapability(role: UserRole | undefined, capability: Pro
 
 export function isProjectRole(role: UserRole | undefined): role is ProjectRole {
   return role === UserRole.ADMIN || role === UserRole.PROJECT_MANAGER;
+}
+
+/**
+ * Whether the given user may edit (reschedule, retitle, retype) a planner item.
+ *
+ * - Admins and project managers always can.
+ * - Staff can edit only items where they are listed as the assignee or in `assigneeCrewIds`.
+ * - Other roles cannot edit at all.
+ */
+export function canEditPlannerItem(
+  role: UserRole | undefined,
+  item: PlannerItem,
+  options?: { crewId?: string }
+): boolean {
+  if (isProjectRole(role)) return true;
+  if (role === UserRole.STAFF) {
+    const crewId = options?.crewId;
+    if (!crewId) return false;
+    if (item.assigneeCrewId === crewId) return true;
+    if (item.assigneeCrewIds?.includes(crewId)) return true;
+  }
+  return false;
 }

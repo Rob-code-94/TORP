@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { buildGoogleCalendarTemplateUrl, buildGoogleTemplateDatesString, buildIcsFileContent, withResolvedRange } from './calendarEvent';
+import {
+  buildGoogleCalendarTemplateUrl,
+  buildGoogleTemplateDatesString,
+  buildIcsFileContent,
+  payloadFromPlannerItem,
+  withResolvedRange,
+} from './calendarEvent';
+import type { PlannerItem } from '../types';
 
 describe('withResolvedRange', () => {
   it('adds 1h end when timed and no end', () => {
@@ -56,5 +63,51 @@ describe('buildIcsFileContent', () => {
     expect(ics).toContain('BEGIN:VEVENT');
     expect(ics).toContain('SUMMARY:Hello');
     expect(ics).toContain('END:VEVENT');
+  });
+});
+
+describe('payloadFromPlannerItem', () => {
+  const baseTask = {
+    id: 't1',
+    projectId: 'p1',
+    projectTitle: 'Demo project',
+    clientName: 'ACME',
+    type: 'edit',
+    title: 'Color pass',
+    column: 'post',
+    priority: 'high',
+    dueDate: '2025-04-10',
+    assigneeCrewId: 'cr-1',
+    assigneeName: 'A. Vance',
+    done: false,
+  } as unknown as PlannerItem;
+
+  it('falls back to all-day when no startTime is set', () => {
+    const p = payloadFromPlannerItem(baseTask, 'https://torp.test');
+    expect(p.allDay).toBe(true);
+    expect(p.start.getDate()).toBe(10);
+  });
+
+  it('emits a timed event when startTime/endTime are set', () => {
+    const timed: PlannerItem = { ...baseTask, startTime: '13:00', endTime: '14:30', allDay: false };
+    const p = payloadFromPlannerItem(timed, 'https://torp.test');
+    expect(p.allDay).toBe(false);
+    expect(p.start.getHours()).toBe(13);
+    expect(p.start.getMinutes()).toBe(0);
+    expect(p.end?.getHours()).toBe(14);
+    expect(p.end?.getMinutes()).toBe(30);
+  });
+
+  it('treats allDay=true as all-day even when startTime is set', () => {
+    const timed: PlannerItem = { ...baseTask, startTime: '09:00', allDay: true };
+    const p = payloadFromPlannerItem(timed, 'https://torp.test');
+    expect(p.allDay).toBe(true);
+  });
+
+  it('defaults to startTime + 30 minutes when endTime is omitted', () => {
+    const timed: PlannerItem = { ...baseTask, startTime: '09:00', allDay: false };
+    const p = payloadFromPlannerItem(timed, 'https://torp.test');
+    expect(p.allDay).toBe(false);
+    expect(p.end!.getTime() - p.start.getTime()).toBe(30 * 60 * 1000);
   });
 });

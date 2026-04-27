@@ -169,13 +169,32 @@ function combineDateAndTime(ymd: string, timeHm: string): Date {
   return d;
 }
 
-/** All-day event on the planner task due date. */
+/**
+ * Calendar payload for a planner task.
+ * - If `startTime` is set and `allDay` is not true, emit a timed event with
+ *   `endTime` (defaults to startTime + 30 minutes when omitted).
+ * - Otherwise, emit an all-day event on the task's due date.
+ */
 export function payloadFromPlannerItem(item: PlannerItem, appOrigin: string): CalendarEventPayload {
-  const start = parseYmd(item.dueDate);
   const projectUrl = `${appOrigin}/hq/admin/projects/${item.projectId}`;
   const description = [item.projectTitle, item.clientName, item.type && `Type: ${item.type}`, `TORP: ${projectUrl}`]
     .filter(Boolean)
     .join('\n');
+  const isTimed = !item.allDay && Boolean(item.startTime);
+  if (isTimed && item.startTime) {
+    const start = combineDateAndTime(item.dueDate, item.startTime);
+    const end = item.endTime
+      ? combineDateAndTime(item.dueDate, item.endTime)
+      : new Date(start.getTime() + 30 * 60 * 1000);
+    return {
+      title: item.title,
+      start,
+      allDay: false,
+      end,
+      description,
+    };
+  }
+  const start = parseYmd(item.dueDate);
   return {
     title: item.title,
     start,
