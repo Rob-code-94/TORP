@@ -56,7 +56,7 @@ function callable<TIn, TOut>(name: string) {
 }
 
 function describeError(e: unknown): string {
-  const err = e as { code?: string; message?: string };
+  const err = e as { code?: string; message?: string; details?: unknown };
   if (err?.code === 'functions/permission-denied' || err?.code === 'permission-denied') {
     return 'You do not have permission to do that.';
   }
@@ -66,7 +66,24 @@ function describeError(e: unknown): string {
   if (err?.code === 'functions/failed-precondition') {
     return 'Connect your account again to refresh access.';
   }
-  if (err?.message) return err.message;
+  // Firebase often surfaces a bare "internal" message when a callable throws
+  // (missing secrets, function not deployed, or server error). Do not show that word alone.
+  if (
+    err?.code === 'functions/internal' ||
+    err?.code === 'internal' ||
+    (err?.message && /^internal$/i.test(String(err.message).trim()))
+  ) {
+    return 'Calendar could not reach the server. Ask your admin to deploy Cloud Functions, set the calendar OAuth and encryption secrets, and try again.';
+  }
+  if (err?.code === 'functions/unavailable' || err?.code === 'functions/deadline-exceeded') {
+    return 'The calendar service is temporarily unavailable. Please try again in a moment.';
+  }
+  if (err?.code === 'functions/resource-exhausted') {
+    return 'Too many requests. Please wait a minute and try again.';
+  }
+  if (err?.message && !/^internal$/i.test(String(err.message).trim())) {
+    return err.message;
+  }
   return 'Something went wrong. Please try again.';
 }
 
