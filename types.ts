@@ -522,6 +522,7 @@ export type ProjectCapability =
   | 'project.create'
   | 'project.edit'
   | 'project.archive'
+  | 'project.delete'
   | 'project.bulk.archive'
   | 'project.bulk.assign'
   | 'project.stage.move'

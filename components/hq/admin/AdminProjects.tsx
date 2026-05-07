@@ -1,8 +1,15 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CalendarDays, KanbanSquare, ListFilter, Search } from 'lucide-react';
+import { CalendarDays, KanbanSquare, ListFilter, MoreVertical, Search } from 'lucide-react';
 import { MOCK_ADMIN_PROJECTS, MOCK_CREW, PROJECT_STAGE_ORDER, transitionProjectStage } from '../../../data/adminMock';
-import { archiveProjects, bulkAssignCrew } from '../../../data/adminProjectsApi';
+import {
+  archiveProject,
+  archiveProjects,
+  bulkAssignCrew,
+  deleteProject,
+  getProjectCascadeCounts,
+} from '../../../data/adminProjectsApi';
+import type { ProjectCascadeCounts } from '../../../data/adminProjectsApi';
 import { useAuth } from '../../../lib/auth';
 import { useAdminTheme } from '../../../lib/adminTheme';
 import { hasProjectCapability } from '../../../lib/projectPermissions';
@@ -54,6 +61,13 @@ const AdminProjects: React.FC = () => {
   const [assignPickerOpen, setAssignPickerOpen] = useState(false);
   const [pickerCrewIds, setPickerCrewIds] = useState<string[]>([]);
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
+  /** Bumps when archive/delete mutates `MOCK_ADMIN_PROJECTS` so memoized rows refresh. */
+  const [version, setVersion] = useState(0);
+  const [rowMenuId, setRowMenuId] = useState<string | null>(null);
+  const [rowArchiveTarget, setRowArchiveTarget] = useState<AdminProject | null>(null);
+  const [rowDeleteTarget, setRowDeleteTarget] = useState<AdminProject | null>(null);
+  const [deleteCounts, setDeleteCounts] = useState<ProjectCascadeCounts | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
   const rows = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -65,11 +79,14 @@ const AdminProjects: React.FC = () => {
           p.packageLabel.toLowerCase().includes(s)) &&
         (stage === 'all' || p.stage === stage)
     );
-  }, [q, stage]);
+  }, [q, stage, version]);
 
   const canBulkAssign = hasProjectCapability(user?.role, 'project.bulk.assign');
   const canBulkArchive = hasProjectCapability(user?.role, 'project.bulk.archive');
   const canMoveStage = hasProjectCapability(user?.role, 'project.stage.move');
+  const canArchive = hasProjectCapability(user?.role, 'project.archive');
+  const canDelete = hasProjectCapability(user?.role, 'project.delete');
+  const showRowMenu = canArchive || canDelete;
 
   const groupedByStage = useMemo(
     () => {
@@ -140,6 +157,7 @@ const AdminProjects: React.FC = () => {
     );
     setArchiveConfirmOpen(false);
     setSelectedIds([]);
+    setVersion((n) => n + 1);
   };
 
   const applyBulkMoveToPost = () => {
@@ -195,11 +213,69 @@ const AdminProjects: React.FC = () => {
       if (event.key === 'Escape') {
         setDraggingId(null);
         setDragOverStage(null);
+        setRowMenuId(null);
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
+
+  const rowMenuRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!rowMenuId) return;
+    const onClickAway = (event: MouseEvent) => {
+      if (!rowMenuRef.current) return;
+      if (rowMenuRef.current.contains(event.target as Node)) return;
+      setRowMenuId(null);
+    };
+    document.addEventListener('mousedown', onClickAway);
+    return () => document.removeEventListener('mousedown', onClickAway);
+  }, [rowMenuId]);
+
+  const openRowArchive = (project: AdminProject) => {
+    setRowMenuId(null);
+    if (!canArchive) return;
+    setRowArchiveTarget(project);
+  };
+
+  const openRowDelete = (project: AdminProject) => {
+    setRowMenuId(null);
+    if (!canDelete) return;
+    setRowDeleteTarget(project);
+    setDeleteCounts(getProjectCascadeCounts(project.id));
+    setDeleteConfirmText('');
+  };
+
+  const confirmRowArchive = () => {
+    if (!rowArchiveTarget || !canArchive) return;
+    const result = archiveProject(rowArchiveTarget.id, user?.displayName || 'System');
+    setFeedback(
+      result.ok
+        ? `Archived ${rowArchiveTarget.title}.`
+        : result.error || 'Could not archive project.'
+    );
+    setRowArchiveTarget(null);
+    setVersion((n) => n + 1);
+  };
+
+  const confirmRowDelete = () => {
+    if (!rowDeleteTarget || !canDelete) return;
+    const expected = rowDeleteTarget.title.trim().toLowerCase();
+    if (deleteConfirmText.trim().toLowerCase() !== expected) return;
+    const result = deleteProject(rowDeleteTarget.id, user?.displayName || 'System');
+    if (result.ok) {
+      const total = result.counts
+        ? Object.values(result.counts).reduce((a, b) => a + b, 0)
+        : 0;
+      setFeedback(`Deleted ${rowDeleteTarget.title} and ${total} related record(s).`);
+    } else {
+      setFeedback(result.error || 'Could not delete project.');
+    }
+    setRowDeleteTarget(null);
+    setDeleteCounts(null);
+    setDeleteConfirmText('');
+    setVersion((n) => n + 1);
+  };
 
   const onDropToStage = (targetStage: ProjectStage) => {
     if (!draggingId || !hasProjectCapability(user?.role, 'project.stage.move')) {
@@ -414,16 +490,76 @@ const AdminProjects: React.FC = () => {
                     <td className={`px-4 py-3 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>{formatAdminDate(p.dueDate)}</td>
                     <td className={`px-4 py-3 ${isDark ? 'text-zinc-400' : 'text-zinc-700'}`}>{p.ownerName}</td>
                     <td className="px-4 py-3 text-right" data-tour="projects-open-detail">
-                      <Link
-                        to={`/hq/admin/projects/${p.id}`}
-                        className={`text-xs font-bold border rounded-md px-2.5 py-1 transition-colors ${
-                          isDark
-                            ? 'text-white border-zinc-700 hover:bg-white hover:text-black'
-                            : 'text-zinc-800 border-zinc-300 hover:bg-zinc-900 hover:text-white hover:border-zinc-900'
-                        }`}
-                      >
-                        Open
-                      </Link>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <Link
+                          to={`/hq/admin/projects/${p.id}`}
+                          className={`text-xs font-bold border rounded-md px-2.5 py-1 transition-colors ${
+                            isDark
+                              ? 'text-white border-zinc-700 hover:bg-white hover:text-black'
+                              : 'text-zinc-800 border-zinc-300 hover:bg-zinc-900 hover:text-white hover:border-zinc-900'
+                          }`}
+                        >
+                          Open
+                        </Link>
+                        {showRowMenu && (
+                          <div className="relative" ref={rowMenuId === p.id ? rowMenuRef : undefined}>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setRowMenuId((current) => (current === p.id ? null : p.id));
+                              }}
+                              aria-label={`Project actions for ${p.title}`}
+                              aria-haspopup="menu"
+                              aria-expanded={rowMenuId === p.id}
+                              className={`rounded-md border p-1.5 transition-colors ${
+                                isDark
+                                  ? 'border-zinc-700 text-zinc-300 hover:bg-zinc-800'
+                                  : 'border-zinc-300 text-zinc-600 hover:bg-zinc-100'
+                              }`}
+                            >
+                              <MoreVertical size={14} aria-hidden />
+                            </button>
+                            {rowMenuId === p.id && (
+                              <div
+                                role="menu"
+                                className={`absolute right-0 mt-1 z-30 w-44 rounded-md border shadow-lg overflow-hidden ${
+                                  isDark
+                                    ? 'border-zinc-700 bg-zinc-950 text-zinc-200'
+                                    : 'border-zinc-200 bg-white text-zinc-800'
+                                }`}
+                              >
+                                {canArchive && p.stage !== 'archived' && (
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    onClick={() => openRowArchive(p)}
+                                    className={`block w-full text-left px-3 py-2 text-xs ${
+                                      isDark ? 'hover:bg-zinc-900' : 'hover:bg-zinc-100'
+                                    }`}
+                                  >
+                                    Archive project
+                                  </button>
+                                )}
+                                {canDelete && (
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    onClick={() => openRowDelete(p)}
+                                    className={`block w-full text-left px-3 py-2 text-xs font-semibold ${
+                                      isDark
+                                        ? 'text-red-300 hover:bg-red-950/50'
+                                        : 'text-red-700 hover:bg-red-50'
+                                    }`}
+                                  >
+                                    Delete…
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -446,17 +582,77 @@ const AdminProjects: React.FC = () => {
                   </span>
                 </div>
                 {renderProjectMeta(p)}
-                <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center justify-between text-xs gap-2">
                   <span className={isDark ? 'text-zinc-400' : 'text-zinc-700'}>${p.budget.toLocaleString()}</span>
                   <span className={isDark ? 'text-zinc-500' : 'text-zinc-600'}>{formatAdminDate(p.dueDate)}</span>
-                  <Link
-                    to={`/hq/admin/projects/${p.id}`}
-                    className={`rounded-md border px-2 py-1 ${
-                      isDark ? 'border-zinc-700 text-zinc-200' : 'border-zinc-300 text-zinc-800'
-                    }`}
-                  >
-                    Open
-                  </Link>
+                  <div className="ml-auto flex items-center gap-1.5">
+                    <Link
+                      to={`/hq/admin/projects/${p.id}`}
+                      className={`rounded-md border px-2 py-1 ${
+                        isDark ? 'border-zinc-700 text-zinc-200' : 'border-zinc-300 text-zinc-800'
+                      }`}
+                    >
+                      Open
+                    </Link>
+                    {showRowMenu && (
+                      <div className="relative" ref={rowMenuId === p.id ? rowMenuRef : undefined}>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRowMenuId((current) => (current === p.id ? null : p.id));
+                          }}
+                          aria-label={`Project actions for ${p.title}`}
+                          aria-haspopup="menu"
+                          aria-expanded={rowMenuId === p.id}
+                          className={`rounded-md border p-1.5 ${
+                            isDark
+                              ? 'border-zinc-700 text-zinc-300 hover:bg-zinc-800'
+                              : 'border-zinc-300 text-zinc-600 hover:bg-zinc-100'
+                          }`}
+                        >
+                          <MoreVertical size={14} aria-hidden />
+                        </button>
+                        {rowMenuId === p.id && (
+                          <div
+                            role="menu"
+                            className={`absolute right-0 mt-1 z-30 w-44 rounded-md border shadow-lg overflow-hidden ${
+                              isDark
+                                ? 'border-zinc-700 bg-zinc-950 text-zinc-200'
+                                : 'border-zinc-200 bg-white text-zinc-800'
+                            }`}
+                          >
+                            {canArchive && p.stage !== 'archived' && (
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => openRowArchive(p)}
+                                className={`block w-full text-left px-3 py-2 text-xs ${
+                                  isDark ? 'hover:bg-zinc-900' : 'hover:bg-zinc-100'
+                                }`}
+                              >
+                                Archive project
+                              </button>
+                            )}
+                            {canDelete && (
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => openRowDelete(p)}
+                                className={`block w-full text-left px-3 py-2 text-xs font-semibold ${
+                                  isDark
+                                    ? 'text-red-300 hover:bg-red-950/50'
+                                    : 'text-red-700 hover:bg-red-50'
+                                }`}
+                              >
+                                Delete…
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
@@ -665,6 +861,168 @@ const AdminProjects: React.FC = () => {
                 className="rounded-md border border-red-700 bg-red-900/40 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-red-200 hover:bg-red-900/60"
               >
                 Archive {selectedIds.length}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {rowArchiveTarget && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="row-archive-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setRowArchiveTarget(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className={`w-full max-w-md rounded-xl border p-5 ${
+              isDark ? 'border-zinc-800 bg-zinc-950 text-white' : 'border-zinc-300 bg-white text-zinc-900'
+            }`}
+          >
+            <h3 id="row-archive-title" className="text-base font-bold">
+              Archive {rowArchiveTarget.title}?
+            </h3>
+            <p className={`mt-2 text-sm ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
+              The project moves to the Archived stage and is marked complete. You can find it again with the
+              Archived filter at any time.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setRowArchiveTarget(null)}
+                className={`rounded-md border px-3 py-1.5 text-xs ${
+                  isDark ? 'border-zinc-700 text-zinc-300' : 'border-zinc-300 text-zinc-700'
+                }`}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmRowArchive}
+                className={`rounded-md px-3 py-1.5 text-xs font-bold uppercase tracking-wide ${
+                  isDark
+                    ? 'bg-white text-black hover:bg-zinc-200'
+                    : 'bg-zinc-900 text-white hover:bg-zinc-800'
+                }`}
+              >
+                Archive project
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {rowDeleteTarget && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="row-delete-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 sm:p-6"
+          onClick={() => {
+            setRowDeleteTarget(null);
+            setDeleteCounts(null);
+            setDeleteConfirmText('');
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className={`w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl border p-5 ${
+              isDark ? 'border-red-800/60 bg-zinc-950 text-white' : 'border-red-300 bg-white text-zinc-900'
+            }`}
+          >
+            <h3 id="row-delete-title" className="text-base font-bold">
+              Delete {rowDeleteTarget.title}?
+            </h3>
+            <p
+              className={`mt-2 text-sm ${
+                isDark ? 'text-red-300' : 'text-red-700'
+              }`}
+            >
+              This is permanent. The project and every related record listed below will be removed. There is no
+              undo.
+            </p>
+
+            {deleteCounts && (
+              <ul
+                className={`mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs rounded-md border p-3 ${
+                  isDark ? 'border-zinc-800 bg-zinc-900/50' : 'border-zinc-200 bg-zinc-50'
+                }`}
+              >
+                {(
+                  [
+                    ['planner', 'Planner items'],
+                    ['shoots', 'Shoots'],
+                    ['meetings', 'Meetings'],
+                    ['assets', 'Assets'],
+                    ['invoices', 'Invoices'],
+                    ['proposals', 'Proposals'],
+                    ['expenses', 'Expenses'],
+                    ['deliverables', 'Deliverables'],
+                    ['risks', 'Risks'],
+                    ['blockers', 'Blockers'],
+                    ['dependencies', 'Dependencies'],
+                    ['changeOrders', 'Change orders'],
+                    ['stageTransitions', 'Stage history'],
+                    ['activity', 'Activity entries'],
+                  ] as Array<[keyof ProjectCascadeCounts, string]>
+                ).map(([key, label]) => (
+                  <li key={key} className="flex justify-between gap-2">
+                    <span className={isDark ? 'text-zinc-400' : 'text-zinc-600'}>{label}</span>
+                    <span className={`font-mono ${isDark ? 'text-zinc-200' : 'text-zinc-800'}`}>
+                      {deleteCounts[key]}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <label className="mt-4 block">
+              <span
+                className={`text-[11px] font-bold uppercase tracking-wide ${
+                  isDark ? 'text-zinc-400' : 'text-zinc-700'
+                }`}
+              >
+                Type the project title to confirm
+              </span>
+              <input
+                type="text"
+                autoFocus
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder={rowDeleteTarget.title}
+                className={`mt-1 w-full rounded-md border px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 ${
+                  isDark
+                    ? 'border-zinc-700 bg-zinc-900 text-white placeholder:text-zinc-600 focus:ring-red-500/40'
+                    : 'border-zinc-300 bg-white text-zinc-900 placeholder:text-zinc-400 focus:ring-red-500/40'
+                }`}
+              />
+            </label>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setRowDeleteTarget(null);
+                  setDeleteCounts(null);
+                  setDeleteConfirmText('');
+                }}
+                className={`rounded-md border px-3 py-1.5 text-xs ${
+                  isDark ? 'border-zinc-700 text-zinc-300' : 'border-zinc-300 text-zinc-700'
+                }`}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmRowDelete}
+                disabled={
+                  deleteConfirmText.trim().toLowerCase() !== rowDeleteTarget.title.trim().toLowerCase()
+                }
+                className="rounded-md border border-red-700 bg-red-900/40 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-red-200 hover:bg-red-900/60 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Delete project
               </button>
             </div>
           </div>

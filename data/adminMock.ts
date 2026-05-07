@@ -1032,6 +1032,7 @@ const CAPABILITY_BY_ROLE: Record<'ADMIN' | 'PROJECT_MANAGER', ProjectCapability[
     'project.create',
     'project.edit',
     'project.archive',
+    'project.delete',
     'project.bulk.archive',
     'project.bulk.assign',
     'project.stage.move',
@@ -1452,6 +1453,113 @@ export function bulkArchiveProjects(projectIds: string[], actorName: string): Bu
     affected.push(projectId);
   }
   return { ok: failed.length === 0, affected, failed };
+}
+
+/** Convenience single-project archive that proxies to the bulk path. */
+export function archiveProject(projectId: string, actorName: string): { ok: boolean; error?: string } {
+  const result = bulkArchiveProjects([projectId], actorName);
+  if (!result.ok) {
+    return { ok: false, error: result.failed[0]?.error || 'Could not archive project.' };
+  }
+  return { ok: true };
+}
+
+export interface DeleteProjectCascadeResult {
+  ok: boolean;
+  error?: string;
+  /** How many child rows were removed per collection — used for audit/feedback. */
+  counts?: ProjectCascadeCounts;
+}
+
+export interface ProjectCascadeCounts {
+  planner: number;
+  shoots: number;
+  meetings: number;
+  assets: number;
+  invoices: number;
+  proposals: number;
+  expenses: number;
+  deliverables: number;
+  risks: number;
+  blockers: number;
+  dependencies: number;
+  changeOrders: number;
+  stageTransitions: number;
+  activity: number;
+}
+
+/** In-place mutate helper: remove every entry where predicate returns true; return removal count. */
+function spliceWhere<T>(arr: T[], predicate: (item: T) => boolean): number {
+  let removed = 0;
+  for (let i = arr.length - 1; i >= 0; i -= 1) {
+    if (predicate(arr[i])) {
+      arr.splice(i, 1);
+      removed += 1;
+    }
+  }
+  return removed;
+}
+
+/**
+ * Hard delete a project and every mock row that references it.
+ *
+ * - Records a `project.deleted` audit row before the project is spliced out so
+ *   the activity collection captures the action even though that project's
+ *   activity entries are pruned afterward.
+ * - All splices happen on the existing exported arrays so React components that
+ *   memoize on a `version` counter pick up the next render.
+ */
+export function deleteProjectCascade(projectId: string, actorName: string): DeleteProjectCascadeResult {
+  const project = MOCK_ADMIN_PROJECTS.find((item) => item.id === projectId);
+  if (!project) return { ok: false, error: 'Project not found.' };
+  const projectTitle = project.title;
+  pushActivity({
+    projectId,
+    entityType: 'project',
+    entityLabel: projectTitle,
+    actorName,
+    action: 'project.deleted',
+    projectTitle,
+  });
+  const counts: ProjectCascadeCounts = {
+    planner: spliceWhere(MOCK_PLANNER, (i) => i.projectId === projectId),
+    shoots: spliceWhere(MOCK_SHOOTS_ADMIN, (i) => i.projectId === projectId),
+    meetings: spliceWhere(MOCK_MEETINGS_ADMIN, (i) => i.projectId === projectId),
+    assets: spliceWhere(MOCK_ASSETS, (i) => i.projectId === projectId),
+    invoices: spliceWhere(MOCK_INVOICES_ADMIN, (i) => i.projectId === projectId),
+    proposals: spliceWhere(MOCK_PROPOSALS, (i) => i.projectId === projectId),
+    expenses: spliceWhere(MOCK_EXPENSES, (i) => i.projectId === projectId),
+    deliverables: spliceWhere(MOCK_PROJECT_DELIVERABLES, (i) => i.projectId === projectId),
+    risks: spliceWhere(MOCK_RISKS, (i) => i.projectId === projectId),
+    blockers: spliceWhere(MOCK_BLOCKERS, (i) => i.projectId === projectId),
+    dependencies: spliceWhere(MOCK_DEPENDENCIES, (i) => i.projectId === projectId),
+    changeOrders: spliceWhere(MOCK_CHANGE_ORDERS, (i) => i.projectId === projectId),
+    stageTransitions: spliceWhere(MOCK_STAGE_TRANSITIONS, (i) => i.projectId === projectId),
+    activity: spliceWhere(MOCK_ACTIVITY, (i) => i.projectId === projectId),
+  };
+  const projectIndex = MOCK_ADMIN_PROJECTS.findIndex((item) => item.id === projectId);
+  if (projectIndex >= 0) MOCK_ADMIN_PROJECTS.splice(projectIndex, 1);
+  return { ok: true, counts };
+}
+
+/** Cheap pre-flight count used by the delete confirmation modal. */
+export function countProjectCascade(projectId: string): ProjectCascadeCounts {
+  return {
+    planner: MOCK_PLANNER.filter((i) => i.projectId === projectId).length,
+    shoots: MOCK_SHOOTS_ADMIN.filter((i) => i.projectId === projectId).length,
+    meetings: MOCK_MEETINGS_ADMIN.filter((i) => i.projectId === projectId).length,
+    assets: MOCK_ASSETS.filter((i) => i.projectId === projectId).length,
+    invoices: MOCK_INVOICES_ADMIN.filter((i) => i.projectId === projectId).length,
+    proposals: MOCK_PROPOSALS.filter((i) => i.projectId === projectId).length,
+    expenses: MOCK_EXPENSES.filter((i) => i.projectId === projectId).length,
+    deliverables: MOCK_PROJECT_DELIVERABLES.filter((i) => i.projectId === projectId).length,
+    risks: MOCK_RISKS.filter((i) => i.projectId === projectId).length,
+    blockers: MOCK_BLOCKERS.filter((i) => i.projectId === projectId).length,
+    dependencies: MOCK_DEPENDENCIES.filter((i) => i.projectId === projectId).length,
+    changeOrders: MOCK_CHANGE_ORDERS.filter((i) => i.projectId === projectId).length,
+    stageTransitions: MOCK_STAGE_TRANSITIONS.filter((i) => i.projectId === projectId).length,
+    activity: MOCK_ACTIVITY.filter((i) => i.projectId === projectId).length,
+  };
 }
 
 export function createPlannerTask(input: Omit<PlannerItem, 'id'>, actorName: string): PlannerItem {

@@ -10,7 +10,10 @@ import type {
 import {
   MOCK_CLIENTS,
   MOCK_CREW,
+  archiveProject as archiveProjectMock,
+  countProjectCascade,
   createCrewMemberProfile,
+  deleteProjectCascade,
   MOCK_ADMIN_PROJECTS,
   MOCK_BLOCKERS,
   MOCK_CHANGE_ORDERS,
@@ -29,7 +32,11 @@ import {
   updateProjectNarrative,
   transitionProjectStage,
 } from './adminMock';
-import type { BulkProjectResult } from './adminMock';
+import type {
+  BulkProjectResult,
+  DeleteProjectCascadeResult,
+  ProjectCascadeCounts,
+} from './adminMock';
 import type { CrewAvailability, CrewProfile } from '../types';
 
 export type UiLoadState = 'loading' | 'empty' | 'error' | 'success';
@@ -141,6 +148,23 @@ export function bulkAssignCrew(
 export function archiveProjects(projectIds: string[], actorName: string): BulkProjectResult {
   return bulkArchiveProjects(projectIds, actorName);
 }
+
+/** Single-project archive (soft, reversible). */
+export function archiveProject(projectId: string, actorName: string): { ok: boolean; error?: string } {
+  return archiveProjectMock(projectId, actorName);
+}
+
+/** Hard delete a project and every related mock row. */
+export function deleteProject(projectId: string, actorName: string): DeleteProjectCascadeResult {
+  return deleteProjectCascade(projectId, actorName);
+}
+
+/** Pre-flight cascade counts for the delete confirmation modal. */
+export function getProjectCascadeCounts(projectId: string): ProjectCascadeCounts {
+  return countProjectCascade(projectId);
+}
+
+export type { DeleteProjectCascadeResult, ProjectCascadeCounts };
 
 export interface ProjectControlsResponse {
   deliverables: ProjectDeliverable[];
