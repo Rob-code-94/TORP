@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "start": "node server/index.mjs",
     "test": "vitest run",
+    "test:launch-gates": "node scripts/check-no-mock-runtime.mjs",
     "test:watch": "vitest",
     "deploy:rules": "npx -y firebase-tools@latest deploy --only firestore:rules,storage",
     "seed:firebase-users": "node scripts/seedFirebaseAuthUsers.mjs"

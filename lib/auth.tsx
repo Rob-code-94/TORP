@@ -1,5 +1,12 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { getIdTokenResult, onAuthStateChanged, signOut, updateProfile } from 'firebase/auth';
+import {
+  browserLocalPersistence,
+  getIdTokenResult,
+  onAuthStateChanged,
+  setPersistence,
+  signOut,
+  updateProfile,
+} from 'firebase/auth';
 import { UserRole } from '../types';
 import { authUserFromFirebase } from './firebaseAuthUser';
 import { getFirebaseAuthInstance, getFirebaseFunctionsInstance, isFirebaseConfigured } from './firebase';
@@ -100,16 +107,20 @@ function persistUser(user: AuthUser | null, firebaseUserActive: boolean) {
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const useFirebase = isFirebaseConfigured();
-  const [user, setUser] = useState<AuthUser | null>(() => (useFirebase ? null : readLegacySessionUser()));
+  const allowLocalSession = import.meta.env.DEV && !useFirebase;
+  const [user, setUser] = useState<AuthUser | null>(() => (allowLocalSession ? readLegacySessionUser() : null));
   const [loading, setLoading] = useState(() => useFirebase);
 
   useEffect(() => {
     if (!useFirebase) {
-      setUser(readLegacySessionUser());
+      setUser(allowLocalSession ? readLegacySessionUser() : null);
       setLoading(false);
       return;
     }
     const auth = getFirebaseAuthInstance();
+    void setPersistence(auth, browserLocalPersistence).catch((err) => {
+      console.warn('[torp.auth] failed to set local persistence', err);
+    });
     const unsub = onAuthStateChanged(auth, async (next) => {
       if (next) {
         let token = await getIdTokenResult(next);
@@ -139,16 +150,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           sessionStorage.removeItem(PORTAL_SESSION_KEY);
         }
       } else {
-        // Rehydrate demo sessions (HQ + portal) when not signed in to Firebase
-        setUser(readLegacySessionUser());
+        setUser(allowLocalSession ? readLegacySessionUser() : null);
       }
       setLoading(false);
     });
     return unsub;
-  }, [useFirebase]);
+  }, [allowLocalSession, useFirebase]);
 
   useEffect(() => {
-    if (useFirebase) {
+    if (useFirebase || !allowLocalSession) {
       try {
         if (getFirebaseAuthInstance().currentUser) return;
       } catch {
@@ -156,17 +166,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
     persistUser(user, false);
-  }, [user, useFirebase]);
+  }, [allowLocalSession, user, useFirebase]);
 
   const loginAs = useCallback(
     (session: AuthUser) => {
+      if (!allowLocalSession) return;
       if (useFirebase && getFirebaseAuthInstance().currentUser) {
-        // Avoid mixing anonymous mock sessions with a signed-in Firebase user.
         return;
       }
       setUser(session);
     },
-    [useFirebase]
+    [allowLocalSession, useFirebase]
   );
 
   const refreshIdToken = useCallback(async () => {

@@ -9,6 +9,8 @@ import ContactModal from './ContactModal';
 import ShowcaseStrip from './ShowcaseStrip';
 import { PROJECTS } from '../../constants';
 import { listShowcaseAssets, type ShowcaseAsset } from '../../data/showcaseRepository';
+import { useAuth } from '../../lib/auth';
+import { hqDestinationForUser, portalDestinationForUser } from '../../lib/authRedirect';
 
 function getWorkSlugFromHash(): string | null {
   const raw = window.location.hash.replace(/^#/, '');
@@ -18,6 +20,7 @@ function getWorkSlugFromHash(): string | null {
 
 /** Public marketing site only — no auth, no CRM data. */
 const Landing: React.FC = () => {
+  const { user, loading } = useAuth();
   const [showContact, setShowContact] = useState(false);
   const [, setHashTick] = useState(0);
   const [showcaseItems, setShowcaseItems] = useState<ShowcaseAsset[]>([]);
@@ -72,6 +75,9 @@ const Landing: React.FC = () => {
       mounted = false;
     };
   }, []);
+
+  const hqAccessPath = !loading && user ? hqDestinationForUser(user) : '/hq';
+  const clientPortalPath = !loading && user ? portalDestinationForUser(user) : '/portal/login';
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 selection:bg-white selection:text-black">
@@ -146,13 +152,13 @@ const Landing: React.FC = () => {
 
           <div className="flex flex-col items-center gap-3 mt-2">
             <Link
-              to="/hq"
+              to={hqAccessPath}
               className="inline-flex items-center gap-2 text-[10px] text-zinc-800 hover:text-zinc-600 transition-colors uppercase tracking-widest font-bold"
             >
               <Lock size={10} /> HQ Access
             </Link>
             <Link
-              to="/portal/login"
+              to={clientPortalPath}
               className="text-[10px] text-zinc-700 hover:text-zinc-500 uppercase tracking-widest font-bold transition-colors"
             >
               Client portal

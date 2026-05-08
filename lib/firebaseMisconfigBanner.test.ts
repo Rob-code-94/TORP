@@ -5,34 +5,23 @@ import {
 } from './firebaseMisconfigBanner';
 
 describe('isHostedProductionLikeHost', () => {
-  it('matches the Cloud Run hostname pattern', () => {
-    expect(
-      isHostedProductionLikeHost(
-        'torp-cinematic-production-management-ks75xiqola-uw.a.run.app',
-      ),
-    ).toBe(true);
-  });
-
-  it('matches Firebase Hosting domains', () => {
+  it('treats hosted domains as production-like', () => {
     expect(isHostedProductionLikeHost('torp-hub.web.app')).toBe(true);
-    expect(isHostedProductionLikeHost('torp-hub.firebaseapp.com')).toBe(true);
+    expect(isHostedProductionLikeHost('app.example.com')).toBe(true);
   });
 
   it('is case-insensitive', () => {
-    expect(isHostedProductionLikeHost('TORP-HUB.WEB.APP')).toBe(true);
+    expect(isHostedProductionLikeHost('LOCALHOST')).toBe(false);
+    expect(isHostedProductionLikeHost('APP.EXAMPLE.COM')).toBe(true);
   });
 
-  it('does not match localhost or unrelated hosts', () => {
+  it('does not match loopback hosts', () => {
     expect(isHostedProductionLikeHost('localhost')).toBe(false);
     expect(isHostedProductionLikeHost('127.0.0.1')).toBe(false);
-    expect(isHostedProductionLikeHost('staging.example.com')).toBe(false);
+    expect(isHostedProductionLikeHost('::1')).toBe(false);
     expect(isHostedProductionLikeHost(undefined)).toBe(false);
     expect(isHostedProductionLikeHost(null)).toBe(false);
     expect(isHostedProductionLikeHost('')).toBe(false);
-  });
-
-  it('does not match domains that merely contain run.app as a substring', () => {
-    expect(isHostedProductionLikeHost('myrun.appfake.com')).toBe(false);
   });
 });
 

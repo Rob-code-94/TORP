@@ -8,12 +8,9 @@ interface RequireAuthProps {
   children: React.ReactNode;
 }
 
-/**
- * Route guard: renders children only when the mock session matches `role`.
- * Phase 2: swap to Firebase custom claims while keeping the same API.
- */
+/** Route guard requiring role + tenant-scoped Firebase session. */
 const RequireAuth: React.FC<RequireAuthProps> = ({ roles, redirectTo, children }) => {
-  const { user, loading } = useAuth();
+  const { user, loading, isFirebase } = useAuth();
 
   if (loading) {
     return (
@@ -23,7 +20,7 @@ const RequireAuth: React.FC<RequireAuthProps> = ({ roles, redirectTo, children }
     );
   }
 
-  if (!user || !roles.includes(user.role)) {
+  if (!isFirebase || !user || !roles.includes(user.role)) {
     return <Navigate to={redirectTo} replace />;
   }
 

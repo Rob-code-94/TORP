@@ -1,13 +1,20 @@
 import React, { useState } from 'react';
 import { Play, MessageSquare, CheckCircle, Download, CreditCard } from 'lucide-react';
-import { MOCK_INVOICES } from '../../constants';
 import { useAdminTheme } from '../../lib/adminTheme';
 import { appInputClass, appPanelClass } from '../../lib/appThemeClasses';
+import { getFinanceRepository } from '../../data/financeRepository';
+import { useAuth } from '../../lib/auth';
 
 const ClientView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'approvals' | 'invoices'>('approvals');
   const { theme } = useAdminTheme();
+  const { user } = useAuth();
   const isDark = theme === 'dark';
+  const invoices = getFinanceRepository().listInvoices().filter((inv) => {
+    const userEmail = user?.email?.trim().toLowerCase();
+    if (!userEmail) return false;
+    return inv.clientName.trim().toLowerCase().includes(userEmail.split('@')[0] || '');
+  });
   const tabActive = (on: boolean) =>
     on
       ? isDark
@@ -183,7 +190,7 @@ const ClientView: React.FC = () => {
         </div>
       ) : (
         <div className="space-y-4 min-w-0">
-          {MOCK_INVOICES.filter((i) => i.client === 'Nike').map((inv) => (
+          {invoices.map((inv) => (
             <div
               key={inv.id}
               className={`p-6 rounded-lg flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 min-w-0 ${appPanelClass(
@@ -225,15 +232,17 @@ const ClientView: React.FC = () => {
             </div>
           ))}
 
-          <div
-            className={`border border-dashed p-8 rounded-lg text-center ${
-              isDark
-                ? 'bg-zinc-900/30 border-zinc-800'
-                : 'bg-zinc-100/50 border-zinc-300'
-            }`}
-          >
-            <p className="text-zinc-500 text-sm">No other outstanding invoices.</p>
-          </div>
+          {invoices.length === 0 && (
+            <div
+              className={`border border-dashed p-8 rounded-lg text-center ${
+                isDark
+                  ? 'bg-zinc-900/30 border-zinc-800'
+                  : 'bg-zinc-100/50 border-zinc-300'
+              }`}
+            >
+              <p className="text-zinc-500 text-sm">No invoices are available for this client account yet.</p>
+            </div>
+          )}
         </div>
       )}
     </div>
