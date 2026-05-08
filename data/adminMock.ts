@@ -691,6 +691,39 @@ export const MOCK_STORAGE_OPS_EVENTS: StorageOpsEvent[] = [
   },
 ];
 
+const RETAINED_CREW_IDS = new Set(['cr-4', 'cr-5', 'cr-6']);
+
+function clearArray<T>(items: T[]) {
+  if (items.length) items.splice(0, items.length);
+}
+
+function enforceLeanMockDataset() {
+  const retained = MOCK_CREW.filter((crew) => RETAINED_CREW_IDS.has(crew.id)).map((crew) => ({
+    ...crew,
+    assignedProjectIds: [],
+    mediaAssetIds: [],
+    mediaPolicies: [],
+  }));
+  MOCK_CREW.splice(0, MOCK_CREW.length, ...retained);
+  clearArray(MOCK_CLIENTS);
+  clearArray(MOCK_ADMIN_PROJECTS);
+  clearArray(MOCK_PLANNER);
+  clearArray(MOCK_ASSETS);
+  clearArray(MOCK_INVOICES_ADMIN);
+  clearArray(MOCK_PROPOSALS);
+  clearArray(MOCK_SHOOTS_ADMIN);
+  clearArray(MOCK_MEETINGS_ADMIN);
+  clearArray(MOCK_EXPENSES);
+  clearArray(MOCK_ACTIVITY);
+  clearArray(MOCK_PROJECT_DELIVERABLES);
+  clearArray(MOCK_RISKS);
+  clearArray(MOCK_BLOCKERS);
+  clearArray(MOCK_DEPENDENCIES);
+  clearArray(MOCK_CHANGE_ORDERS);
+  clearArray(MOCK_STAGE_TRANSITIONS);
+  clearArray(MOCK_STORAGE_OPS_EVENTS);
+}
+
 function pushActivity(entry: Omit<ActivityEntry, 'id' | 'createdAt' | 'projectTitle'> & { projectTitle?: string }) {
   const project = getProjectById(entry.projectId);
   MOCK_ACTIVITY.unshift({
@@ -714,9 +747,10 @@ function sumOutstandingInvoices(): number {
 
 export function getCommandStats() {
   const active = MOCK_ADMIN_PROJECTS.filter((p) => p.status === 'active');
+  const paidRevenue = MOCK_INVOICES_ADMIN.filter((i) => i.status === 'paid').reduce((sum, i) => sum + i.amountPaid, 0);
   return {
     activeProjects: active.length,
-    revenueYtd: 305000, // static hero stat (aligned with old AdminView mock)
+    revenueYtd: paidRevenue,
     outstanding: sumOutstandingInvoices(),
     pendingApprovals: MOCK_ASSETS.filter((a) => a.status === 'client_review').length,
     urgentTasks: MOCK_PLANNER.filter((t) => !t.done && t.priority === 'urgent').length,
@@ -1026,6 +1060,8 @@ export const MOCK_CHANGE_ORDERS: ChangeOrder[] = [
 ];
 
 export const MOCK_STAGE_TRANSITIONS: ProjectStageTransition[] = [];
+
+enforceLeanMockDataset();
 
 const CAPABILITY_BY_ROLE: Record<'ADMIN' | 'PROJECT_MANAGER', ProjectCapability[]> = {
   ADMIN: [

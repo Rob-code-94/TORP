@@ -41,6 +41,6 @@ describe('authenticateHqUser', () => {
   it('staff login includes crewId', () => {
     const r = authenticateHqUser('staff@torp.life', 'Staff1234');
     expect(r.ok).toBe(true);
-    if (r.ok) expect(r.user.crewId).toBe('cr-1');
+    if (r.ok) expect(r.user.crewId).toBe('cr-6');
   });
 });

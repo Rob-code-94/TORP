@@ -62,7 +62,7 @@ describe('canHqAdminAccessPathForUser default-deny', () => {
     role: UserRole.STAFF,
     displayName: 'Staff User',
     email: 'staff@torp.life',
-    crewId: 'cr-1',
+    crewId: 'cr-6',
   };
 
   it('blocks unmapped /hq/admin/* paths for ADMIN', () => {
@@ -103,12 +103,12 @@ describe('canHqAdminAccessPathForUser default-deny', () => {
       role: UserRole.STAFF,
       displayName: 'Staff',
       email: 'staff@torp.life',
-      crewId: 'cr-1',
+      crewId: 'cr-6',
     };
     expect(canHqAdminAccessPathForUser('/hq/admin', staff)).toBe(false);
     expect(canHqAdminAccessPathForUser('/hq/admin/projects', staff)).toBe(false);
-    expect(staffCanViewProject(staff, 'p1')).toBe(true);
-    expect(canHqAdminAccessPathForUser('/hq/admin/projects/p1', staff)).toBe(true);
+    expect(staffCanViewProject(staff, 'p1')).toBe(false);
+    expect(canHqAdminAccessPathForUser('/hq/admin/projects/p1', staff)).toBe(false);
     expect(staffCanViewProject(staff, 'p-ghost')).toBe(false);
   });
 });

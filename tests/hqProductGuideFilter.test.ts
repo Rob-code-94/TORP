@@ -14,7 +14,7 @@ const staff: AuthUser = {
   role: UserRole.STAFF,
   displayName: 'S',
   email: 'staff@torp.life',
-  crewId: 'cr-1',
+  crewId: 'cr-6',
 };
 
 describe('getGuideSectionsForContext', () => {

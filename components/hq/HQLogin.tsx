@@ -99,7 +99,7 @@ const HQLogin: React.FC = () => {
         setBusy(false);
       }
     } else {
-      loginAs({ role: UserRole.STAFF, displayName: 'Crew', crewId: 'cr-1' });
+      loginAs({ role: UserRole.STAFF, displayName: 'Crew', crewId: 'cr-6' });
       navigate('/hq/staff', { replace: true });
     }
   };

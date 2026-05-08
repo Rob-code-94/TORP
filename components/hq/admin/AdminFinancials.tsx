@@ -41,7 +41,7 @@ const AdminFinancials: React.FC = () => {
   const [dueTo, setDueTo] = useState('');
 
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [newProjectId, setNewProjectId] = useState(MOCK_ADMIN_PROJECTS[0]?.id ?? 'p1');
+  const [newProjectId, setNewProjectId] = useState(MOCK_ADMIN_PROJECTS[0]?.id ?? '');
   const [newClientName, setNewClientName] = useState('');
   const [newAmount, setNewAmount] = useState('');
   const [newIssued, setNewIssued] = useState(() => new Date().toISOString().slice(0, 10));
@@ -111,6 +111,11 @@ const AdminFinancials: React.FC = () => {
   }, []);
 
   const openCreateDrawer = () => {
+    if (MOCK_ADMIN_PROJECTS.length === 0) {
+      setDrawerError('Create a project first before creating invoices.');
+      setDrawerOpen(false);
+      return;
+    }
     const p = projectsById.get(newProjectId) ?? MOCK_ADMIN_PROJECTS[0];
     setNewClientName(p?.clientName ?? '');
     setNewAmount('');
@@ -154,6 +159,10 @@ const AdminFinancials: React.FC = () => {
 
   const saveNewInvoice = () => {
     setDrawerError(null);
+    if (!newProjectId) {
+      setDrawerError('Project is required.');
+      return;
+    }
     const project = projectsById.get(newProjectId);
     const amount = Number(newAmount || '0');
     try {
@@ -345,7 +354,8 @@ const AdminFinancials: React.FC = () => {
           <button
             type="button"
             onClick={openCreateDrawer}
-            className="w-full sm:w-auto rounded-lg bg-white text-zinc-900 px-3 py-2 text-xs font-semibold hover:bg-zinc-200"
+            disabled={MOCK_ADMIN_PROJECTS.length === 0}
+            className="w-full sm:w-auto rounded-lg bg-white text-zinc-900 px-3 py-2 text-xs font-semibold hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
           >
             New invoice
           </button>

@@ -15,8 +15,8 @@ const DEMO_HQ_USERS: Array<{
   { email: 'info@torp.life', password: 'Admin1234', role: UserRole.ADMIN, displayName: 'ROB R' },
   { email: 'william@torp.life', password: 'Admin1234', role: UserRole.ADMIN, displayName: 'William Fairbanks' },
   { email: 'jp@torp.life', password: 'Crew1234', role: UserRole.PROJECT_MANAGER, displayName: 'Jayden Price' },
-  /** Optional staff preview: same planner data as mock crew cr-1 */
-  { email: 'staff@torp.life', password: 'Staff1234', role: UserRole.STAFF, displayName: 'A. Vance', crewId: 'cr-1' },
+  /** Optional staff preview linked to retained mock crew. */
+  { email: 'staff@torp.life', password: 'Staff1234', role: UserRole.STAFF, displayName: 'Crew', crewId: 'cr-6' },
 ];
 
 export function normalizeHqEmail(value: string) {
