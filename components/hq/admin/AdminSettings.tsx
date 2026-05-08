@@ -6,6 +6,7 @@ import { appPanelClass } from '../../../lib/appThemeClasses';
 import SettingsShell from '../settings/SettingsShell';
 import OrgIdentitySection from '../settings/orgSections/OrgIdentitySection';
 import ShowcaseLibrarySection from '../settings/orgSections/ShowcaseLibrarySection';
+import PortfolioLandingSection from '../settings/orgSections/PortfolioLandingSection';
 import { useAuth } from '../../../lib/auth';
 import { loadStoragePolicy, saveStoragePolicy } from '../../../data/storagePolicyRepository';
 import { createDefaultStoragePolicy } from '../../../lib/storagePolicy';
@@ -72,6 +73,7 @@ const AdminSettings: React.FC = () => {
       <div className={`min-w-0 space-y-4 text-sm ${isDark ? 'text-zinc-300' : 'text-zinc-800'}`}>
         <OrgIdentitySection canEdit={isPolicyEditor} />
         <ShowcaseLibrarySection canEdit={isPolicyEditor} />
+        <PortfolioLandingSection canEdit={isPolicyEditor} />
 
         <Link
           to="/hq/admin/settings/integrations"

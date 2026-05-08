@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Instagram, Mail, Lock, ArrowRight } from 'lucide-react';
 import Hero from './Hero';
@@ -8,7 +8,14 @@ import ProjectDetail from './ProjectDetail';
 import ContactModal from './ContactModal';
 import ShowcaseStrip from './ShowcaseStrip';
 import { PROJECTS } from '../../constants';
+import { listPortfolioLandingProjects, savePortfolioLandingProject } from '../../data/portfolioLandingRepository';
 import { listShowcaseAssets, type ShowcaseAsset } from '../../data/showcaseRepository';
+import { formatFirestoreListError } from '../../lib/formatFirestoreListError';
+import { isFirebaseConfigured } from '../../lib/firebase';
+import { canEditMarketingLanding } from '../../lib/landingMarketingEdit';
+import { getMarketingTenantId, getMarketingTenantIdForUser } from '../../lib/marketingTenant';
+import { uploadPortfolioLandingImage } from '../../lib/portfolioLandingStorage';
+import type { VideoProject } from '../../types';
 import { useAuth } from '../../lib/auth';
 import { hqDestinationForUser, portalDestinationForUser } from '../../lib/authRedirect';
 
@@ -24,6 +31,34 @@ const Landing: React.FC = () => {
   const [showContact, setShowContact] = useState(false);
   const [, setHashTick] = useState(0);
   const [showcaseItems, setShowcaseItems] = useState<ShowcaseAsset[]>([]);
+  const [portfolioProjects, setPortfolioProjects] = useState<VideoProject[]>(() => PROJECTS);
+  const [marketingSiteEditMode, setMarketingSiteEditMode] = useState(false);
+  const [gridEditError, setGridEditError] = useState<string | null>(null);
+  const [thumbnailUploadingId, setThumbnailUploadingId] = useState<string | null>(null);
+  /** True once Firestore/local list returned ≥1 row — avoids saving against constants fallback IDs */
+  const [portfolioPersistable, setPortfolioPersistable] = useState(false);
+
+  const canEditMarketing = canEditMarketingLanding(user, loading);
+  const marketingWriteTenantId = getMarketingTenantIdForUser(user?.tenantId);
+
+  useEffect(() => {
+    if (!canEditMarketing) setMarketingSiteEditMode(false);
+  }, [canEditMarketing]);
+
+  /** Deep link from HQ Org settings: `/?marketingEdit=1` enables inline edit for ADMIN; param is stripped after apply */
+  useEffect(() => {
+    if (loading) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('marketingEdit') !== '1') return;
+    if (canEditMarketing) setMarketingSiteEditMode(true);
+    params.delete('marketingEdit');
+    const qs = params.toString();
+    window.history.replaceState(
+      null,
+      '',
+      `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`,
+    );
+  }, [loading, canEditMarketing]);
 
   useEffect(() => {
     const onHash = () => setHashTick((n) => n + 1);
@@ -32,7 +67,7 @@ const Landing: React.FC = () => {
   }, []);
 
   const workSlug = getWorkSlugFromHash();
-  const activeWork = workSlug ? PROJECTS.find((p) => p.slug === workSlug) : undefined;
+  const activeWork = workSlug ? portfolioProjects.find((p) => p.slug === workSlug) : undefined;
 
   useEffect(() => {
     if (workSlug && !activeWork) {
@@ -49,8 +84,12 @@ const Landing: React.FC = () => {
   };
 
   const nextWorkProject =
-    activeWork != null
-      ? PROJECTS[(PROJECTS.findIndex((p) => p.slug === activeWork.slug) + 1) % PROJECTS.length]
+    activeWork != null && portfolioProjects.length > 0
+      ? (() => {
+          const idx = portfolioProjects.findIndex((p) => p.slug === activeWork.slug);
+          if (idx < 0) return null;
+          return portfolioProjects[(idx + 1) % portfolioProjects.length] ?? null;
+        })()
       : null;
 
   useEffect(() => {
@@ -62,7 +101,61 @@ const Landing: React.FC = () => {
 
   useEffect(() => {
     let mounted = true;
-    void listShowcaseAssets('torp-default')
+    void listPortfolioLandingProjects(getMarketingTenantId())
+      .then((rows) => {
+        if (!mounted) return;
+        setPortfolioPersistable(rows.length > 0);
+        if (rows.length > 0) setPortfolioProjects(rows);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setPortfolioPersistable(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const handleReplaceLandingThumbnail = useCallback(
+    async (project: VideoProject, file: File) => {
+      setGridEditError(null);
+      if (!isFirebaseConfigured()) {
+        setGridEditError(formatFirestoreListError(new Error('Firebase is not configured.'), 'portfolio'));
+        return;
+      }
+      if (!portfolioPersistable) {
+        setGridEditError(
+          'Portfolio is still using bundled sample projects or could not load from Firestore. Add or sync projects in HQ (Org → Landing portfolio), then reload this page.',
+        );
+        return;
+      }
+      const idx = portfolioProjects.findIndex((p) => p.id === project.id);
+      if (idx < 0) return;
+      if (!project.id || project.id.startsWith('draft-')) {
+        setGridEditError('This entry is not published to Firestore yet. Save it from HQ Org settings first.');
+        return;
+      }
+      setThumbnailUploadingId(project.id);
+      try {
+        const uploaded = await uploadPortfolioLandingImage({
+          assetId: `${project.id}-landing-thumb-${Date.now()}`,
+          file,
+        });
+        const merged: VideoProject = { ...project, thumbnail: uploaded.downloadUrl };
+        const saved = await savePortfolioLandingProject(marketingWriteTenantId, merged, idx + 1);
+        setPortfolioProjects((prev) => prev.map((p) => (p.id === project.id ? saved : p)));
+      } catch (e) {
+        setGridEditError(formatFirestoreListError(e, 'portfolio'));
+      } finally {
+        setThumbnailUploadingId(null);
+      }
+    },
+    [marketingWriteTenantId, portfolioPersistable, portfolioProjects],
+  );
+
+  useEffect(() => {
+    let mounted = true;
+    void listShowcaseAssets(getMarketingTenantId())
       .then((rows) => {
         if (!mounted) return;
         setShowcaseItems(rows.filter((row) => row.visible));
@@ -80,13 +173,24 @@ const Landing: React.FC = () => {
   const clientPortalPath = !loading && user ? portalDestinationForUser(user) : '/portal/login';
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 selection:bg-white selection:text-black">
+    <div className="min-h-screen min-w-0 overflow-x-hidden bg-zinc-950 text-zinc-100 selection:bg-white selection:text-black">
       {activeWork && (
         <ProjectDetail
           project={activeWork}
           nextProject={nextWorkProject}
           onBack={closeWork}
           onNext={openWork}
+          canEditMarketing={canEditMarketing}
+          marketingEditMode={marketingSiteEditMode}
+          onToggleMarketingEditMode={() => setMarketingSiteEditMode((v) => !v)}
+          marketingTenantId={marketingWriteTenantId}
+          portfolioPersistable={portfolioPersistable}
+          portfolioProjectIndex={
+            portfolioProjects.findIndex((p) => p.slug === activeWork.slug)
+          }
+          onProjectSaved={(saved) =>
+            setPortfolioProjects((prev) => prev.map((p) => (p.id === saved.id ? saved : p)))
+          }
         />
       )}
 
@@ -94,7 +198,16 @@ const Landing: React.FC = () => {
         <Hero />
         <TrustTicker />
         <ShowcaseStrip items={showcaseItems} />
-        <WorkGrid onSelect={openWork} />
+        <WorkGrid
+          projects={portfolioProjects}
+          onSelect={openWork}
+          canEditMarketing={canEditMarketing}
+          marketingEditMode={marketingSiteEditMode}
+          onToggleMarketingEditMode={() => setMarketingSiteEditMode((v) => !v)}
+          onReplaceThumbnail={handleReplaceLandingThumbnail}
+          thumbnailUploadingId={thumbnailUploadingId}
+          gridEditError={gridEditError}
+        />
 
         <section className="py-32 px-4 md:px-12 bg-zinc-950 border-t border-zinc-900">
           <div className="max-w-4xl mx-auto text-center md:text-left">

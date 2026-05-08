@@ -4,21 +4,19 @@ import { useAdminTheme } from '../../../../lib/adminTheme';
 import { appPanelClass } from '../../../../lib/appThemeClasses';
 import { useAuth } from '../../../../lib/auth';
 import { deleteShowcaseAsset, listShowcaseAssets, saveShowcaseAsset, type ShowcaseAsset } from '../../../../data/showcaseRepository';
+import { formatFirestoreListError } from '../../../../lib/formatFirestoreListError';
+import { getMarketingTenantIdForUser } from '../../../../lib/marketingTenant';
 import { deleteShowcaseAsset as deleteShowcaseObject, uploadShowcaseAsset } from '../../../../lib/showcaseStorage';
 
 interface ShowcaseLibrarySectionProps {
   canEdit: boolean;
 }
 
-function tenantIdFromUser(tenantId: string | undefined): string {
-  return tenantId && tenantId.length > 0 ? tenantId : 'torp-default';
-}
-
 const ShowcaseLibrarySection: React.FC<ShowcaseLibrarySectionProps> = ({ canEdit }) => {
   const { theme } = useAdminTheme();
   const { user } = useAuth();
   const isDark = theme === 'dark';
-  const tenantId = tenantIdFromUser(user?.tenantId);
+  const tenantId = getMarketingTenantIdForUser(user?.tenantId);
   const [items, setItems] = useState<ShowcaseAsset[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +33,7 @@ const ShowcaseLibrarySection: React.FC<ShowcaseLibrarySectionProps> = ({ canEdit
       setState('ready');
     } catch (err) {
       setState('error');
-      setError(err instanceof Error ? err.message : 'Could not load showcase assets.');
+      setError(formatFirestoreListError(err, 'showcase'));
     }
   };
 
@@ -136,7 +134,7 @@ const ShowcaseLibrarySection: React.FC<ShowcaseLibrarySectionProps> = ({ canEdit
           </button>
         </div>
       </div>
-      {error && <p className="mt-2 text-xs text-rose-400">{error}</p>}
+      {error && <p className="mt-2 min-w-0 text-xs text-rose-400 break-words">{error}</p>}
       {state === 'loading' ? (
         <p className="text-xs text-zinc-500 mt-3">Loading showcase assets...</p>
       ) : items.length === 0 ? (

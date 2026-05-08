@@ -35,6 +35,12 @@ service cloud.firestore {
       allow read: if true;
     }
 
+    // Marketing landing portfolio — public read for WorkGrid / ProjectDetail;
+    // writes require tenant-matched signed-in token (rule above).
+    match /tenants/{tid}/portfolioProjects/{docId} {
+      allow read: if true;
+    }
+
     // Example: collection with a tenantId field (adjust collection id to your app)
     match /shared_collections/{docId} {
       allow read, update, delete: if isSignedIn() && sameTenantInDoc();
