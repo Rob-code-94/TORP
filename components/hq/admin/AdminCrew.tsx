@@ -184,19 +184,12 @@ const AdminCrew: React.FC = () => {
 
   const saveCrew = () => {
     if (crewReadOnly) return;
-    if (availabilityBlocked) {
-      setStatus(
-        'This crew member has multi-window or multi-exception availability that the simple editor cannot represent without losing data. An admin must adjust this in the data layer until the advanced editor ships.'
-      );
-      setStatusTone('error');
-      return;
-    }
     if (draft.systemRole === UserRole.ADMIN && !isAdmin) {
       setStatus('Only an admin can assign the Admin system role.');
       setStatusTone('error');
       return;
     }
-    const payload = {
+    const basePayload = {
       displayName: draft.displayName,
       role: draft.role,
       systemRole: draft.systemRole,
@@ -206,9 +199,11 @@ const AdminCrew: React.FC = () => {
       rateShootHour: Number(draft.rateShootHour || 0),
       rateEditHour: Number(draft.rateEditHour || 0),
       active: draft.active,
-      availabilityDetail,
     };
-    const result = editingCrewId ? updateCrew(editingCrewId, payload) : createCrew(payload);
+    /** Rich availability is read-only here; omit so update preserves on-file windows/exceptions (see updateCrewMemberProfile). */
+    const updatePayload =
+      editingCrewId && availabilityBlocked ? basePayload : { ...basePayload, availabilityDetail };
+    const result = editingCrewId ? updateCrew(editingCrewId, updatePayload) : createCrew(basePayload);
     if (!result.ok) {
       setStatus('error' in result ? result.error : 'Could not save crew profile.');
       setStatusTone('error');
@@ -522,10 +517,9 @@ const AdminCrew: React.FC = () => {
               <button
                 type="button"
                 onClick={saveCrew}
-                disabled={availabilityBlocked}
                 title={
                   availabilityBlocked
-                    ? 'This profile has complex availability. Saving is disabled until a multi-window editor is available.'
+                    ? 'Availability on file uses multiple windows or exceptions and cannot be edited here. This save updates profile, role, rates, and account—hours stay as stored.'
                     : undefined
                 }
                 className="rounded-md bg-white px-3 py-1.5 text-xs font-bold text-black hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
@@ -642,9 +636,9 @@ const AdminCrew: React.FC = () => {
           <div className={`rounded-lg p-3 space-y-2 min-w-0 ${appPanelClass(isDark)}`}>
             <p className="text-xs uppercase tracking-wide text-zinc-500">Availability</p>
             {availabilityBlocked && (
-              <div className="rounded-md border border-amber-700/60 bg-amber-950/40 p-2 text-[11px] leading-snug text-amber-200">
-                <p className="font-semibold uppercase tracking-wide">Availability locked</p>
-                <p className="mt-1 text-amber-100/90">
+              <div className="rounded-md border border-zinc-700/80 bg-zinc-900/60 p-2 text-[11px] leading-snug text-zinc-300">
+                <p className="font-semibold uppercase tracking-wide text-zinc-400">Availability not editable here</p>
+                <p className="mt-1 text-zinc-400">
                   This profile has{' '}
                   {availabilityRichness.distinctWindows > 1 && (
                     <>{availabilityRichness.distinctWindows} different time windows</>
@@ -653,7 +647,9 @@ const AdminCrew: React.FC = () => {
                   {availabilityRichness.exceptions > 1 && (
                     <>{availabilityRichness.exceptions} time-off exceptions</>
                   )}
-                  . The simple editor would flatten this and silently lose data, so saving is blocked. Contact an admin to adjust the underlying record.
+                  . The simple editor cannot represent that without losing data, so hours stay read-only. You can still save{' '}
+                  <span className="text-zinc-200">name, role, feature access, rates, email, and account</span>
+                  —on-file availability is unchanged until adjusted elsewhere or an advanced editor is available.
                 </p>
               </div>
             )}

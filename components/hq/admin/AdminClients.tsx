@@ -249,7 +249,9 @@ const AdminClients: React.FC = () => {
             <button
               type="button"
               onClick={() => {
-                const result = editingClientId ? updateClient(editingClientId, newClient) : createClient(newClient);
+                const result = editingClientId
+                  ? updateClient(editingClientId, newClient)
+                  : createClient(newClient, { quick: true });
                 if (!result.ok) {
                   setError('error' in result ? result.error : 'Could not create client.');
                   return;

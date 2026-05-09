@@ -89,7 +89,7 @@ const AdminProjectWizard: React.FC<AdminProjectWizardProps> = ({ open, onClose, 
   };
 
   const quickCreateClient = () => {
-    const result = createClient(quickClient);
+    const result = createClient(quickClient, { quick: true });
     if (!result.ok) {
       setError('error' in result ? result.error : 'Could not create client.');
       return;

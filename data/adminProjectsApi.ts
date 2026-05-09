@@ -205,8 +205,8 @@ export function listClients() {
   return { items: MOCK_CLIENTS };
 }
 
-export function createClient(request: CreateClientRequest) {
-  return createClientProfile(request);
+export function createClient(request: CreateClientRequest, options?: { quick?: boolean }) {
+  return createClientProfile(request, options);
 }
 
 export function updateClient(clientId: string, request: CreateClientRequest) {

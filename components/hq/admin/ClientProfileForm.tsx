@@ -48,6 +48,10 @@ const ClientProfileForm: React.FC<ClientProfileFormProps> = ({ value, onChange }
 
   return (
     <div className="space-y-3 min-w-0">
+      <p className="text-[11px] leading-snug text-zinc-500">
+        Quick add: enter <span className="text-zinc-400">company</span> and/or{' '}
+        <span className="text-zinc-400">primary contact</span>; you can fill the rest later.
+      </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <label className={labelClass}>
           Company

@@ -229,7 +229,7 @@ const AdminCommand: React.FC = () => {
   }, [refreshTick]);
 
   const submitQuickClient = () => {
-    const result = createClient(clientDraft);
+    const result = createClient(clientDraft, { quick: true });
     if (!result.ok) {
       setStatus({ tone: 'error', message: 'error' in result ? result.error : 'Could not create client.' });
       return;

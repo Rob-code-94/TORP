@@ -816,7 +816,27 @@ function validateClientInput(input: ReturnType<typeof normalizeClientInput>): st
   return null;
 }
 
-export function createClientProfile(input: {
+const SYNTHETIC_EMAIL_SUFFIX = '@quick-add.local';
+
+function syntheticQuickEmail(): string {
+  const id =
+    typeof globalThis.crypto !== 'undefined' && typeof globalThis.crypto.randomUUID === 'function'
+      ? globalThis.crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+  return `quick-${id}${SYNTHETIC_EMAIL_SUFFIX}`;
+}
+
+function validateClientInputQuick(input: {
+  company: string;
+  name: string;
+}): string | null {
+  if (!input.company.trim() && !input.name.trim()) {
+    return 'Enter a company name or primary contact.';
+  }
+  return null;
+}
+
+function normalizeClientInputQuick(input: {
   company: string;
   name: string;
   email: string;
@@ -831,19 +851,107 @@ export function createClientProfile(input: {
   timezone: string;
   clientStatus: 'active' | 'prospect' | 'paused';
   notes?: string;
-}): { ok: true; client: ClientProfile } | { ok: false; error: string } {
-  const normalized = normalizeClientInput(input);
-  const error = validateClientInput(normalized);
-  if (error) return { ok: false, error };
+}): ReturnType<typeof normalizeClientInput> {
+  const co = input.company.trim();
+  const nm = input.name.trim();
+  const company = co || nm;
+  const name = nm || co;
 
-  const duplicate = MOCK_CLIENTS.find(
+  const contactRaw = input.email.trim();
+  const billingRaw = input.billingEmail.trim();
+
+  let emailOut = normalizeEmail(contactRaw);
+  if (!isValidEmail(emailOut)) {
+    emailOut = syntheticQuickEmail();
+  }
+
+  let billingEmailOut = normalizeEmail(billingRaw);
+  if (!isValidEmail(billingEmailOut)) {
+    billingEmailOut = isValidEmail(normalizeEmail(contactRaw)) ? normalizeEmail(contactRaw) : emailOut;
+  }
+
+  const billingContactName = input.billingContactName.trim() || name;
+
+  return {
+    company,
+    name,
+    email: emailOut,
+    phone: input.phone?.trim() || '(000) 000-0000',
+    billingEmail: billingEmailOut,
+    billingContactName,
+    addressCity: input.addressCity.trim() || 'TBD',
+    addressState: input.addressState.trim() || '—',
+    addressPostal: input.addressPostal.trim() || '00000',
+    addressCountry: input.addressCountry.trim() || 'US',
+    preferredCommunication: input.preferredCommunication,
+    timezone: input.timezone.trim() || 'America/New_York',
+    clientStatus: input.clientStatus,
+    notes: input.notes?.trim() || '',
+  };
+}
+
+function isSyntheticQuickEmail(email: string): boolean {
+  return email.toLowerCase().endsWith(SYNTHETIC_EMAIL_SUFFIX);
+}
+
+function emailConflictsWithRow(normEmail: string, row: ClientProfile): boolean {
+  if (!normEmail || isSyntheticQuickEmail(normEmail)) return false;
+  const e = normEmail.toLowerCase();
+  return row.email.toLowerCase() === e || row.billingEmail.toLowerCase() === e;
+}
+
+function findDuplicateClientQuick(normalized: ReturnType<typeof normalizeClientInput>): ClientProfile | undefined {
+  return MOCK_CLIENTS.find(
     (item) =>
-      item.company.toLowerCase() === normalized.company.toLowerCase() ||
-      item.email.toLowerCase() === normalized.email ||
-      item.billingEmail.toLowerCase() === normalized.billingEmail
+      emailConflictsWithRow(normalized.email, item) || emailConflictsWithRow(normalized.billingEmail, item),
   );
-  if (duplicate) {
-    return { ok: false, error: 'A client with matching company or email already exists.' };
+}
+
+export type CreateClientProfileOptions = { quick?: boolean };
+
+export function createClientProfile(
+  input: {
+    company: string;
+    name: string;
+    email: string;
+    phone?: string;
+    billingEmail: string;
+    billingContactName: string;
+    addressCity: string;
+    addressState: string;
+    addressPostal: string;
+    addressCountry: string;
+    preferredCommunication: 'email' | 'sms' | 'phone';
+    timezone: string;
+    clientStatus: 'active' | 'prospect' | 'paused';
+    notes?: string;
+  },
+  options?: CreateClientProfileOptions,
+): { ok: true; client: ClientProfile } | { ok: false; error: string } {
+  let normalized: ReturnType<typeof normalizeClientInput>;
+
+  if (options?.quick) {
+    const quickErr = validateClientInputQuick(input);
+    if (quickErr) return { ok: false, error: quickErr };
+    normalized = normalizeClientInputQuick(input);
+    const duplicateQuick = findDuplicateClientQuick(normalized);
+    if (duplicateQuick) {
+      return { ok: false, error: 'A client with matching company or email already exists.' };
+    }
+  } else {
+    normalized = normalizeClientInput(input);
+    const error = validateClientInput(normalized);
+    if (error) return { ok: false, error };
+
+    const duplicate = MOCK_CLIENTS.find(
+      (item) =>
+        item.company.toLowerCase() === normalized.company.toLowerCase() ||
+        item.email.toLowerCase() === normalized.email ||
+        item.billingEmail.toLowerCase() === normalized.billingEmail,
+    );
+    if (duplicate) {
+      return { ok: false, error: 'A client with matching company or email already exists.' };
+    }
   }
 
   const client: ClientProfile = {
