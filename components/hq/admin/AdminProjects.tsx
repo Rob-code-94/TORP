@@ -1,7 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CalendarDays, KanbanSquare, ListFilter, MoreVertical, Search } from 'lucide-react';
-import { MOCK_ADMIN_PROJECTS, MOCK_CREW, PROJECT_STAGE_ORDER, transitionProjectStage } from '../../../data/adminMock';
+import { PROJECT_STAGE_ORDER } from '../../../data/hqConstants';
+import { transitionProjectStage } from '../../../data/hqProjectOps';
+import { getHqCrewDirectory, getHqProjectDirectory } from '../../../data/hqSyncDirectory';
+import { useHqOrgTick } from '../HqFirestoreProvider';
 import {
   archiveProject,
   archiveProjects,
@@ -61,8 +64,9 @@ const AdminProjects: React.FC = () => {
   const [assignPickerOpen, setAssignPickerOpen] = useState(false);
   const [pickerCrewIds, setPickerCrewIds] = useState<string[]>([]);
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
-  /** Bumps when archive/delete mutates `MOCK_ADMIN_PROJECTS` so memoized rows refresh. */
+  /** Bumps after local mutations; Firestore sync also bumps via `hqTick`. */
   const [version, setVersion] = useState(0);
+  const hqTick = useHqOrgTick();
   const [rowMenuId, setRowMenuId] = useState<string | null>(null);
   const [rowArchiveTarget, setRowArchiveTarget] = useState<AdminProject | null>(null);
   const [rowDeleteTarget, setRowDeleteTarget] = useState<AdminProject | null>(null);
@@ -71,7 +75,7 @@ const AdminProjects: React.FC = () => {
 
   const rows = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return MOCK_ADMIN_PROJECTS.filter(
+    return getHqProjectDirectory().filter(
       (p) =>
         (!s ||
           p.title.toLowerCase().includes(s) ||
@@ -79,7 +83,7 @@ const AdminProjects: React.FC = () => {
           p.packageLabel.toLowerCase().includes(s)) &&
         (stage === 'all' || p.stage === stage)
     );
-  }, [q, stage, version]);
+  }, [q, stage, version, hqTick]);
 
   const canBulkAssign = hasProjectCapability(user?.role, 'project.bulk.assign');
   const canBulkArchive = hasProjectCapability(user?.role, 'project.bulk.archive');
@@ -167,12 +171,21 @@ const AdminProjects: React.FC = () => {
       setFeedback('Select at least one project.');
       return;
     }
-    selectedIds.forEach((id) => {
-      const p = MOCK_ADMIN_PROJECTS.find((item) => item.id === id);
-      if (p) p.stage = 'post';
-    });
-    setFeedback(`Moved ${selectedIds.length} project(s) to Post.`);
+    const actorName = user?.displayName || 'System';
+    let moved = 0;
+    let failed = 0;
+    for (const id of selectedIds) {
+      const r = transitionProjectStage(id, 'post', actorName);
+      if (r.ok) moved += 1;
+      else failed += 1;
+    }
+    setFeedback(
+      failed
+        ? `Moved ${moved} project(s) to Post; ${failed} could not be moved (invalid stage or guardrails).`
+        : `Moved ${moved} project(s) to Post.`
+    );
     setSelectedIds([]);
+    setVersion((n) => n + 1);
   };
 
   const renderProjectMeta = (p: AdminProject) => (
@@ -283,7 +296,7 @@ const AdminProjects: React.FC = () => {
       setDragOverStage(null);
       return;
     }
-    const moved = MOCK_ADMIN_PROJECTS.find((item) => item.id === draggingId);
+    const moved = getHqProjectDirectory().find((item) => item.id === draggingId);
     const result = transitionProjectStage(draggingId, targetStage, user?.displayName || 'System');
     setFeedback(
       result.ok
@@ -777,7 +790,9 @@ const AdminProjects: React.FC = () => {
               Adds selected crew to {selectedIds.length} project(s). Existing assignments are preserved.
             </p>
             <div className="mt-4 max-h-64 overflow-y-auto space-y-1.5 pr-1">
-              {MOCK_CREW.filter((c) => c.active).map((c) => {
+              {getHqCrewDirectory()
+                .filter((c) => c.active)
+                .map((c) => {
                 const checked = pickerCrewIds.includes(c.id);
                 return (
                   <label

@@ -1,5 +1,5 @@
 import { UserRole, type PlannerItem, type ProjectCapability } from '../types';
-import { capabilitiesForRole } from '../data/adminMock';
+import { capabilitiesForRole } from '../data/hqConstants';
 
 type ProjectRole = UserRole.ADMIN | UserRole.PROJECT_MANAGER;
 

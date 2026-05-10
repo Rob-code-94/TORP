@@ -20,11 +20,13 @@ import { readFile } from 'node:fs/promises';
 import { getApps, initializeApp, cert, applicationDefault } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 
+const TENANT_ID = process.env.TORP_HQ_TENANT_ID || 'torp-default';
+
 const USERS = [
   { email: 'info@torp.life', password: 'Admin1234', displayName: 'ROB R', role: 'ADMIN' },
   { email: 'william@torp.life', password: 'Admin1234', displayName: 'William Fairbanks', role: 'ADMIN' },
-  { email: 'jp@torp.life', password: 'Crew1234', displayName: 'Jayden Price', role: 'PROJECT_MANAGER' },
-  { email: 'staff@torp.life', password: 'Staff1234', displayName: 'A. Vance', role: 'STAFF', crewId: 'cr-1' },
+  { email: 'jp@torp.life', password: 'Crew1234', displayName: 'Jayden Price', role: 'ADMIN' },
+  { email: 'staff@torp.life', password: 'Staff1234', displayName: 'A. Vance', role: 'STAFF', crewId: 'cr-staff-1' },
 ];
 
 function resolveProjectId(serviceAccount) {
@@ -64,7 +66,11 @@ async function main() {
   const auth = getAuth();
   for (const row of USERS) {
     const email = row.email.trim().toLowerCase();
-    const claims = { role: row.role, ...(row.crewId ? { crewId: row.crewId } : {}) };
+    const claims = {
+      role: row.role,
+      tenantId: TENANT_ID,
+      ...(row.crewId ? { crewId: row.crewId } : {}),
+    };
     let uid;
     try {
       const existing = await auth.getUserByEmail(email);

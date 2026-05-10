@@ -1,9 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import {
-  MOCK_ADMIN_PROJECTS,
-} from '../../../data/adminMock';
+import { getHqProjectDirectory } from '../../../data/hqSyncDirectory';
 import { getFinanceRepository } from '../../../data/financeRepository';
 import { setInvoiceLockStatus } from '../../../data/financeApi';
 import { useAuth } from '../../../lib/auth';
@@ -19,6 +17,7 @@ import {
 import type { AdminInvoice, AdminInvoiceStatus, AdminProject } from '../../../types';
 import AdminFormDrawer from './AdminFormDrawer';
 import { formatAdminDate, invoiceStatusClassForTheme, proposalStatusClassForTheme } from './adminFormat';
+import { useHqOrgTick } from '../HqFirestoreProvider';
 
 const INVOICE_STATUS_FILTERS: Array<{ value: 'all' | AdminInvoiceStatus; label: string }> = [
   { value: 'all', label: 'All statuses' },
@@ -41,7 +40,7 @@ const AdminFinancials: React.FC = () => {
   const [dueTo, setDueTo] = useState('');
 
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [newProjectId, setNewProjectId] = useState(MOCK_ADMIN_PROJECTS[0]?.id ?? '');
+  const [newProjectId, setNewProjectId] = useState('');
   const [newClientName, setNewClientName] = useState('');
   const [newAmount, setNewAmount] = useState('');
   const [newIssued, setNewIssued] = useState(() => new Date().toISOString().slice(0, 10));
@@ -62,6 +61,8 @@ const AdminFinancials: React.FC = () => {
   const [financeStatus, setFinanceStatus] = useState<'loading' | 'error' | 'success'>('loading');
   const [financeError, setFinanceError] = useState<string | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
+  const hqTick = useHqOrgTick();
+  const projects = useMemo(() => getHqProjectDirectory(), [hqTick]);
 
   const financeRepo = useMemo(() => getFinanceRepository(), []);
   const invoices = useMemo(() => {
@@ -104,19 +105,23 @@ const AdminFinancials: React.FC = () => {
     }
   }, [financeRepo, reloadTick]);
 
+  useEffect(() => {
+    setNewProjectId((cur) => cur || projects[0]?.id || '');
+  }, [projects]);
+
   const projectsById = useMemo(() => {
     const m = new Map<string, AdminProject>();
-    for (const p of MOCK_ADMIN_PROJECTS) m.set(p.id, p);
+    for (const p of projects) m.set(p.id, p);
     return m;
-  }, []);
+  }, [projects]);
 
   const openCreateDrawer = () => {
-    if (MOCK_ADMIN_PROJECTS.length === 0) {
+    if (projects.length === 0) {
       setDrawerError('Create a project first before creating invoices.');
       setDrawerOpen(false);
       return;
     }
-    const p = projectsById.get(newProjectId) ?? MOCK_ADMIN_PROJECTS[0];
+    const p = projectsById.get(newProjectId) ?? projects[0];
     setNewClientName(p?.clientName ?? '');
     setNewAmount('');
     setNewIssued(new Date().toISOString().slice(0, 10));
@@ -263,7 +268,7 @@ const AdminFinancials: React.FC = () => {
         <div className={`rounded-xl p-5 min-w-0 ${appKpiLinkClass(isDark, false)}`}>
           <p className="text-zinc-500 text-xs uppercase font-bold">Active projects</p>
           <p className={`text-3xl font-bold mt-1 ${isDark ? 'text-white' : 'text-zinc-900'}`}>
-            {MOCK_ADMIN_PROJECTS.filter((p) => p.status === 'active').length}
+            {projects.filter((p) => p.status === 'active').length}
           </p>
         </div>
       </div>
@@ -318,7 +323,7 @@ const AdminFinancials: React.FC = () => {
             >
               <div className="min-w-0">
                 <p className={`font-medium text-sm truncate ${isDark ? 'text-white' : 'text-zinc-900'}`}>
-                  {p.clientName} — {MOCK_ADMIN_PROJECTS.find((x) => x.id === p.projectId)?.title}
+                  {p.clientName} — {projects.find((x) => x.id === p.projectId)?.title}
                 </p>
                 <p className="text-xs text-zinc-500">Total: ${p.total.toLocaleString()}</p>
               </div>
@@ -354,7 +359,7 @@ const AdminFinancials: React.FC = () => {
           <button
             type="button"
             onClick={openCreateDrawer}
-            disabled={MOCK_ADMIN_PROJECTS.length === 0}
+            disabled={projects.length === 0}
             className="w-full sm:w-auto rounded-lg bg-white text-zinc-900 px-3 py-2 text-xs font-semibold hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
           >
             New invoice
@@ -392,7 +397,7 @@ const AdminFinancials: React.FC = () => {
               }
             >
               <option value="all">All projects</option>
-              {MOCK_ADMIN_PROJECTS.map((p) => (
+              {projects.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.title}
                 </option>
@@ -634,7 +639,7 @@ const AdminFinancials: React.FC = () => {
               }}
               className={`mt-1 ${appInputClass(isDark)}`}
             >
-              {MOCK_ADMIN_PROJECTS.map((p) => (
+              {projects.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.title} ({p.id})
                 </option>
@@ -715,7 +720,7 @@ const AdminFinancials: React.FC = () => {
               onChange={(e) => setEditProjectId(e.target.value)}
               className={`mt-1 ${appInputClass(isDark)}`}
             >
-              {MOCK_ADMIN_PROJECTS.map((p) => (
+              {projects.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.title} ({p.id})
                 </option>

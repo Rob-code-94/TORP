@@ -16,20 +16,26 @@ import {
   UserPlus,
 } from 'lucide-react';
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { DEFAULT_HQ_TENANT_ID, resolveHqTenantId } from '../../../data/hqTenant';
 import {
-  MOCK_STORAGE_OPS_EVENTS,
   createPlannerTask,
   createShoot,
-  MOCK_ADMIN_PROJECTS,
-  MOCK_ACTIVITY,
-  MOCK_ASSETS,
-  MOCK_CREW,
-  MOCK_PLANNER,
-  MOCK_SHOOTS_ADMIN,
+} from '../../../data/hqPlannerCalendarOps';
+import {
+  getActivitySync,
+  getAssetsSync,
+  getHqCrewDirectory,
+  getHqProjectDirectory,
+  getPlannerItemsSync,
+  getShootsSync,
+  getStorageOpsSync,
+} from '../../../data/hqSyncDirectory';
+import {
+  recordStorageOpsEvent,
   retryStorageOperation,
   revokeStorageOpsLink,
-  recordStorageOpsEvent,
-} from '../../../data/adminMock';
+} from '../../../data/hqStorageOps';
+import { useHqOrgTick } from '../HqFirestoreProvider';
 import { createClient } from '../../../data/adminProjectsApi';
 import { getFinanceDashboardMetrics } from '../../../data/financeApi';
 import { useAdminTheme } from '../../../lib/adminTheme';
@@ -42,7 +48,7 @@ import {
   HQ_GUIDE_TIP_RESET_EVENT,
 } from '../../../lib/hqGuideTipStorage';
 import { hqUserGreetingName } from '../../../lib/hqUserDisplay';
-import { UserRole, type AdminProject, type PlannerItemPriority } from '../../../types';
+import { UserRole, type AdminProject, type PlannerItem, type PlannerItemPriority } from '../../../types';
 import {
   appErrorBannerClass,
   appIconWellClass,
@@ -97,10 +103,11 @@ const AdminCommand: React.FC = () => {
   const [taskOpen, setTaskOpen] = useState(false);
   const [shootOpen, setShootOpen] = useState(false);
   const [guideTipVisible, setGuideTipVisible] = useState(!isHqGuideTipDismissed());
+  const hqTick = useHqOrgTick();
 
   const activeProjects = useMemo(
-    () => MOCK_ADMIN_PROJECTS.filter((p) => p.status === 'active'),
-    [refreshTick]
+    () => getHqProjectDirectory().filter((p) => p.status === 'active'),
+    [refreshTick, hqTick]
   );
   const defaultProject = activeProjects[0];
   const canCreateProject = hasHqFeatureAccess(user, 'quick.addProject');
@@ -167,32 +174,32 @@ const AdminCommand: React.FC = () => {
   const financeMetrics = useMemo(() => getFinanceDashboardMetrics(), [refreshTick]);
   const stats = useMemo(
     () => ({
-      activeProjects: MOCK_ADMIN_PROJECTS.filter((project) => project.status === 'active').length,
+      activeProjects: getHqProjectDirectory().filter((project) => project.status === 'active').length,
       revenueYtd: financeMetrics.revenueYtd,
       outstanding: financeMetrics.openArTotal,
-      pendingApprovals: MOCK_ASSETS.filter((asset) => asset.status === 'client_review').length,
-      urgentTasks: MOCK_PLANNER.filter((task) => !task.done && task.priority === 'urgent').length,
+      pendingApprovals: getAssetsSync().filter((asset) => asset.status === 'client_review').length,
+      urgentTasks: getPlannerItemsSync().filter((task) => !task.done && task.priority === 'urgent').length,
     }),
-    [financeMetrics, refreshTick]
+    [financeMetrics, refreshTick, hqTick]
   );
 
   const urgent = useMemo(
-    () => MOCK_PLANNER.filter((t) => !t.done && t.priority === 'urgent').slice(0, 4),
-    [refreshTick]
+    () => getPlannerItemsSync().filter((t) => !t.done && t.priority === 'urgent').slice(0, 4),
+    [refreshTick, hqTick]
   );
 
   const nextShoots = useMemo(
-    () => [...MOCK_SHOOTS_ADMIN].sort((a, b) => a.date.localeCompare(b.date)).slice(0, 3),
-    [refreshTick]
+    () => [...getShootsSync()].sort((a, b) => a.date.localeCompare(b.date)).slice(0, 3),
+    [refreshTick, hqTick]
   );
 
   const pendingAssets = useMemo(
-    () => MOCK_ASSETS.filter((a) => a.status === 'client_review'),
-    [refreshTick]
+    () => getAssetsSync().filter((a) => a.status === 'client_review'),
+    [refreshTick, hqTick]
   );
 
   const overdue = useMemo(() => financeMetrics.overdueInvoices, [financeMetrics]);
-  const storageOpsEvents = useMemo(() => MOCK_STORAGE_OPS_EVENTS.slice(0, 8), [refreshTick]);
+  const storageOpsEvents = useMemo(() => getStorageOpsSync().slice(0, 8), [refreshTick, hqTick]);
   const quotaSnapshot = useMemo(
     () => ({
       projectsGb: 412,
@@ -206,12 +213,12 @@ const AdminCommand: React.FC = () => {
 
   const weekData = useMemo(() => {
     const start = startOfWeekSun(new Date());
-    const byDate = new Map<string, typeof MOCK_PLANNER>();
+    const byDate = new Map<string, PlannerItem[]>();
     for (let i = 0; i < 7; i++) {
       const key = toYmd(addDays(start, i));
       byDate.set(key, []);
     }
-    for (const item of MOCK_PLANNER) {
+    for (const item of getPlannerItemsSync()) {
       if (byDate.has(item.dueDate)) {
         byDate.get(item.dueDate)!.push(item);
       }
@@ -226,7 +233,7 @@ const AdminCommand: React.FC = () => {
         items: byDate.get(ymd) || [],
       };
     });
-  }, [refreshTick]);
+  }, [refreshTick, hqTick]);
 
   const submitQuickClient = () => {
     const result = createClient(clientDraft, { quick: true });
@@ -241,7 +248,7 @@ const AdminCommand: React.FC = () => {
   };
 
   const projectById = (projectId: string): AdminProject | undefined =>
-    MOCK_ADMIN_PROJECTS.find((project) => project.id === projectId);
+    getHqProjectDirectory().find((project) => project.id === projectId);
 
   const submitQuickTask = () => {
     if (!taskDraft.projectId) {
@@ -271,7 +278,7 @@ const AdminCommand: React.FC = () => {
           assigneeCrewIds: [taskDraft.assigneeCrewId || project.ownerCrewId],
           assigneeCrewId: taskDraft.assigneeCrewId || project.ownerCrewId,
           assigneeName:
-            MOCK_CREW.find((crew) => crew.id === (taskDraft.assigneeCrewId || project.ownerCrewId))
+            getHqCrewDirectory().find((crew) => crew.id === (taskDraft.assigneeCrewId || project.ownerCrewId))
               ?.displayName || project.ownerName,
           done: false,
           notes: '',
@@ -359,7 +366,7 @@ const AdminCommand: React.FC = () => {
     recordStorageOpsEvent({
       eventType: 'link_revoked',
       actorName: user?.displayName || user?.email || 'Admin',
-      tenantId: 'torp-default',
+      tenantId: resolveHqTenantId(user) ?? DEFAULT_HQ_TENANT_ID,
       details: `Manual revoke from command center for ${eventId}`,
     });
     setRefreshTick((value) => value + 1);
@@ -806,7 +813,7 @@ const AdminCommand: React.FC = () => {
               : 'bg-white border border-zinc-200 divide-y divide-zinc-200'
           }`}
         >
-          {MOCK_ACTIVITY.map((a) => (
+          {getActivitySync().map((a) => (
             <Link
               key={a.id}
               to={`/hq/admin/projects/${a.projectId}`}
@@ -972,7 +979,7 @@ const AdminCommand: React.FC = () => {
             value={taskDraft.projectId}
             onChange={(e) =>
               setTaskDraft((current) => {
-                const nextProject = MOCK_ADMIN_PROJECTS.find((project) => project.id === e.target.value);
+                const nextProject = getHqProjectDirectory().find((project) => project.id === e.target.value);
                 return {
                   ...current,
                   projectId: e.target.value,

@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { plannerStatusFromItem, updatePlannerTask } from '../../data/hqPlannerCalendarOps';
 import {
-  MOCK_ADMIN_PROJECTS,
-  MOCK_CREW,
-  MOCK_PLANNER,
-  MOCK_SHOOTS_ADMIN,
-  plannerStatusFromItem,
-  updatePlannerTask,
-} from '../../data/adminMock';
+  getHqCrewDirectory,
+  getHqProjectDirectory,
+  getPlannerItemsSync,
+  getShootsSync,
+} from '../../data/hqSyncDirectory';
+import { useHqOrgTick } from '../hq/HqFirestoreProvider';
 import { updateCrew } from '../../data/adminProjectsApi';
 import { useAuth } from '../../lib/auth';
 import {
@@ -71,11 +71,12 @@ const StaffView: React.FC = () => {
   const [gearChecked, setGearChecked] = useState<Record<string, Record<string, boolean>>>({});
   const [staffMsg, setStaffMsg] = useState<string | null>(null);
   const [staffMsgTone, setStaffMsgTone] = useState<'ok' | 'error'>('ok');
+  const hqTick = useHqOrgTick();
 
   const crewId = user?.crewId ?? null;
   const crewProfile = useMemo(
-    () => (crewId ? MOCK_CREW.find((c) => c.id === crewId) : undefined),
-    [crewId, refresh],
+    () => (crewId ? getHqCrewDirectory().find((c) => c.id === crewId) : undefined),
+    [crewId, refresh, hqTick],
   );
 
   const [avDraft, setAvDraft] = useState<{
@@ -120,22 +121,22 @@ const StaffView: React.FC = () => {
 
   const myTasks = useMemo(() => {
     if (!crewId) return [];
-    return MOCK_PLANNER.filter((t) => taskAssignedToCrew(t, crewId));
-  }, [crewId, refresh]);
+    return getPlannerItemsSync().filter((t) => taskAssignedToCrew(t, crewId));
+  }, [crewId, refresh, hqTick]);
 
   const myProjects = useMemo(() => {
     if (!crewId) return [];
-    return MOCK_ADMIN_PROJECTS.filter(
+    return getHqProjectDirectory().filter(
       (p) => p.ownerCrewId === crewId || (p.assignedCrewIds || []).includes(crewId),
     );
-  }, [crewId, refresh]);
+  }, [crewId, refresh, hqTick]);
 
   const myShoots = useMemo(() => {
     if (!crewId) return [];
-    return MOCK_SHOOTS_ADMIN.filter((s) => isShootVisibleToCrew(s, crewId)).sort((a, b) =>
+    return getShootsSync().filter((s) => isShootVisibleToCrew(s, crewId)).sort((a, b) =>
       a.date.localeCompare(b.date),
     );
-  }, [crewId, refresh]);
+  }, [crewId, refresh, hqTick]);
 
   const today = ymdToday();
   const { upcomingShoots, pastShoots } = useMemo(() => {

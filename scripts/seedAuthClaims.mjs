@@ -22,18 +22,24 @@ if (!getApps().length) {
   initializeApp({ credential: cert(sa) });
 }
 
+const TENANT_ID = process.env.TORP_HQ_TENANT_ID || 'torp-default';
+
 const SEED = [
   { email: 'info@torp.life', role: 'ADMIN' },
   { email: 'william@torp.life', role: 'ADMIN' },
-  { email: 'jp@torp.life', role: 'PROJECT_MANAGER' },
-  { email: 'staff@torp.life', role: 'STAFF', crewId: 'cr-1' },
+  { email: 'jp@torp.life', role: 'ADMIN' },
+  { email: 'staff@torp.life', role: 'STAFF', crewId: 'cr-staff-1' },
 ];
 
 const auth = getAuth();
 
 for (const row of SEED) {
   const email = row.email.trim().toLowerCase();
-  const claims = { role: row.role, ...(row.crewId ? { crewId: row.crewId } : {}) };
+  const claims = {
+    role: row.role,
+    tenantId: TENANT_ID,
+    ...(row.crewId ? { crewId: row.crewId } : {}),
+  };
   try {
     const u = await auth.getUserByEmail(email);
     await auth.setCustomUserClaims(u.uid, claims);

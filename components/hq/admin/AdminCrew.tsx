@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { attachMediaToCrewProfile, MOCK_ASSETS, MOCK_CREW, upsertCrewMediaPolicy } from '../../../data/adminMock';
+import { attachMediaToCrewProfile, upsertCrewMediaPolicy } from '../../../data/hqCrewCrud';
+import { getAssetsSync, getHqCrewDirectory } from '../../../data/hqSyncDirectory';
+import { useHqOrgTick } from '../HqFirestoreProvider';
 import { createCrew, deleteCrew, sendCrewResetLink, setCrewPassword, updateCrew } from '../../../data/adminProjectsApi';
 import { useAuth } from '../../../lib/auth';
 import { isFirebaseConfigured } from '../../../lib/firebase';
@@ -90,10 +92,14 @@ const AdminCrew: React.FC = () => {
   const [roleFilter, setRoleFilter] = useState<'all' | CrewProfile['role']>('all');
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [listVersion, setListVersion] = useState(0);
-  const editingCrew = useMemo(() => MOCK_CREW.find((crew) => crew.id === editingCrewId), [editingCrewId]);
+  const hqTick = useHqOrgTick();
+  const editingCrew = useMemo(
+    () => getHqCrewDirectory().find((crew) => crew.id === editingCrewId),
+    [editingCrewId, hqTick]
+  );
 
   const filteredCrew = useMemo(() => {
-    return MOCK_CREW.filter((c) => {
+    return getHqCrewDirectory().filter((c) => {
       const t = directoryQuery.trim().toLowerCase();
       if (t) {
         const blob = `${c.displayName} ${c.email} ${c.role}`.toLowerCase();
@@ -104,7 +110,7 @@ const AdminCrew: React.FC = () => {
       if (activeFilter === 'inactive' && c.active) return false;
       return true;
     });
-  }, [directoryQuery, roleFilter, activeFilter, listVersion]);
+  }, [directoryQuery, roleFilter, activeFilter, listVersion, hqTick]);
 
   // Detect availability records the simple single-window editor cannot represent
   // without losing data. The editor flattens all selected days to one (start,end)
@@ -131,7 +137,7 @@ const AdminCrew: React.FC = () => {
   };
 
   const openEdit = (crewId: string) => {
-    const crew = MOCK_CREW.find((item) => item.id === crewId);
+    const crew = getHqCrewDirectory().find((item) => item.id === crewId);
     if (!crew) return;
     setEditingCrewId(crew.id);
     setDraft({
@@ -815,7 +821,7 @@ const AdminCrew: React.FC = () => {
                   className={`${appInputClass(isDark)} min-w-0`}
                 >
                   <option value="">Select project asset to attach</option>
-                  {MOCK_ASSETS.filter((asset) => editingCrew.assignedProjectIds.includes(asset.projectId)).map((asset) => (
+                  {getAssetsSync().filter((asset) => editingCrew.assignedProjectIds.includes(asset.projectId)).map((asset) => (
                     <option key={asset.id} value={asset.id}>
                       {asset.label}
                     </option>
@@ -835,7 +841,7 @@ const AdminCrew: React.FC = () => {
                   <p className="text-xs text-zinc-500">No media attached.</p>
                 ) : (
                   (editingCrew.mediaAssetIds || []).map((assetId) => {
-                    const asset = MOCK_ASSETS.find((item) => item.id === assetId);
+                    const asset = getAssetsSync().find((item) => item.id === assetId);
                     const policy = editingCrew.mediaPolicies?.find((item) => item.assetId === assetId);
                     const expired = policy?.expiresAt ? new Date(policy.expiresAt).getTime() < Date.now() : false;
                     return (

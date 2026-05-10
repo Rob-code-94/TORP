@@ -5,7 +5,13 @@ import type {
   FinancialLockStatus,
   ProjectExpense,
 } from '../types';
-import { MOCK_EXPENSES, MOCK_INVOICES_ADMIN, MOCK_PROPOSALS } from './adminMock';
+import { hqUpsertExpense, hqUpsertInvoice } from './hqFirestoreService';
+import {
+  getHqExpenseDirectory,
+  getHqInvoiceDirectory,
+  getHqProposalDirectory,
+} from './hqSyncDirectory';
+import { getHqTenantForWrites } from './hqWriteContext';
 
 export interface FinanceMetrics {
   openArTotal: number;
@@ -29,66 +35,12 @@ export interface FinanceRepository {
   getMetrics(now?: Date): FinanceMetrics;
 }
 
-interface FinanceStore {
-  invoices: AdminInvoice[];
-  proposals: AdminProposal[];
-  expenses: ProjectExpense[];
-}
-
-const STORE_KEY = 'torp.finance.v1';
-let memoryStore: FinanceStore | null = null;
-
-function cloneStore(store: FinanceStore): FinanceStore {
-  return {
-    invoices: store.invoices.map((item) => ({ ...item })),
-    proposals: store.proposals.map((item) => ({
-      ...item,
-      lineItems: item.lineItems.map((lineItem) => ({ ...lineItem })),
-    })),
-    expenses: store.expenses.map((item) => ({ ...item })),
-  };
-}
-
-function createSeedStore(): FinanceStore {
-  return {
-    invoices: MOCK_INVOICES_ADMIN.map((item) => ({ ...item })),
-    proposals: MOCK_PROPOSALS.map((item) => ({
-      ...item,
-      lineItems: item.lineItems.map((lineItem) => ({ ...lineItem })),
-    })),
-    expenses: MOCK_EXPENSES.map((item) => ({ ...item })),
-  };
-}
-
-function parseStore(raw: string | null): FinanceStore | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as FinanceStore;
-    if (!parsed || !Array.isArray(parsed.invoices) || !Array.isArray(parsed.proposals) || !Array.isArray(parsed.expenses)) {
-      return null;
-    }
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-function readStore(): FinanceStore {
-  if (typeof window === 'undefined') {
-    if (!memoryStore) memoryStore = createSeedStore();
-    return cloneStore(memoryStore);
-  }
-  const parsed = parseStore(window.localStorage.getItem(STORE_KEY));
-  if (parsed) return cloneStore(parsed);
-  const seeded = createSeedStore();
-  window.localStorage.setItem(STORE_KEY, JSON.stringify(seeded));
-  return cloneStore(seeded);
-}
-
-function writeStore(store: FinanceStore) {
-  memoryStore = cloneStore(store);
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(STORE_KEY, JSON.stringify(store));
+function coerceInvoiceStatus(invoice: AdminInvoice): AdminInvoiceStatus {
+  if (invoice.status === 'paid' || invoice.status === 'void') return invoice.status;
+  const openAmount = invoice.amount - invoice.amountPaid;
+  if (openAmount <= 0) return 'paid';
+  if (invoice.amountPaid > 0) return 'partial';
+  return invoice.status;
 }
 
 function validateInvoicePatch(patch: Partial<AdminInvoice>) {
@@ -125,18 +77,7 @@ function monthLabel(monthIndex: number) {
   return ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][monthIndex]!;
 }
 
-function coerceInvoiceStatus(invoice: AdminInvoice): AdminInvoiceStatus {
-  if (invoice.status === 'paid' || invoice.status === 'void') return invoice.status;
-  const openAmount = invoice.amount - invoice.amountPaid;
-  if (openAmount <= 0) return 'paid';
-  if (invoice.amountPaid > 0) return 'partial';
-  return invoice.status;
-}
-
-function calculateMonthlyRevenue(
-  invoices: AdminInvoice[],
-  now: Date
-): Array<{ name: string; revenue: number }> {
+function calculateMonthlyRevenue(invoices: AdminInvoice[], now: Date): Array<{ name: string; revenue: number }> {
   const currentMonthIndex = now.getMonth();
   const monthIndexes = Array.from({ length: 6 }, (_, idx) => {
     const monthIndex = currentMonthIndex - (5 - idx);
@@ -158,28 +99,27 @@ function calculateMonthlyRevenue(
   }));
 }
 
-const localFinanceRepository: FinanceRepository = {
+const firestoreFinanceRepository: FinanceRepository = {
   listInvoices() {
-    const store = readStore();
-    return store.invoices.map((invoice) => ({ ...invoice, status: coerceInvoiceStatus(invoice) }));
+    return getHqInvoiceDirectory().map((invoice) => ({ ...invoice, status: coerceInvoiceStatus(invoice) }));
   },
   listInvoicesByProject(projectId) {
     return this.listInvoices().filter((invoice) => invoice.projectId === projectId);
   },
   listProposals() {
-    const store = readStore();
-    return store.proposals;
+    return getHqProposalDirectory().map((item) => ({
+      ...item,
+      lineItems: item.lineItems.map((lineItem) => ({ ...lineItem })),
+    }));
   },
   getProposalByProject(projectId) {
     return this.listProposals().find((proposal) => proposal.projectId === projectId);
   },
   listExpensesByProject(projectId) {
-    const store = readStore();
-    return store.expenses.filter((expense) => expense.projectId === projectId);
+    return getHqExpenseDirectory().filter((expense) => expense.projectId === projectId);
   },
   createInvoice(input) {
     validateInvoice(input);
-    const store = readStore();
     const invoice: AdminInvoice = {
       ...input,
       id: `INV-${new Date().getFullYear()}-${Math.floor(Math.random() * 900 + 100)}`,
@@ -187,14 +127,12 @@ const localFinanceRepository: FinanceRepository = {
       lockedAt: input.lockStatus === 'locked' ? new Date().toISOString() : undefined,
       lockedBy: input.lockStatus === 'locked' ? 'system' : undefined,
     };
-    store.invoices.unshift(invoice);
-    writeStore(store);
+    void hqUpsertInvoice(getHqTenantForWrites(), invoice).catch((err) => console.error('[hq] createInvoice', err));
     return invoice;
   },
   updateInvoice(id, patch) {
     validateInvoicePatch(patch);
-    const store = readStore();
-    const invoice = store.invoices.find((item) => item.id === id);
+    const invoice = getHqInvoiceDirectory().find((item) => item.id === id);
     if (!invoice) return { ok: false };
     if (
       invoice.lockStatus === 'locked' &&
@@ -211,29 +149,29 @@ const localFinanceRepository: FinanceRepository = {
     const merged: AdminInvoice = { ...invoice, ...patch };
     if (merged.dueDate < merged.issuedDate) throw new Error('Due date cannot be earlier than issued date.');
     if (merged.amountPaid > merged.amount) throw new Error('Amount paid cannot exceed invoice amount.');
-    Object.assign(invoice, merged, { status: coerceInvoiceStatus(merged) });
-    writeStore(store);
+    const next = { ...merged, status: coerceInvoiceStatus(merged) };
+    void hqUpsertInvoice(getHqTenantForWrites(), next).catch((err) => console.error('[hq] updateInvoice', err));
     return { ok: true };
   },
   setInvoiceLockStatus(id, lockStatus, actor = 'system') {
-    const store = readStore();
-    const invoice = store.invoices.find((item) => item.id === id);
+    const invoice = getHqInvoiceDirectory().find((item) => item.id === id);
     if (!invoice) return { ok: false };
-    invoice.lockStatus = lockStatus;
-    invoice.lockedAt = lockStatus === 'locked' ? new Date().toISOString() : undefined;
-    invoice.lockedBy = lockStatus === 'locked' ? actor : undefined;
-    writeStore(store);
+    const next: AdminInvoice = {
+      ...invoice,
+      lockStatus,
+      lockedAt: lockStatus === 'locked' ? new Date().toISOString() : undefined,
+      lockedBy: lockStatus === 'locked' ? actor : undefined,
+    };
+    void hqUpsertInvoice(getHqTenantForWrites(), next).catch((err) => console.error('[hq] setInvoiceLockStatus', err));
     return { ok: true };
   },
   createExpense(input) {
     validateExpense(input);
-    const store = readStore();
     const expense: ProjectExpense = {
       ...input,
       id: `e-${Date.now()}`,
     };
-    store.expenses.unshift(expense);
-    writeStore(store);
+    void hqUpsertExpense(getHqTenantForWrites(), expense).catch((err) => console.error('[hq] createExpense', err));
     return expense;
   },
   getMetrics(now = new Date()) {
@@ -260,12 +198,9 @@ const localFinanceRepository: FinanceRepository = {
 };
 
 export function getFinanceRepository(): FinanceRepository {
-  return localFinanceRepository;
+  return firestoreFinanceRepository;
 }
 
 export function resetFinanceStoreForTests() {
-  memoryStore = null;
-  if (typeof window !== 'undefined') {
-    window.localStorage.removeItem(STORE_KEY);
-  }
+  /* Firestore-backed finance has no localStorage store; tests rely on `resetHqSyncDirectoryForTests`. */
 }

@@ -7,37 +7,41 @@ import type {
   BlockerItem,
   DependencyItem,
 } from '../types';
+import type { CrewAvailability, CrewProfile } from '../types';
 import {
-  MOCK_CLIENTS,
-  MOCK_CREW,
-  archiveProject as archiveProjectMock,
-  countProjectCascade,
-  createCrewMemberProfile,
-  deleteProjectCascade,
-  MOCK_ADMIN_PROJECTS,
-  MOCK_BLOCKERS,
-  MOCK_CHANGE_ORDERS,
-  MOCK_DEPENDENCIES,
-  MOCK_PROJECT_DELIVERABLES,
-  MOCK_RISKS,
-  bulkAssignCrewToProjects,
-  bulkArchiveProjects,
   createClientProfile,
+  updateClientProfile,
+  deleteClientProfile,
+} from './hqClientCrud';
+import {
+  createCrewMemberProfile,
+  deleteCrewMemberProfile,
   requestCrewPasswordReset,
   setCrewTemporaryPassword,
-  deleteCrewMemberProfile,
-  deleteClientProfile,
-  updateClientProfile,
   updateCrewMemberProfile,
-  updateProjectNarrative,
-  transitionProjectStage,
-} from './adminMock';
-import type {
-  BulkProjectResult,
-  DeleteProjectCascadeResult,
-  ProjectCascadeCounts,
-} from './adminMock';
-import type { CrewAvailability, CrewProfile } from '../types';
+} from './hqCrewCrud';
+import {
+  archiveProject as hqArchiveProject,
+  bulkArchiveProjects,
+  bulkAssignCrewToProjects,
+  countProjectCascade,
+  deleteProjectCascade,
+  transitionProjectStage as hqTransitionProjectStage,
+  updateProjectNarrative as hqUpdateProjectNarrative,
+} from './hqProjectOps';
+import type { DeleteProjectCascadeResult, ProjectCascadeCounts } from './hqProjectOps';
+import {
+  getDeliverablesByProjectSync,
+  getHqBlockerDirectory,
+  getHqChangeOrderDirectory,
+  getHqClientDirectory,
+  getHqCrewDirectory,
+  getHqDependencyDirectory,
+  getHqProjectDirectory,
+  getHqRiskDirectory,
+} from './hqSyncDirectory';
+import { hqUpsertProject } from './hqFirestoreService';
+import { getHqTenantForWrites } from './hqWriteContext';
 
 export type UiLoadState = 'loading' | 'empty' | 'error' | 'success';
 
@@ -60,18 +64,22 @@ export interface ProjectListResponse {
 export function listProjects(request: ProjectListRequest): ProjectListResponse {
   const q = request.q?.trim().toLowerCase() ?? '';
   const stage = request.stage ?? 'all';
-  const items = MOCK_ADMIN_PROJECTS.filter(
+  const items = getHqProjectDirectory().filter(
     (item) =>
       (stage === 'all' || item.stage === stage) &&
       (!q ||
         item.title.toLowerCase().includes(q) ||
         item.clientName.toLowerCase().includes(q) ||
-        item.packageLabel.toLowerCase().includes(q))
+        item.packageLabel.toLowerCase().includes(q)),
   );
   return { items, total: items.length };
 }
 
-export interface CreateProjectRequest extends Pick<AdminProject, 'title' | 'clientId' | 'clientName' | 'packageLabel' | 'budget' | 'dueDate' | 'ownerCrewId' | 'ownerName'> {
+export interface CreateProjectRequest
+  extends Pick<
+    AdminProject,
+    'title' | 'clientId' | 'clientName' | 'packageLabel' | 'budget' | 'dueDate' | 'ownerCrewId' | 'ownerName'
+  > {
   stage: ProjectStage;
 }
 
@@ -129,37 +137,30 @@ export function createProject(request: CreateProjectRequest): AdminProject {
     deliverables: [],
     contactEmail: '',
   };
-  MOCK_ADMIN_PROJECTS.unshift(created);
+  void hqUpsertProject(getHqTenantForWrites(), created).catch((err) => console.error('[hq] createProject', err));
   return created;
 }
 
 export function moveProjectStage(projectId: string, toStage: ProjectStage, actorName: string): { ok: boolean; error?: string } {
-  return transitionProjectStage(projectId, toStage, actorName);
+  return hqTransitionProjectStage(projectId, toStage, actorName);
 }
 
-export function bulkAssignCrew(
-  projectIds: string[],
-  crewIds: string[],
-  actorName: string
-): BulkProjectResult {
+export function bulkAssignCrew(projectIds: string[], crewIds: string[], actorName: string) {
   return bulkAssignCrewToProjects(projectIds, crewIds, actorName);
 }
 
-export function archiveProjects(projectIds: string[], actorName: string): BulkProjectResult {
+export function archiveProjects(projectIds: string[], actorName: string) {
   return bulkArchiveProjects(projectIds, actorName);
 }
 
-/** Single-project archive (soft, reversible). */
 export function archiveProject(projectId: string, actorName: string): { ok: boolean; error?: string } {
-  return archiveProjectMock(projectId, actorName);
+  return hqArchiveProject(projectId, actorName);
 }
 
-/** Hard delete a project and every related mock row. */
 export function deleteProject(projectId: string, actorName: string): DeleteProjectCascadeResult {
   return deleteProjectCascade(projectId, actorName);
 }
 
-/** Pre-flight cascade counts for the delete confirmation modal. */
 export function getProjectCascadeCounts(projectId: string): ProjectCascadeCounts {
   return countProjectCascade(projectId);
 }
@@ -176,11 +177,11 @@ export interface ProjectControlsResponse {
 
 export function getProjectControls(projectId: string): ProjectControlsResponse {
   return {
-    deliverables: MOCK_PROJECT_DELIVERABLES.filter((item) => item.projectId === projectId),
-    risks: MOCK_RISKS.filter((item) => item.projectId === projectId),
-    blockers: MOCK_BLOCKERS.filter((item) => item.projectId === projectId),
-    dependencies: MOCK_DEPENDENCIES.filter((item) => item.projectId === projectId),
-    changeOrders: MOCK_CHANGE_ORDERS.filter((item) => item.projectId === projectId),
+    deliverables: getDeliverablesByProjectSync(projectId),
+    risks: getHqRiskDirectory().filter((r) => r.projectId === projectId),
+    blockers: getHqBlockerDirectory().filter((b) => b.projectId === projectId),
+    dependencies: getHqDependencyDirectory().filter((d) => d.projectId === projectId),
+    changeOrders: getHqChangeOrderDirectory().filter((c) => c.projectId === projectId),
   };
 }
 
@@ -202,7 +203,7 @@ export interface CreateClientRequest {
 }
 
 export function listClients() {
-  return { items: MOCK_CLIENTS };
+  return { items: getHqClientDirectory() };
 }
 
 export function createClient(request: CreateClientRequest, options?: { quick?: boolean }) {
@@ -213,7 +214,7 @@ export function updateClient(clientId: string, request: CreateClientRequest) {
   return updateClientProfile(clientId, request);
 }
 
-export function deleteClient(clientId: string) {
+export async function deleteClient(clientId: string) {
   return deleteClientProfile(clientId);
 }
 
@@ -234,7 +235,7 @@ export interface UpdateCrewRequest extends Partial<CreateCrewRequest> {
 }
 
 export function listCrew() {
-  return { items: MOCK_CREW };
+  return { items: getHqCrewDirectory() };
 }
 
 export function createCrew(request: CreateCrewRequest) {
@@ -265,5 +266,5 @@ export interface UpdateProjectNarrativeRequest {
 }
 
 export function saveProjectNarrative(projectId: string, request: UpdateProjectNarrativeRequest, actorName: string) {
-  return updateProjectNarrative(projectId, request, actorName);
+  return hqUpdateProjectNarrative(projectId, request, actorName);
 }

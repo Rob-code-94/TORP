@@ -1,93 +1,142 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { attachAssetToPlannerItem, removeAssetFromPlannerItem } from '../data/hqPlannerCalendarOps';
+import { retryStorageOperation, revokeStorageOpsLink } from '../data/hqStorageOps';
+import { upsertCrewMediaPolicy } from '../data/hqCrewCrud';
 import {
-  MOCK_STORAGE_OPS_EVENTS,
-  attachAssetToPlannerItem,
-  removeAssetFromPlannerItem,
-  retryStorageOperation,
-  revokeStorageOpsLink,
-  upsertCrewMediaPolicy,
-} from '../data/adminMock';
-import { MOCK_PLANNER, MOCK_ASSETS, MOCK_CREW } from '../data/adminMock';
+  resetHqSyncDirectoryForTests,
+  setHqAssetDirectory,
+  setHqCrewDirectory,
+  setHqPlannerDirectory,
+  setHqStorageOpsDirectory,
+  getPlannerItemsSync,
+  getAssetsSync,
+  getHqCrewDirectory,
+  getStorageOpsSync,
+} from '../data/hqSyncDirectory';
+import type { CrewProfile } from '../types';
+import { UserRole } from '../types';
+
+function minimalJayden(): CrewProfile {
+  return {
+    id: 'cr-6',
+    displayName: 'Jayden Price',
+    role: 'producer',
+    systemRole: UserRole.ADMIN,
+    email: 'jp@torp.life',
+    phone: '',
+    rateShootHour: 0,
+    rateEditHour: 0,
+    active: true,
+    assignedProjectIds: [],
+    availability: '',
+    availabilityDetail: {
+      timezone: 'America/Chicago',
+      windows: [],
+      exceptions: [],
+      notes: '',
+    },
+  };
+}
 
 describe('Wave 3 planner attachments', () => {
+  beforeEach(() => {
+    resetHqSyncDirectoryForTests();
+  });
+
   it('attaches and detaches planner asset references', () => {
     const taskId = 't-wave3';
     const projectId = 'p-wave3';
     const assetId = 'a-wave3';
-    MOCK_PLANNER.unshift({
-      id: taskId,
-      projectId,
-      projectTitle: 'Wave 3',
-      title: 'Task',
-      status: 'todo',
-      dueDate: '2026-05-07',
-      priority: 'normal',
-      assigneeCrewId: 'cr-6',
-      assigneeName: 'Jayden Price',
-      done: false,
-      attachmentAssetIds: [],
-    });
-    MOCK_ASSETS.unshift({
-      id: assetId,
-      projectId,
-      projectTitle: 'Wave 3',
-      label: 'Asset',
-      type: 'video',
-      sourceType: 'internal',
-      sourceRef: 'local',
-      version: 1,
-      status: 'internal_review',
-      signedUrl: null,
-      signedUrlExpiresAt: null,
-      uploadedBy: 'tester',
-      uploadedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      usageRights: 'owned',
-      storagePath: null,
-      storageBucket: null,
-      storageDownloadUrl: null,
-      metadata: {},
-    });
-    const task = MOCK_PLANNER.find((item) => item.id === taskId)!;
-    const asset = MOCK_ASSETS.find((item) => item.id === assetId)!;
+    setHqPlannerDirectory([
+      {
+        id: taskId,
+        projectId,
+        projectTitle: 'Wave 3',
+        clientName: 'Client',
+        type: 'edit',
+        title: 'Task',
+        column: 'queue',
+        status: 'todo',
+        dueDate: '2026-05-07',
+        priority: 'normal',
+        assigneeCrewId: 'cr-6',
+        assigneeName: 'Jayden Price',
+        done: false,
+        attachmentAssetIds: [],
+      },
+    ]);
+    setHqAssetDirectory([
+      {
+        id: assetId,
+        projectId,
+        projectTitle: 'Wave 3',
+        label: 'Asset',
+        type: 'video',
+        sourceType: 'upload',
+        sourceRef: 'local',
+        version: '1',
+        status: 'internal_review',
+        clientVisible: false,
+        signedUrl: null,
+        signedUrlExpiresAt: null,
+        uploadedBy: 'tester',
+        uploadedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        usageRights: 'owned',
+        storagePath: null,
+        storageBucket: null,
+        storageDownloadUrl: null,
+        metadata: {},
+        commentCount: 0,
+      },
+    ]);
+    const task = getPlannerItemsSync().find((item) => item.id === taskId)!;
+    const asset = getAssetsSync().find((item) => item.id === assetId)!;
     const attach = attachAssetToPlannerItem(task.id, asset.id, 'tester');
     expect(attach.ok).toBe(true);
-    expect(MOCK_PLANNER.find((item) => item.id === task.id)?.attachmentAssetIds || []).toContain(asset.id);
+    expect(getPlannerItemsSync().find((item) => item.id === task.id)?.attachmentAssetIds || []).toContain(asset.id);
 
     const detach = removeAssetFromPlannerItem(task.id, asset.id, 'tester');
     expect(detach.ok).toBe(true);
-    expect(MOCK_PLANNER.find((item) => item.id === task.id)?.attachmentAssetIds || []).not.toContain(asset.id);
-    MOCK_PLANNER.splice(MOCK_PLANNER.findIndex((item) => item.id === taskId), 1);
-    MOCK_ASSETS.splice(MOCK_ASSETS.findIndex((item) => item.id === assetId), 1);
+    expect(getPlannerItemsSync().find((item) => item.id === task.id)?.attachmentAssetIds || []).not.toContain(asset.id);
   });
 });
 
 describe('Wave 3 crew media rights', () => {
+  beforeEach(() => {
+    resetHqSyncDirectoryForTests();
+    setHqCrewDirectory([minimalJayden()]);
+  });
+
   it('stores crew media policy with expiration metadata', () => {
-    const crew = MOCK_CREW.find((item) => item.id === 'cr-6')!;
+    const crew = getHqCrewDirectory().find((item) => item.id === 'cr-6')!;
     const assetId = 'a-wave3-policy';
-    MOCK_ASSETS.unshift({
-      id: assetId,
-      projectId: 'p-wave3-policy',
-      projectTitle: 'Wave 3 Policy',
-      label: 'Policy asset',
-      type: 'video',
-      sourceType: 'internal',
-      sourceRef: 'local',
-      version: 1,
-      status: 'internal_review',
-      signedUrl: null,
-      signedUrlExpiresAt: null,
-      uploadedBy: 'tester',
-      uploadedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      usageRights: 'owned',
-      storagePath: null,
-      storageBucket: null,
-      storageDownloadUrl: null,
-      metadata: {},
-    });
-    const asset = MOCK_ASSETS.find((item) => item.id === assetId)!;
+    setHqAssetDirectory([
+      {
+        id: assetId,
+        projectId: 'p-wave3-policy',
+        projectTitle: 'Wave 3 Policy',
+        label: 'Policy asset',
+        type: 'video',
+        sourceType: 'upload',
+        sourceRef: 'local',
+        version: '1',
+        status: 'internal_review',
+        clientVisible: false,
+        signedUrl: null,
+        signedUrlExpiresAt: null,
+        uploadedBy: 'tester',
+        uploadedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        usageRights: 'owned',
+        storagePath: null,
+        storageBucket: null,
+        storageDownloadUrl: null,
+        metadata: {},
+        commentCount: 0,
+      },
+    ]);
+    const asset = getAssetsSync().find((item) => item.id === assetId)!;
     const result = upsertCrewMediaPolicy(crew.id, {
       assetId: asset.id,
       visibility: 'client',
@@ -95,14 +144,19 @@ describe('Wave 3 crew media rights', () => {
       expiresAt: '2026-05-01',
     });
     expect(result.ok).toBe(true);
-    const stored = MOCK_CREW.find((item) => item.id === crew.id)?.mediaPolicies?.find((item) => item.assetId === asset.id);
+    const stored = getHqCrewDirectory()
+      .find((item) => item.id === crew.id)
+      ?.mediaPolicies?.find((item) => item.assetId === asset.id);
     expect(stored?.usageRights).toBe('licensed');
     expect(stored?.expiresAt).toBe('2026-05-01');
-    MOCK_ASSETS.splice(MOCK_ASSETS.findIndex((item) => item.id === assetId), 1);
   });
 });
 
 describe('Wave 3 storage ops actions', () => {
+  beforeEach(() => {
+    resetHqSyncDirectoryForTests();
+  });
+
   it('records retry and revoke actions', () => {
     const source = {
       id: 'ops-wave3-source',
@@ -114,11 +168,11 @@ describe('Wave 3 storage ops actions', () => {
       errorCode: 'network-timeout',
       details: 'Synthetic source event',
     };
-    MOCK_STORAGE_OPS_EVENTS.unshift(source);
-    const before = MOCK_STORAGE_OPS_EVENTS.length;
+    setHqStorageOpsDirectory([source]);
+    const before = getStorageOpsSync().length;
     expect(retryStorageOperation(source.id, 'admin').ok).toBe(true);
     expect(revokeStorageOpsLink(source.id, 'admin').ok).toBe(true);
-    expect(MOCK_STORAGE_OPS_EVENTS.length).toBeGreaterThan(before);
-    expect(MOCK_STORAGE_OPS_EVENTS[0]?.eventType).toBe('link_revoked');
+    expect(getStorageOpsSync().length).toBeGreaterThanOrEqual(before + 1);
+    expect(getStorageOpsSync()[0]?.eventType).toBe('link_revoked');
   });
 });

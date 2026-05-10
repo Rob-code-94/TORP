@@ -1,5 +1,5 @@
 import type { AuthUser } from './auth';
-import { getProjectById, MOCK_CREW } from '../data/adminMock';
+import { getHqCrewDirectory, getProjectByIdSync } from '../data/hqSyncDirectory';
 import { UserRole, type CrewFeatureKey, type CrewProfile } from '../types';
 
 /**
@@ -79,19 +79,20 @@ export function hqAdminNavIdsForRole(role: UserRole | null | undefined): HqAdmin
 
 export function getCrewByAuthUser(user: AuthUser | null | undefined): CrewProfile | undefined {
   if (!user) return undefined;
+  const crew = getHqCrewDirectory();
   if (user.crewId) {
-    const byId = MOCK_CREW.find((crew) => crew.id === user.crewId);
+    const byId = crew.find((c) => c.id === user.crewId);
     if (byId) return byId;
   }
   const email = user.email?.trim().toLowerCase();
   if (!email) return undefined;
-  return MOCK_CREW.find((crew) => crew.email.trim().toLowerCase() === email);
+  return crew.find((c) => c.email.trim().toLowerCase() === email);
 }
 
 /** STAFF may open `/hq/admin/projects/:projectId` for assigned (or owner) projects only. */
 export function staffCanViewProject(user: AuthUser, projectId: string): boolean {
   if (user.role !== UserRole.STAFF || !user.crewId) return false;
-  const p = getProjectById(projectId);
+  const p = getProjectByIdSync(projectId);
   if (!p) return false;
   if (p.ownerCrewId === user.crewId) return true;
   return (p.assignedCrewIds || []).includes(user.crewId);

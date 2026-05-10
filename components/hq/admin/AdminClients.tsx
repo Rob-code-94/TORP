@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { MOCK_CLIENTS } from '../../../data/adminMock';
+import { getHqClientDirectory } from '../../../data/hqSyncDirectory';
 import { createClient, deleteClient, updateClient } from '../../../data/adminProjectsApi';
+import { useHqOrgTick } from '../HqFirestoreProvider';
 import { PROJECT_WIZARD_DRAFT_KEY } from './AdminProjectWizard';
 import AdminFormDrawer from './AdminFormDrawer';
 import { useAdminTheme } from '../../../lib/adminTheme';
@@ -24,9 +25,10 @@ const AdminClients: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | ClientProfile['clientStatus']>('all');
   const [listVersion, setListVersion] = useState(0);
+  const hqTick = useHqOrgTick();
 
   const filteredClients = useMemo(() => {
-    return MOCK_CLIENTS.filter((c) => {
+    return getHqClientDirectory().filter((c) => {
       const t = searchQuery.trim().toLowerCase();
       if (t) {
         const blob = `${c.company} ${c.name} ${c.email} ${c.billingEmail}`.toLowerCase();
@@ -35,7 +37,7 @@ const AdminClients: React.FC = () => {
       if (statusFilter !== 'all' && c.clientStatus !== statusFilter) return false;
       return true;
     });
-  }, [searchQuery, statusFilter, listVersion]);
+  }, [searchQuery, statusFilter, listVersion, hqTick]);
 
   const closeDrawer = () => {
     setDrawerOpen(false);
@@ -52,7 +54,7 @@ const AdminClients: React.FC = () => {
   };
 
   const openEditDrawer = (clientId: string) => {
-    const client = MOCK_CLIENTS.find((item) => item.id === clientId);
+    const client = getHqClientDirectory().find((item) => item.id === clientId);
     if (!client) return;
     setNewClient({
       company: client.company,
@@ -83,15 +85,17 @@ const AdminClients: React.FC = () => {
     ) {
       return;
     }
-    const r = deleteClient(c.id);
-    if (r.ok === false) {
-      setError(r.error);
-      return;
-    }
-    setListVersion((n) => n + 1);
-    if (editingClientId === c.id) {
-      closeDrawer();
-    }
+    void (async () => {
+      const r = await deleteClient(c.id);
+      if (r.ok === false) {
+        setError(r.error);
+        return;
+      }
+      setListVersion((n) => n + 1);
+      if (editingClientId === c.id) {
+        closeDrawer();
+      }
+    })();
   };
 
   return (

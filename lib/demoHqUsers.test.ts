@@ -23,11 +23,11 @@ describe('authenticateHqUser', () => {
     }
   });
 
-  it('accepts project manager demo', () => {
+  it('accepts Jayden as HQ admin (parity with stakeholder admins)', () => {
     const r = authenticateHqUser('jp@torp.life', 'Crew1234');
     expect(r.ok).toBe(true);
     if (r.ok) {
-      expect(r.user.role).toBe(UserRole.PROJECT_MANAGER);
+      expect(r.user.role).toBe(UserRole.ADMIN);
       expect(r.user.crewId).toBeUndefined();
     }
   });
@@ -41,6 +41,6 @@ describe('authenticateHqUser', () => {
   it('staff login includes crewId', () => {
     const r = authenticateHqUser('staff@torp.life', 'Staff1234');
     expect(r.ok).toBe(true);
-    if (r.ok) expect(r.user.crewId).toBe('cr-6');
+    if (r.ok) expect(r.user.crewId).toBe('cr-staff-1');
   });
 });

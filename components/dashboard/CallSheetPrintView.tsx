@@ -1,7 +1,8 @@
 import { useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../../lib/auth';
-import { getAdminShootById } from '../../data/adminMock';
+import { getAdminShootById } from '../../data/hqOrgRead';
+import { useHqOrgTick } from '../hq/HqFirestoreProvider';
 import { isShootVisibleToCrew } from '../../lib/staffShoots';
 import { UserRole } from '../../types';
 import { useAdminTheme } from '../../lib/adminTheme';
@@ -15,8 +16,9 @@ export default function CallSheetPrintView() {
   const { theme } = useAdminTheme();
   const isDark = theme === 'dark';
   const crewId = user?.crewId;
+  const hqTick = useHqOrgTick();
 
-  const shoot = useMemo(() => getAdminShootById(shootId), [shootId]);
+  const shoot = useMemo(() => getAdminShootById(shootId), [shootId, hqTick]);
   const canView = useMemo(
     () => (!shoot ? false : isShootVisibleToCrew(shoot, crewId)),
     [crewId, shoot],

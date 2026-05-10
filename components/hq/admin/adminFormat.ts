@@ -1,5 +1,5 @@
 import type { AdminInvoiceStatus, PlannerBoardColumn, PlannerItemType, ProjectAssetStatus, ProjectStage, ProposalContractStatus } from '../../../types';
-import { PLANNER_COLUMN_LABEL } from '../../../data/adminMock';
+import { PLANNER_COLUMN_LABEL } from '../../../data/hqConstants';
 
 export type AdminThemeMode = 'dark' | 'light';
 

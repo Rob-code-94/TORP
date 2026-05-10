@@ -20,6 +20,140 @@ service cloud.firestore {
         && resource.data.tenantId == request.auth.token.tenantId;
     }
 
+    function tenantMatchesCreate() {
+      return hasTenant()
+        && 'tenantId' in request.resource.data
+        && request.resource.data.tenantId == request.auth.token.tenantId;
+    }
+
+    function tenantMatchesExisting() {
+      return hasTenant()
+        && resource != null
+        && 'tenantId' in resource.data
+        && resource.data.tenantId == request.auth.token.tenantId;
+    }
+
+    function role() {
+      return request.auth.token.role;
+    }
+
+    function isAdmin() {
+      return role() == 'ADMIN';
+    }
+
+    function isPm() {
+      return role() == 'PROJECT_MANAGER';
+    }
+
+    function isStaff() {
+      return role() == 'STAFF';
+    }
+
+    function canWriteOrgProjectData() {
+      return isAdmin() || isPm();
+    }
+
+    /** HQ CRM collections at top level — documents carry tenantId (calendar Functions use crew/shoots/meetings/plannerItems). */
+    match /crew/{crewId} {
+      allow read: if isSignedIn() && tenantMatchesExisting();
+      allow create: if isSignedIn() && tenantMatchesCreate() && isAdmin();
+      allow update, delete: if isSignedIn() && tenantMatchesExisting() && isAdmin();
+    }
+
+    match /clients/{clientId} {
+      allow read: if isSignedIn() && tenantMatchesExisting();
+      allow create, update, delete: if isSignedIn() && tenantMatchesCreate() && isAdmin();
+    }
+
+    match /hqProjects/{projectId} {
+      allow read: if isSignedIn() && tenantMatchesExisting();
+      allow create, update, delete: if isSignedIn() && tenantMatchesCreate() && canWriteOrgProjectData();
+    }
+
+    match /plannerItems/{itemId} {
+      allow read: if isSignedIn() && tenantMatchesExisting();
+      allow create, delete: if isSignedIn() && tenantMatchesCreate() && canWriteOrgProjectData();
+      allow update: if isSignedIn() && tenantMatchesExisting() && (
+        canWriteOrgProjectData() ||
+        (
+          isStaff()
+          && request.auth.token.crewId is string
+          && (
+            resource.data.assigneeCrewId == request.auth.token.crewId ||
+            ('assigneeCrewIds' in resource.data &&
+              resource.data.assigneeCrewIds is list &&
+              request.auth.token.crewId in resource.data.assigneeCrewIds)
+          )
+        )
+      );
+    }
+
+    match /shoots/{shootId} {
+      allow read: if isSignedIn() && tenantMatchesExisting();
+      allow create, update, delete: if isSignedIn() && tenantMatchesCreate() && canWriteOrgProjectData();
+    }
+
+    match /meetings/{meetingId} {
+      allow read: if isSignedIn() && tenantMatchesExisting();
+      allow create, update, delete: if isSignedIn() && tenantMatchesCreate() && canWriteOrgProjectData();
+    }
+
+    match /hqActivity/{entryId} {
+      allow read: if isSignedIn() && tenantMatchesExisting();
+      allow create: if isSignedIn() && tenantMatchesCreate() && canWriteOrgProjectData();
+      allow update, delete: if isSignedIn() && tenantMatchesExisting() && isAdmin();
+    }
+
+    match /hqProjectAssets/{assetId} {
+      allow read: if isSignedIn() && tenantMatchesExisting();
+      allow create, update, delete: if isSignedIn() && tenantMatchesCreate() && canWriteOrgProjectData();
+    }
+
+    match /hqInvoices/{invoiceId} {
+      allow read: if isSignedIn() && tenantMatchesExisting();
+      allow create, update, delete: if isSignedIn() && tenantMatchesCreate() && isAdmin();
+    }
+
+    match /hqProposals/{proposalId} {
+      allow read: if isSignedIn() && tenantMatchesExisting();
+      allow create, update, delete: if isSignedIn() && tenantMatchesCreate() && canWriteOrgProjectData();
+    }
+
+    match /hqExpenses/{expenseId} {
+      allow read: if isSignedIn() && tenantMatchesExisting();
+      allow create, update, delete: if isSignedIn() && tenantMatchesCreate() && canWriteOrgProjectData();
+    }
+
+    match /hqDeliverables/{id} {
+      allow read: if isSignedIn() && tenantMatchesExisting();
+      allow create, update, delete: if isSignedIn() && tenantMatchesCreate() && canWriteOrgProjectData();
+    }
+
+    match /hqRisks/{id} {
+      allow read: if isSignedIn() && tenantMatchesExisting();
+      allow create, update, delete: if isSignedIn() && tenantMatchesCreate() && canWriteOrgProjectData();
+    }
+
+    match /hqBlockers/{id} {
+      allow read: if isSignedIn() && tenantMatchesExisting();
+      allow create, update, delete: if isSignedIn() && tenantMatchesCreate() && canWriteOrgProjectData();
+    }
+
+    match /hqDependencies/{id} {
+      allow read: if isSignedIn() && tenantMatchesExisting();
+      allow create, update, delete: if isSignedIn() && tenantMatchesCreate() && canWriteOrgProjectData();
+    }
+
+    match /hqChangeOrders/{id} {
+      allow read: if isSignedIn() && tenantMatchesExisting();
+      allow create, update, delete: if isSignedIn() && tenantMatchesCreate() && canWriteOrgProjectData();
+    }
+
+    match /hqStorageOpsEvents/{id} {
+      allow read: if isSignedIn() && tenantMatchesExisting();
+      allow create, update, delete: if isSignedIn() && tenantMatchesCreate() && isAdmin();
+    }
+
     // Preferred layout: tenant data under /tenants/{tid}/... (tid must match claim)
     match /tenants/{tid}/{path=**} {
       allow read, write: if isSignedIn()

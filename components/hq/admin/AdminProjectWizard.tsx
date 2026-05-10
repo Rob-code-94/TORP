@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { X } from 'lucide-react';
-import { MOCK_CLIENTS, MOCK_CREW, PROJECT_STAGE_ORDER } from '../../../data/adminMock';
+import { PROJECT_STAGE_ORDER } from '../../../data/hqConstants';
+import { getHqClientDirectory, getHqCrewDirectory } from '../../../data/hqSyncDirectory';
+import { useHqOrgTick } from '../HqFirestoreProvider';
 import { createClient, createProject, type CreateProjectRequest } from '../../../data/adminProjectsApi';
 import { adminDateTimeInputProps, useAdminTheme } from '../../../lib/adminTheme';
 import type { ProjectStage } from '../../../types';
@@ -54,9 +56,18 @@ const AdminProjectWizard: React.FC<AdminProjectWizardProps> = ({ open, onClose, 
   const [quickClient, setQuickClient] = useState<ClientProfileDraft>(EMPTY_CLIENT_PROFILE_DRAFT);
   const [customPackage, setCustomPackage] = useState('');
   const [budgetInput, setBudgetInput] = useState('0');
+  const hqTick = useHqOrgTick();
 
-  const selectedClient = useMemo(() => MOCK_CLIENTS.find((c) => c.id === form.clientId), [form.clientId]);
-  const selectedOwner = useMemo(() => MOCK_CREW.find((c) => c.id === form.ownerCrewId), [form.ownerCrewId]);
+  const selectedClient = useMemo(
+    () => getHqClientDirectory().find((c) => c.id === form.clientId),
+    [form.clientId, hqTick]
+  );
+  const selectedOwner = useMemo(
+    () => getHqCrewDirectory().find((c) => c.id === form.ownerCrewId),
+    [form.ownerCrewId, hqTick]
+  );
+  const clients = useMemo(() => getHqClientDirectory(), [hqTick]);
+  const crewRows = useMemo(() => getHqCrewDirectory(), [hqTick]);
 
   useEffect(() => {
     if (open && initialDraft) {
@@ -177,18 +188,24 @@ const AdminProjectWizard: React.FC<AdminProjectWizardProps> = ({ open, onClose, 
                 Client
                 <select
                   value={form.clientId}
-                  onChange={(e) => setForm((v) => ({ ...v, clientId: e.target.value, clientName: MOCK_CLIENTS.find((c) => c.id === e.target.value)?.company || '' }))}
+                  onChange={(e) =>
+                    setForm((v) => ({
+                      ...v,
+                      clientId: e.target.value,
+                      clientName: getHqClientDirectory().find((c) => c.id === e.target.value)?.company || '',
+                    }))
+                  }
                   className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
                 >
                   <option value="">Select client</option>
-                  {MOCK_CLIENTS.map((client) => (
+                  {clients.map((client) => (
                     <option key={client.id} value={client.id}>
                       {client.company}
                     </option>
                   ))}
                 </select>
               </label>
-              {MOCK_CLIENTS.length === 0 && (
+              {clients.length === 0 && (
                 <p className="text-xs text-amber-300">
                   No clients found yet. Use Quick add client or create one in the Clients tab.
                 </p>
@@ -283,11 +300,17 @@ const AdminProjectWizard: React.FC<AdminProjectWizardProps> = ({ open, onClose, 
                 Owner
                 <select
                   value={form.ownerCrewId}
-                  onChange={(e) => setForm((v) => ({ ...v, ownerCrewId: e.target.value, ownerName: MOCK_CREW.find((c) => c.id === e.target.value)?.displayName || '' }))}
+                  onChange={(e) =>
+                    setForm((v) => ({
+                      ...v,
+                      ownerCrewId: e.target.value,
+                      ownerName: getHqCrewDirectory().find((c) => c.id === e.target.value)?.displayName || '',
+                    }))
+                  }
                   className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
                 >
                   <option value="">Select owner</option>
-                  {MOCK_CREW.map((crew) => (
+                  {crewRows.map((crew) => (
                     <option key={crew.id} value={crew.id}>
                       {crew.displayName}
                     </option>

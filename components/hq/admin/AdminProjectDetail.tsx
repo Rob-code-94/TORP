@@ -1,49 +1,56 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { ArrowLeft, CalendarPlus, Share2 } from 'lucide-react';
+import { PROJECT_STAGE_ORDER } from '../../../data/hqConstants';
 import {
-  MOCK_CREW,
-  PROJECT_STAGE_ORDER,
-  assignCrewToProject,
-  createBlocker,
-  createDeliverable,
-  createDependency,
-  createPlannerTask,
-  createProjectAsset,
-  createRisk,
-  createShoot,
-  createMeeting,
-  deleteDeliverable,
-  deleteMeeting,
-  deletePlannerTask,
-  deleteProjectAsset,
-  deleteShoot,
+  getActivityByProject,
+  getAssetsByProject,
   getBlockersByProject,
   getChangeOrdersByProject,
   getDeliverablesByProject,
   getDependenciesByProject,
-  getActivityByProject,
-  getAssetsByProject,
+  getMeetingsByProject,
   getPlannerByProject,
   getProjectById,
   getRisksByProject,
   getShootsByProject,
-  getMeetingsByProject,
+} from '../../../data/hqOrgRead';
+import {
+  assignCrewToProject,
+  removeCrewFromProject,
+  transitionProjectStage,
+} from '../../../data/hqProjectOps';
+import {
+  createMeeting,
+  createPlannerTask,
+  createProjectAsset,
+  createShoot,
+  deleteMeeting,
+  deletePlannerTask,
+  deleteProjectAsset,
+  deleteShoot,
   plannerStatusFromItem,
   plannerStatusToLegacy,
-  projectAssignableCrew,
-  removeCrewFromProject,
+  updateMeeting,
+  updatePlannerTask,
+  updateProjectAsset,
+  updateShoot,
+} from '../../../data/hqPlannerCalendarOps';
+import { projectAssignableCrew } from '../../../data/hqSchedulingGuards';
+import {
+  createBlocker,
+  createDeliverable,
+  createDependency,
+  createRisk,
+  deleteDeliverable,
   requestChangeOrder,
-  transitionProjectStage,
   updateBlocker,
   updateDeliverable,
   updateDependency,
-  updatePlannerTask,
-  updateProjectAsset,
   updateRisk,
-  updateShoot,
-  updateMeeting,
-} from '../../../data/adminMock';
+} from '../../../data/hqProjectControlsOps';
+import { getHqCrewDirectory } from '../../../data/hqSyncDirectory';
+import { useHqOrgTick } from '../HqFirestoreProvider';
 import {
   createExpense,
   createInvoice,
@@ -142,6 +149,7 @@ const AdminProjectDetail: React.FC = () => {
   };
   const [stageMessage, setStageMessage] = useState<string | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
+  const hqTick = useHqOrgTick();
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>('all');
   const [watching, setWatching] = useState(false);
   const [readIds, setReadIds] = useState<string[]>([]);
@@ -224,9 +232,12 @@ const AdminProjectDetail: React.FC = () => {
     description?: string;
   }>({});
 
-  const project = projectId ? getProjectById(projectId) : undefined;
+  const project = useMemo(
+    () => (projectId ? getProjectById(projectId) : undefined),
+    [projectId, refreshTick, hqTick],
+  );
 
-  const planner = useMemo(() => (projectId ? getPlannerByProject(projectId) : []), [projectId, refreshTick]);
+  const planner = useMemo(() => (projectId ? getPlannerByProject(projectId) : []), [projectId, refreshTick, hqTick]);
   const plannerView = useMemo(() => {
     if (user?.role !== UserRole.STAFF || !user.crewId) return planner;
     return planner.filter((t) => {
@@ -238,19 +249,22 @@ const AdminProjectDetail: React.FC = () => {
       return ids.includes(user.crewId!);
     });
   }, [planner, user]);
-  const shoots = useMemo(() => (projectId ? getShootsByProject(projectId) : []), [projectId, refreshTick]);
-  const meetings = useMemo(() => (projectId ? getMeetingsByProject(projectId) : []), [projectId, refreshTick]);
-  const assets = useMemo(() => (projectId ? getAssetsByProject(projectId) : []), [projectId, refreshTick]);
-  const invoices = useMemo(() => (projectId ? getInvoicesByProject(projectId) : []), [projectId, refreshTick]);
-  const proposal = projectId ? getProposalByProject(projectId) : undefined;
-  const expenses = useMemo(() => (projectId ? getExpensesByProject(projectId) : []), [projectId, refreshTick]);
-  const activity = useMemo(() => (projectId ? getActivityByProject(projectId) : []), [projectId, refreshTick]);
-  const deliverables = useMemo(() => (projectId ? getDeliverablesByProject(projectId) : []), [projectId, refreshTick]);
-  const risks = useMemo(() => (projectId ? getRisksByProject(projectId) : []), [projectId, refreshTick]);
-  const blockers = useMemo(() => (projectId ? getBlockersByProject(projectId) : []), [projectId, refreshTick]);
-  const dependencies = useMemo(() => (projectId ? getDependenciesByProject(projectId) : []), [projectId, refreshTick]);
-  const changeOrders = useMemo(() => (projectId ? getChangeOrdersByProject(projectId) : []), [projectId, refreshTick]);
-  const assignableCrew = useMemo(() => (projectId ? projectAssignableCrew(projectId) : []), [projectId, refreshTick]);
+  const shoots = useMemo(() => (projectId ? getShootsByProject(projectId) : []), [projectId, refreshTick, hqTick]);
+  const meetings = useMemo(() => (projectId ? getMeetingsByProject(projectId) : []), [projectId, refreshTick, hqTick]);
+  const assets = useMemo(() => (projectId ? getAssetsByProject(projectId) : []), [projectId, refreshTick, hqTick]);
+  const invoices = useMemo(() => (projectId ? getInvoicesByProject(projectId) : []), [projectId, refreshTick, hqTick]);
+  const proposal = useMemo(
+    () => (projectId ? getProposalByProject(projectId) : undefined),
+    [projectId, refreshTick, hqTick],
+  );
+  const expenses = useMemo(() => (projectId ? getExpensesByProject(projectId) : []), [projectId, refreshTick, hqTick]);
+  const activity = useMemo(() => (projectId ? getActivityByProject(projectId) : []), [projectId, refreshTick, hqTick]);
+  const deliverables = useMemo(() => (projectId ? getDeliverablesByProject(projectId) : []), [projectId, refreshTick, hqTick]);
+  const risks = useMemo(() => (projectId ? getRisksByProject(projectId) : []), [projectId, refreshTick, hqTick]);
+  const blockers = useMemo(() => (projectId ? getBlockersByProject(projectId) : []), [projectId, refreshTick, hqTick]);
+  const dependencies = useMemo(() => (projectId ? getDependenciesByProject(projectId) : []), [projectId, refreshTick, hqTick]);
+  const changeOrders = useMemo(() => (projectId ? getChangeOrdersByProject(projectId) : []), [projectId, refreshTick, hqTick]);
+  const assignableCrew = useMemo(() => (projectId ? projectAssignableCrew(projectId) : []), [projectId, refreshTick, hqTick]);
   const filteredActivity = useMemo(() => {
     if (activityFilter === 'all') return activity;
     if (activityFilter === 'unread') return activity.filter((item) => !readIds.includes(item.id));
@@ -752,7 +766,7 @@ const AdminProjectDetail: React.FC = () => {
             </p>
             <div className="flex flex-wrap gap-2 mb-3">
               {(project.assignedCrewIds || []).map((crewId) => {
-                const crew = MOCK_CREW.find((c) => c.id === crewId);
+                const crew = getHqCrewDirectory().find((c) => c.id === crewId);
                 return (
                   <button
                     key={crewId}
@@ -770,7 +784,9 @@ const AdminProjectDetail: React.FC = () => {
               {(project.assignedCrewIds || []).length === 0 && <p className="text-sm text-zinc-500">No assigned contributors yet.</p>}
             </div>
             <div className="flex flex-wrap gap-2">
-              {MOCK_CREW.filter((crew) => !(project.assignedCrewIds || []).includes(crew.id)).map((crew) => (
+              {getHqCrewDirectory()
+                .filter((crew) => !(project.assignedCrewIds || []).includes(crew.id))
+                .map((crew) => (
                 <button
                   key={crew.id}
                   type="button"

@@ -1,20 +1,22 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { CalendarPlus, Share2 } from 'lucide-react';
+import { PLANNER_COLUMN_LABEL } from '../../../data/hqConstants';
+import { getProjectById, getAssetsByProject } from '../../../data/hqOrgRead';
 import {
   attachAssetToPlannerItem,
   createProjectAsset,
-  getProjectById,
-  getAssetsByProject,
-  MOCK_ADMIN_PROJECTS,
-  MOCK_MEETINGS_ADMIN,
-  MOCK_PLANNER,
-  MOCK_SHOOTS_ADMIN,
-  PLANNER_COLUMN_LABEL,
   plannerStatusFromItem,
   removeAssetFromPlannerItem,
   updatePlannerTask,
-} from '../../../data/adminMock';
+} from '../../../data/hqPlannerCalendarOps';
+import {
+  getHqProjectDirectory,
+  getMeetingsSync,
+  getPlannerItemsSync,
+  getShootsSync,
+} from '../../../data/hqSyncDirectory';
+import { useHqOrgTick } from '../HqFirestoreProvider';
 import { openGoogleCalendarInNewTab, payloadFromPlannerItem } from '../../../lib/calendarEvent';
 import { useAuth } from '../../../lib/auth';
 import { useAdminTheme } from '../../../lib/adminTheme';
@@ -46,6 +48,7 @@ const AdminPlanner: React.FC = () => {
   const isDark = theme === 'dark';
   const actorName = user?.displayName?.trim() || user?.email || 'HQ';
   const [plannerVersion, setPlannerVersion] = useState(0);
+  const hqTick = useHqOrgTick();
   const initialParams = useMemo(() => new URLSearchParams(search), [search]);
   const initialView = initialParams.get('view');
   const initialMode = initialParams.get('mode');
@@ -69,13 +72,13 @@ const AdminPlanner: React.FC = () => {
   const appOrigin = typeof window !== 'undefined' ? window.location.origin : '';
   const projectOptions: CalendarProjectOption[] = useMemo(
     () =>
-      MOCK_ADMIN_PROJECTS.map((p) => ({
+      getHqProjectDirectory().map((p) => ({
         id: p.id,
         title: p.title,
         clientName: p.clientName,
         contactEmail: p.contactEmail,
       })),
-    []
+    [hqTick]
   );
   const onAddPlannerToGoogle = useCallback(
     (t: PlannerItem) => {
@@ -115,7 +118,9 @@ const AdminPlanner: React.FC = () => {
     setCalendarOpen(true);
   }, []);
 
-  const items = MOCK_PLANNER;
+  const items = useMemo(() => getPlannerItemsSync(), [plannerVersion, hqTick]);
+  const shootsCalendar = useMemo(() => getShootsSync(), [plannerVersion, hqTick]);
+  const meetingsCalendar = useMemo(() => getMeetingsSync(), [plannerVersion, hqTick]);
   const defaultPolicy = createDefaultStoragePolicy(actorName);
 
   const board = useMemo(() => {
@@ -134,7 +139,7 @@ const AdminPlanner: React.FC = () => {
       }
     }
     return out;
-  }, [plannerVersion]);
+  }, [items]);
 
   const onBoardStatus = useCallback(
     (task: PlannerItem, next: PlannerTaskStatus) => {
@@ -570,8 +575,8 @@ const AdminPlanner: React.FC = () => {
         <div data-tour="planner-main-content">
           <PlannerCalendar
             items={items}
-            shoots={MOCK_SHOOTS_ADMIN}
-            meetings={MOCK_MEETINGS_ADMIN}
+            shoots={shootsCalendar}
+            meetings={meetingsCalendar}
             onAddToGoogle={onAddPlannerToGoogle}
             onOpenCalendarSheet={openCalendarForItem}
             onScheduleItem={openScheduleDrawer}

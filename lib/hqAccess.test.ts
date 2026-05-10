@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { UserRole } from '../types';
-import { MOCK_CREW } from '../data/adminMock';
+import type { CrewProfile } from '../types';
 import type { AuthUser } from './auth';
+import { resetHqSyncDirectoryForTests, setHqCrewDirectory } from '../data/hqSyncDirectory';
 import {
   canHqAdminAccessPath,
   canHqAdminAccessPathForUser,
@@ -12,6 +13,29 @@ import {
   resolveHqAdminNavId,
   staffCanViewProject,
 } from './hqAccess';
+
+function seedPmFixtureCrew(overrides?: Partial<CrewProfile>): CrewProfile {
+  return {
+    id: 'cr-pm-fix',
+    displayName: 'PM Fixture',
+    role: 'producer',
+    systemRole: UserRole.PROJECT_MANAGER,
+    email: 'pm-fixture@torp.life',
+    phone: '',
+    rateShootHour: 0,
+    rateEditHour: 0,
+    active: true,
+    assignedProjectIds: [],
+    availability: '',
+    availabilityDetail: {
+      timezone: 'America/Chicago',
+      windows: [],
+      exceptions: [],
+      notes: '',
+    },
+    ...overrides,
+  };
+}
 
 describe('hqAdminNavIdsForRole', () => {
   it('gives PM a subset', () => {
@@ -55,15 +79,20 @@ describe('canHqAdminAccessPathForUser default-deny', () => {
   const pmUser: AuthUser = {
     role: UserRole.PROJECT_MANAGER,
     displayName: 'PM User',
-    email: 'pm@torp.life',
-    crewId: 'cr-6',
+    email: 'pm-fixture@torp.life',
+    crewId: 'cr-pm-fix',
   };
   const staffUser: AuthUser = {
     role: UserRole.STAFF,
     displayName: 'Staff User',
     email: 'staff@torp.life',
-    crewId: 'cr-6',
+    crewId: 'cr-staff-1',
   };
+
+  beforeEach(() => {
+    resetHqSyncDirectoryForTests();
+    setHqCrewDirectory([seedPmFixtureCrew()]);
+  });
 
   it('blocks unmapped /hq/admin/* paths for ADMIN', () => {
     expect(canHqAdminAccessPathForUser('/hq/admin/secret', adminUser)).toBe(false);
@@ -103,7 +132,7 @@ describe('canHqAdminAccessPathForUser default-deny', () => {
       role: UserRole.STAFF,
       displayName: 'Staff',
       email: 'staff@torp.life',
-      crewId: 'cr-6',
+      crewId: 'cr-staff-1',
     };
     expect(canHqAdminAccessPathForUser('/hq/admin', staff)).toBe(false);
     expect(canHqAdminAccessPathForUser('/hq/admin/projects', staff)).toBe(false);
@@ -116,14 +145,19 @@ describe('canHqAdminAccessPathForUser default-deny', () => {
 describe('crew access overrides', () => {
   const pmUser: AuthUser = {
     role: UserRole.PROJECT_MANAGER,
-    displayName: 'Jayden Price',
-    email: 'jp@torp.life',
-    crewId: 'cr-6',
+    displayName: 'PM Fixture',
+    email: 'pm-fixture@torp.life',
+    crewId: 'cr-pm-fix',
   };
+
+  beforeEach(() => {
+    resetHqSyncDirectoryForTests();
+    setHqCrewDirectory([seedPmFixtureCrew()]);
+  });
 
   it('finds crew by crewId first', () => {
     const crew = getCrewByAuthUser(pmUser);
-    expect(crew?.id).toBe('cr-6');
+    expect(crew?.id).toBe('cr-pm-fix');
   });
 
   it('uses role baseline when override missing', () => {
@@ -132,27 +166,21 @@ describe('crew access overrides', () => {
   });
 
   it('allows explicit grant override over role default', () => {
-    const crew = MOCK_CREW.find((c) => c.id === 'cr-6');
-    const previous = crew?.featureAccess;
-    if (crew) crew.featureAccess = { ...(crew.featureAccess || {}), 'page.clients': true };
+    const crew = seedPmFixtureCrew({ featureAccess: { 'page.clients': true } });
+    setHqCrewDirectory([crew]);
     expect(hasHqFeatureAccess(pmUser, 'page.clients')).toBe(true);
-    if (crew) crew.featureAccess = previous;
   });
 
   it('allows explicit deny override over role default', () => {
-    const crew = MOCK_CREW.find((c) => c.id === 'cr-6');
-    const previous = crew?.featureAccess;
-    if (crew) crew.featureAccess = { ...(crew.featureAccess || {}), 'quick.addProject': false };
+    const crew = seedPmFixtureCrew({ featureAccess: { 'quick.addProject': false } });
+    setHqCrewDirectory([crew]);
     expect(hasHqFeatureAccess(pmUser, 'quick.addProject')).toBe(false);
-    if (crew) crew.featureAccess = previous;
   });
 
   it('filters nav and routes with user-level feature checks', () => {
-    const crew = MOCK_CREW.find((c) => c.id === 'cr-6');
-    const previous = crew?.featureAccess;
-    if (crew) crew.featureAccess = { ...(crew.featureAccess || {}), 'page.clients': true };
+    const crew = seedPmFixtureCrew({ featureAccess: { 'page.clients': true } });
+    setHqCrewDirectory([crew]);
     expect(hqAdminNavIdsForUser(pmUser)).toContain('clients');
     expect(canHqAdminAccessPathForUser('/hq/admin/clients', pmUser)).toBe(true);
-    if (crew) crew.featureAccess = previous;
   });
 });

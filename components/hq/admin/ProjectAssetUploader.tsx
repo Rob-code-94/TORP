@@ -15,7 +15,7 @@ import {
   uploadProjectAsset,
 } from '../../../lib/projectAssetUpload';
 import { isFirebaseConfigured } from '../../../lib/firebase';
-import { createProjectAsset } from '../../../data/adminMock';
+import { createProjectAsset } from '../../../data/hqPlannerCalendarOps';
 import type { ProjectAssetStatus, StoragePolicy } from '../../../types';
 
 type ItemState =

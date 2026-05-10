@@ -123,7 +123,7 @@ These are allowed, local scroll regions (not page-level):
 ### Scope
 
 - `components/hq/admin/AdminProjectDetail.tsx`
-- `data/adminMock.ts`
+- HQ data layer: [`hq-data-source-matrix.md`](hq-data-source-matrix.md) (`hqFirestoreService`, `hqSyncDirectory`)
 - `types.ts`
 
 ### Functional parity checks
@@ -149,7 +149,7 @@ These are allowed, local scroll regions (not page-level):
 ### Scope
 
 - `components/hq/admin/AdminProjectDetail.tsx`
-- `data/adminMock.ts`
+- [`hq-data-source-matrix.md`](hq-data-source-matrix.md) (`hqFirestoreService`, `hqSyncDirectory`, HQ ops modules)
 - `data/adminProjectsApi.ts`
 
 ### Functional status matrix
@@ -188,7 +188,7 @@ These are allowed, local scroll regions (not page-level):
 ### Scope
 
 - `components/hq/admin/AdminProjectDetail.tsx`
-- `data/adminMock.ts`
+- HQ data layer: [`hq-data-source-matrix.md`](hq-data-source-matrix.md) (`hqFirestoreService`, `hqSyncDirectory`)
 - `types.ts`
 
 ### Functional checks
@@ -213,7 +213,7 @@ These are allowed, local scroll regions (not page-level):
 ### Scope
 
 - `components/hq/admin/AdminProjectDetail.tsx`
-- `data/adminMock.ts`
+- HQ data layer: [`hq-data-source-matrix.md`](hq-data-source-matrix.md) (`hqFirestoreService`, `hqSyncDirectory`)
 - `types.ts`
 - `lib/adminTheme.tsx`
 - `components/hq/admin/AdminProjectWizard.tsx`
@@ -280,7 +280,7 @@ These are allowed, local scroll regions (not page-level):
 ### Scope
 
 - `components/hq/admin/AdminProjectDetail.tsx`
-- `data/adminMock.ts`
+- HQ data layer: [`hq-data-source-matrix.md`](hq-data-source-matrix.md) (`hqFirestoreService`, `hqSyncDirectory`)
 - `types.ts`
 - `lib/projectAssetStorage.ts`
 

@@ -26,6 +26,7 @@ import ProfilePage from './components/hq/settings/ProfilePage';
 import NotificationsPage from './components/hq/settings/NotificationsPage';
 import SecurityPage from './components/hq/settings/SecurityPage';
 import ThemedAppShell from './components/ThemedAppShell';
+import { HqFirestoreProvider } from './components/hq/HqFirestoreProvider';
 import { initializeStorageRuntime } from './lib/storageRuntime';
 
 /**
@@ -37,6 +38,7 @@ const App: React.FC = () => {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <HqFirestoreProvider>
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route element={<ThemedAppShell />}>
@@ -170,6 +172,7 @@ const App: React.FC = () => {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
+        </HqFirestoreProvider>
       </AuthProvider>
     </BrowserRouter>
   );

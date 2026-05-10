@@ -1,7 +1,8 @@
 import React, { useEffect, useId, useState } from 'react';
 import { X } from 'lucide-react';
 import type { CalendarEventPayload } from '../../../types';
-import { createMeeting, createShoot, getProjectById } from '../../../data/adminMock';
+import { createMeeting, createShoot } from '../../../data/hqPlannerCalendarOps';
+import { getProjectById } from '../../../data/hqOrgRead';
 import {
   buildGoogleCalendarTemplateUrl,
   buildIcsFileContent,

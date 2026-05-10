@@ -31,7 +31,7 @@ gcloud services enable artifactregistry.googleapis.com run.googleapis.com cloudb
 ## Cloud Build trigger (GitHub) — you set this in the console
 
 1. **Cloud Build → Triggers →** your GitHub trigger (or create one).
-2. **Event:** Push to branch `main` (or your branch).
+2. **Event:** Push to branch **`main`** (this repo’s default branch).
 3. **Configuration:** **Cloud Build configuration file (yaml or json)** → path `cloudbuild.yaml` (repository root).
 4. **Service account:** default Cloud Build SA is fine if it has permission to push to Artifact Registry and deploy Cloud Run (see Troubleshooting).
 

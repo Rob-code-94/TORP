@@ -1,5 +1,6 @@
 import type { AuthUser } from './auth';
 import { UserRole } from '../types';
+import { DEFAULT_HQ_TENANT_ID } from '../data/hqTenant';
 
 /**
  * Local dev-only credential map. Replace with Firebase Auth before production.
@@ -14,9 +15,9 @@ const DEMO_HQ_USERS: Array<{
 }> = [
   { email: 'info@torp.life', password: 'Admin1234', role: UserRole.ADMIN, displayName: 'ROB R' },
   { email: 'william@torp.life', password: 'Admin1234', role: UserRole.ADMIN, displayName: 'William Fairbanks' },
-  { email: 'jp@torp.life', password: 'Crew1234', role: UserRole.PROJECT_MANAGER, displayName: 'Jayden Price' },
+  { email: 'jp@torp.life', password: 'Crew1234', role: UserRole.ADMIN, displayName: 'Jayden Price' },
   /** Optional staff preview linked to retained mock crew. */
-  { email: 'staff@torp.life', password: 'Staff1234', role: UserRole.STAFF, displayName: 'Crew', crewId: 'cr-6' },
+  { email: 'staff@torp.life', password: 'Staff1234', role: UserRole.STAFF, displayName: 'Crew', crewId: 'cr-staff-1' },
 ];
 
 export function normalizeHqEmail(value: string) {
@@ -41,6 +42,7 @@ export function authenticateHqUser(
       displayName: row.displayName,
       email: row.email,
       crewId: row.crewId,
+      tenantId: DEFAULT_HQ_TENANT_ID,
     },
   };
 }
