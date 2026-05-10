@@ -10,6 +10,7 @@ import { HQ_GUIDE_TIP_EVENT } from '../../lib/hqGuideTipStorage';
 import { startHqAdminShellTour } from '../../lib/hqAdminTour';
 import { hqUserInitials } from '../../lib/hqUserDisplay';
 import HqProductGuidePanel from '../hq/HqProductGuidePanel';
+import HqFirestoreListenerBanner from '../hq/HqFirestoreListenerBanner';
 import HqProfileMenuCluster from '../hq/HqProfileMenu';
 
 interface DashboardLayoutProps {
@@ -174,6 +175,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ role, children, onLog
             )}
           </div>
         </header>
+        <HqFirestoreListenerBanner />
         <div className="p-4 sm:p-8 min-w-0">{children}</div>
       </main>
       <HqProductGuidePanel

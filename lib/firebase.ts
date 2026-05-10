@@ -4,6 +4,9 @@ import { connectFunctionsEmulator, getFunctions, type Functions } from 'firebase
 import { connectStorageEmulator, getStorage, type FirebaseStorage } from 'firebase/storage';
 import { connectFirestoreEmulator, getFirestore, type Firestore } from 'firebase/firestore';
 
+/** GCP/Firebase project ID for production TORP (HQ seeds, docs, Cloud Run). Not secret. */
+export const CANONICAL_FIREBASE_PROJECT_ID = 'torp-hub';
+
 const apiKey = import.meta.env.VITE_FIREBASE_API_KEY as string | undefined;
 const authDomain = import.meta.env.VITE_FIREBASE_AUTH_DOMAIN as string | undefined;
 const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID as string | undefined;
@@ -20,6 +23,20 @@ let functionsEmulatorConnected = false;
 let storageEmulatorConnected = false;
 let firestoreEmulatorConnected = false;
 
+let warnedNonCanonicalFirebaseProject = false;
+
+function warnDevNonCanonicalFirebaseProject(): void {
+  if (!import.meta.env.DEV || warnedNonCanonicalFirebaseProject) return;
+  if (!isFirebaseConfigured()) return;
+  const id = projectId?.trim();
+  if (!id || id === CANONICAL_FIREBASE_PROJECT_ID) return;
+  warnedNonCanonicalFirebaseProject = true;
+  console.warn(
+    `[torp.firebase] VITE_FIREBASE_PROJECT_ID is "${id}"; HQ seeds and docs assume "${CANONICAL_FIREBASE_PROJECT_ID}". ` +
+      `Use the same project as Firestore data or override intentionally. See docs/crew-directory-troubleshooting.md.`,
+  );
+}
+
 export function isFirebaseConfigured(): boolean {
   return Boolean(apiKey && authDomain && projectId);
 }
@@ -33,6 +50,7 @@ export function getFirebaseApp(): FirebaseApp {
   if (!isFirebaseConfigured()) {
     throw new Error('Firebase is not configured. Set VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, and VITE_FIREBASE_PROJECT_ID.');
   }
+  warnDevNonCanonicalFirebaseProject();
   if (!app) {
     app = getApps().length
       ? getApps()[0]!

@@ -16,7 +16,7 @@ import {
   UserPlus,
 } from 'lucide-react';
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { DEFAULT_HQ_TENANT_ID, resolveHqTenantId } from '../../../data/hqTenant';
+import { resolveHqTenantScopeForFirestore } from '../../../data/hqTenant';
 import {
   createPlannerTask,
   createShoot,
@@ -91,7 +91,7 @@ function startOfWeekSun(d: Date) {
 }
 
 const AdminCommand: React.FC = () => {
-  const { user } = useAuth();
+  const { user, isFirebase } = useAuth();
   const { theme } = useAdminTheme();
   const navigate = useNavigate();
   const isDark = theme === 'dark';
@@ -250,7 +250,7 @@ const AdminCommand: React.FC = () => {
   const projectById = (projectId: string): AdminProject | undefined =>
     getHqProjectDirectory().find((project) => project.id === projectId);
 
-  const submitQuickTask = () => {
+  const submitQuickTask = async () => {
     if (!taskDraft.projectId) {
       setStatus({ tone: 'error', message: 'Select a project to add a task.' });
       return;
@@ -265,7 +265,7 @@ const AdminCommand: React.FC = () => {
       return;
     }
     try {
-      createPlannerTask(
+      await createPlannerTask(
         {
           projectId: project.id,
           projectTitle: project.title,
@@ -295,7 +295,7 @@ const AdminCommand: React.FC = () => {
     }
   };
 
-  const submitQuickShoot = () => {
+  const submitQuickShoot = async () => {
     if (!shootDraft.projectId) {
       setStatus({ tone: 'error', message: 'Select a project to add a shoot.' });
       return;
@@ -310,7 +310,7 @@ const AdminCommand: React.FC = () => {
       return;
     }
     try {
-      createShoot(
+      await createShoot(
         {
           projectId: project.id,
           projectTitle: project.title,
@@ -363,10 +363,18 @@ const AdminCommand: React.FC = () => {
       setStatus({ tone: 'error', message: result.error || 'Could not revoke link.' });
       return;
     }
+    const tenantScope = resolveHqTenantScopeForFirestore(user, isFirebase);
+    if (!tenantScope) {
+      setStatus({
+        tone: 'error',
+        message: 'HQ tenant missing on your session — sign out and sign back in after Auth seed.',
+      });
+      return;
+    }
     recordStorageOpsEvent({
       eventType: 'link_revoked',
       actorName: user?.displayName || user?.email || 'Admin',
-      tenantId: resolveHqTenantId(user) ?? DEFAULT_HQ_TENANT_ID,
+      tenantId: tenantScope,
       details: `Manual revoke from command center for ${eventId}`,
     });
     setRefreshTick((value) => value + 1);

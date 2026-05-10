@@ -188,7 +188,7 @@ const AdminCrew: React.FC = () => {
     notes: draft.availabilityNotes,
   };
 
-  const saveCrew = () => {
+  const saveCrew = async () => {
     if (crewReadOnly) return;
     if (draft.systemRole === UserRole.ADMIN && !isAdmin) {
       setStatus('Only an admin can assign the Admin system role.');
@@ -209,7 +209,9 @@ const AdminCrew: React.FC = () => {
     /** Rich availability is read-only here; omit so update preserves on-file windows/exceptions (see updateCrewMemberProfile). */
     const updatePayload =
       editingCrewId && availabilityBlocked ? basePayload : { ...basePayload, availabilityDetail };
-    const result = editingCrewId ? updateCrew(editingCrewId, updatePayload) : createCrew(basePayload);
+    const result = editingCrewId
+      ? await updateCrew(editingCrewId, updatePayload)
+      : await createCrew(basePayload);
     if (!result.ok) {
       setStatus('error' in result ? result.error : 'Could not save crew profile.');
       setStatusTone('error');

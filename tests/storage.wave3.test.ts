@@ -1,4 +1,9 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('../lib/firebase', () => ({
+  isFirebaseConfigured: () => false,
+}));
+
 import { attachAssetToPlannerItem, removeAssetFromPlannerItem } from '../data/hqPlannerCalendarOps';
 import { retryStorageOperation, revokeStorageOpsLink } from '../data/hqStorageOps';
 import { upsertCrewMediaPolicy } from '../data/hqCrewCrud';
@@ -43,7 +48,7 @@ describe('Wave 3 planner attachments', () => {
     resetHqSyncDirectoryForTests();
   });
 
-  it('attaches and detaches planner asset references', () => {
+  it('attaches and detaches planner asset references', async () => {
     const taskId = 't-wave3';
     const projectId = 'p-wave3';
     const assetId = 'a-wave3';
@@ -92,11 +97,11 @@ describe('Wave 3 planner attachments', () => {
     ]);
     const task = getPlannerItemsSync().find((item) => item.id === taskId)!;
     const asset = getAssetsSync().find((item) => item.id === assetId)!;
-    const attach = attachAssetToPlannerItem(task.id, asset.id, 'tester');
+    const attach = await attachAssetToPlannerItem(task.id, asset.id, 'tester');
     expect(attach.ok).toBe(true);
     expect(getPlannerItemsSync().find((item) => item.id === task.id)?.attachmentAssetIds || []).toContain(asset.id);
 
-    const detach = removeAssetFromPlannerItem(task.id, asset.id, 'tester');
+    const detach = await removeAssetFromPlannerItem(task.id, asset.id, 'tester');
     expect(detach.ok).toBe(true);
     expect(getPlannerItemsSync().find((item) => item.id === task.id)?.attachmentAssetIds || []).not.toContain(asset.id);
   });

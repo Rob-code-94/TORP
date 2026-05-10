@@ -174,11 +174,11 @@ const StaffView: React.FC = () => {
     };
   }, [upcomingShoots.length]);
 
-  const onTaskStatus = (t: PlannerItem, next: PlannerTaskStatus) => {
+  const onTaskStatus = async (t: PlannerItem, next: PlannerTaskStatus) => {
     if (!crewId) return;
-    const ok = updatePlannerTask(t.id, { status: next }, actorName);
-    if (!ok) {
-      setStaffMsg('Could not update that assignment.');
+    const result = await updatePlannerTask(t.id, { status: next }, actorName);
+    if (!result.ok) {
+      setStaffMsg(result.error || 'Could not update that assignment.');
       setStaffMsgTone('error');
       return;
     }
@@ -193,7 +193,7 @@ const StaffView: React.FC = () => {
     }));
   };
 
-  const saveAvailability = () => {
+  const saveAvailability = async () => {
     if (!crewId || !avDraft || !crewProfile) return;
     if (availabilityBlocked) {
       setStaffMsg('Your on-file hours use multiple windows or exceptions. HQ can adjust this so nothing is lost.');
@@ -226,7 +226,7 @@ const StaffView: React.FC = () => {
           : [],
       notes: avDraft.availabilityNotes,
     };
-    const result = updateCrew(crewId, { availabilityDetail });
+    const result = await updateCrew(crewId, { availabilityDetail });
     if (result.ok === false) {
       setStaffMsg(result.error);
       setStaffMsgTone('error');

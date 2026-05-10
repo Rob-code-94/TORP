@@ -24,6 +24,8 @@ import { canHqAdminAccessPathForUser, hqAdminNavIdsForUser } from '../../../lib/
 import { hqUserInitials } from '../../../lib/hqUserDisplay';
 import HqProfileMenuCluster from '../HqProfileMenu';
 import HqProductGuidePanel from '../HqProductGuidePanel';
+import HqFirestoreListenerBanner from '../HqFirestoreListenerBanner';
+import HqTenantClaimBanner from '../HqTenantClaimBanner';
 import { getGuideSectionsForContext } from '../../../lib/hqProductGuideFilter';
 import { startHqAdminShellTour } from '../../../lib/hqAdminTour';
 import { HQ_GUIDE_TIP_EVENT } from '../../../lib/hqGuideTipStorage';
@@ -336,6 +338,8 @@ const AdminLayout: React.FC = () => {
             />
           </div>
         </header>
+        <HqFirestoreListenerBanner />
+        <HqTenantClaimBanner />
         <div className="flex-1 overflow-y-auto no-scrollbar p-4 sm:p-6">
           <Outlet />
         </div>

@@ -13,7 +13,8 @@ Prerequisites: Node.js 20+
 ```bash
 npm install
 cp .env.example .env.local
-# Fill `VITE_*` from Firebase → Project settings (Project ID must match the console, e.g. torp-hub).
+# `.env.example` sets `VITE_FIREBASE_PROJECT_ID=torp-hub` by default. Fill the other `VITE_FIREBASE_*`
+# values from Firebase → Project settings → your web app (same project as torp-hub).
 npm run dev
 ```
 
@@ -47,7 +48,7 @@ The seed writes **crew** plus **one sample document per HQ collection** so every
 
 **Canonical production Firebase project:** `torp-hub` — keep `VITE_FIREBASE_PROJECT_ID` and HQ seed commands aligned with this ID; always **`unset FIRESTORE_EMULATOR_HOST`** before seeding live Firestore (details in [`docs/firestore-hq-bootstrap.md`](docs/firestore-hq-bootstrap.md)).
 
-Align Auth custom claims with [`scripts/seedAuthClaims.mjs`](scripts/seedAuthClaims.mjs) / [`scripts/seedFirebaseAuthUsers.mjs`](scripts/seedFirebaseAuthUsers.mjs). HQ routes read through [`docs/hq-data-source-matrix.md`](docs/hq-data-source-matrix.md).
+Align Auth custom claims with [`scripts/seedAuthClaims.mjs`](scripts/seedAuthClaims.mjs) / [`scripts/seedFirebaseAuthUsers.mjs`](scripts/seedFirebaseAuthUsers.mjs). HQ routes read through [`docs/hq-data-source-matrix.md`](docs/hq-data-source-matrix.md). If the **Crew** directory stays empty, use [`docs/crew-directory-troubleshooting.md`](docs/crew-directory-troubleshooting.md).
 
 ## GCP project pinning (local dev convenience)
 

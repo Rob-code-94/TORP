@@ -17,12 +17,21 @@ import {
   getShootsByProjectSync,
 } from './hqSyncDirectory';
 import {
+  HQ_TENANT_SCOPE_MISSING,
   hqDeleteProjectCascade,
   hqUpsertActivity,
   hqUpsertProject,
 } from './hqFirestoreService';
 import { getHqCrewDirectory } from './hqSyncDirectory';
 import { getHqTenantForWrites } from './hqWriteContext';
+
+function projectPersistError(err: unknown): string {
+  if (err instanceof Error && err.message === HQ_TENANT_SCOPE_MISSING) {
+    return 'HQ data needs a tenant on your account. Sign out and sign back in, or ask an admin to set your tenantId claim so saves reach Firestore.';
+  }
+  if (err instanceof Error && err.message) return err.message;
+  return 'Could not save to Firestore.';
+}
 
 export interface BulkProjectResult {
   ok: boolean;
@@ -75,11 +84,11 @@ export function recordHqActivity(entry: {
   void hqUpsertActivity(getHqTenantForWrites(), row).catch((err) => console.error('[hq] pushActivity', err));
 }
 
-export function transitionProjectStage(
+export async function transitionProjectStage(
   projectId: string,
   toStage: ProjectStage,
   actorName: string,
-): { ok: boolean; error?: string } {
+): Promise<{ ok: boolean; error?: string }> {
   const project = getProjectByIdSync(projectId);
   if (!project) return { ok: false, error: 'Project not found.' };
 
@@ -95,7 +104,12 @@ export function transitionProjectStage(
   }
 
   const next: AdminProject = { ...project, stage: toStage };
-  void hqUpsertProject(getHqTenantForWrites(), next).catch((err) => console.error('[hq] transitionProjectStage', err));
+  try {
+    await hqUpsertProject(getHqTenantForWrites(), next);
+  } catch (err) {
+    console.error('[hq] transitionProjectStage', err);
+    return { ok: false, error: projectPersistError(err) };
+  }
   recordHqActivity({
     projectId,
     entityType: 'project',
@@ -107,14 +121,23 @@ export function transitionProjectStage(
   return { ok: true };
 }
 
-export function removeCrewFromProject(projectId: string, crewId: string, actorName: string): { ok: boolean; error?: string } {
+export async function removeCrewFromProject(
+  projectId: string,
+  crewId: string,
+  actorName: string,
+): Promise<{ ok: boolean; error?: string }> {
   const project = getProjectByIdSync(projectId);
   if (!project) return { ok: false, error: 'Project not found.' };
   const next: AdminProject = {
     ...project,
     assignedCrewIds: (project.assignedCrewIds || []).filter((id) => id !== crewId),
   };
-  void hqUpsertProject(getHqTenantForWrites(), next).catch((err) => console.error('[hq] removeCrewFromProject', err));
+  try {
+    await hqUpsertProject(getHqTenantForWrites(), next);
+  } catch (err) {
+    console.error('[hq] removeCrewFromProject', err);
+    return { ok: false, error: projectPersistError(err) };
+  }
   const crew = getHqCrewDirectory().find((c) => c.id === crewId);
   recordHqActivity({
     projectId,
@@ -127,7 +150,11 @@ export function removeCrewFromProject(projectId: string, crewId: string, actorNa
   return { ok: true };
 }
 
-export function assignCrewToProject(projectId: string, crewId: string, actorName: string): { ok: boolean; error?: string } {
+export async function assignCrewToProject(
+  projectId: string,
+  crewId: string,
+  actorName: string,
+): Promise<{ ok: boolean; error?: string }> {
   const project = getProjectByIdSync(projectId);
   if (!project) return { ok: false, error: 'Project not found.' };
   const assigned = project.assignedCrewIds || [];
@@ -136,7 +163,12 @@ export function assignCrewToProject(projectId: string, crewId: string, actorName
     ...project,
     assignedCrewIds: [...assigned, crewId],
   };
-  void hqUpsertProject(getHqTenantForWrites(), next).catch((err) => console.error('[hq] assignCrewToProject', err));
+  try {
+    await hqUpsertProject(getHqTenantForWrites(), next);
+  } catch (err) {
+    console.error('[hq] assignCrewToProject', err);
+    return { ok: false, error: projectPersistError(err) };
+  }
   const crew = getHqCrewDirectory().find((c) => c.id === crewId);
   recordHqActivity({
     projectId,
@@ -149,7 +181,11 @@ export function assignCrewToProject(projectId: string, crewId: string, actorName
   return { ok: true };
 }
 
-export function bulkAssignCrewToProjects(projectIds: string[], crewIds: string[], actorName: string): BulkProjectResult {
+export async function bulkAssignCrewToProjects(
+  projectIds: string[],
+  crewIds: string[],
+  actorName: string,
+): Promise<BulkProjectResult> {
   const affected: string[] = [];
   const failed: Array<{ projectId: string; error: string }> = [];
   for (const projectId of projectIds) {
@@ -160,7 +196,7 @@ export function bulkAssignCrewToProjects(projectIds: string[], crewIds: string[]
     }
     let mutated = false;
     for (const crewId of crewIds) {
-      const result = assignCrewToProject(projectId, crewId, actorName);
+      const result = await assignCrewToProject(projectId, crewId, actorName);
       if (result.ok) mutated = true;
     }
     if (mutated) affected.push(projectId);
@@ -168,7 +204,7 @@ export function bulkAssignCrewToProjects(projectIds: string[], crewIds: string[]
   return { ok: failed.length === 0, affected, failed };
 }
 
-export function bulkArchiveProjects(projectIds: string[], actorName: string): BulkProjectResult {
+export async function bulkArchiveProjects(projectIds: string[], actorName: string): Promise<BulkProjectResult> {
   const affected: string[] = [];
   const failed: Array<{ projectId: string; error: string }> = [];
   for (const projectId of projectIds) {
@@ -183,7 +219,13 @@ export function bulkArchiveProjects(projectIds: string[], actorName: string): Bu
     }
     const fromStage = project.stage;
     const next: AdminProject = { ...project, stage: 'archived', status: 'complete' };
-    void hqUpsertProject(getHqTenantForWrites(), next).catch((err) => console.error('[hq] bulkArchiveProjects', err));
+    try {
+      await hqUpsertProject(getHqTenantForWrites(), next);
+    } catch (err) {
+      console.error('[hq] bulkArchiveProjects', err);
+      failed.push({ projectId, error: projectPersistError(err) });
+      continue;
+    }
     recordHqActivity({
       projectId,
       entityType: 'project',
@@ -197,8 +239,8 @@ export function bulkArchiveProjects(projectIds: string[], actorName: string): Bu
   return { ok: failed.length === 0, affected, failed };
 }
 
-export function archiveProject(projectId: string, actorName: string): { ok: boolean; error?: string } {
-  const result = bulkArchiveProjects([projectId], actorName);
+export async function archiveProject(projectId: string, actorName: string): Promise<{ ok: boolean; error?: string }> {
+  const result = await bulkArchiveProjects([projectId], actorName);
   if (!result.ok) {
     return { ok: false, error: result.failed[0]?.error || 'Could not archive project.' };
   }
@@ -234,11 +276,11 @@ export function deleteProjectCascade(projectId: string, actorName: string): Dele
   return { ok: true, counts };
 }
 
-export function updateProjectNarrative(
+export async function updateProjectNarrative(
   projectId: string,
   patch: Pick<AdminProject, 'summary' | 'brief' | 'goals' | 'nextMilestone'>,
   actorName: string,
-): { ok: boolean; error?: string } {
+): Promise<{ ok: boolean; error?: string }> {
   const project = getProjectByIdSync(projectId);
   if (!project) return { ok: false, error: 'Project not found.' };
   const next: AdminProject = {
@@ -248,7 +290,12 @@ export function updateProjectNarrative(
     goals: patch.goals.trim(),
     nextMilestone: patch.nextMilestone.trim(),
   };
-  void hqUpsertProject(getHqTenantForWrites(), next).catch((err) => console.error('[hq] updateProjectNarrative', err));
+  try {
+    await hqUpsertProject(getHqTenantForWrites(), next);
+  } catch (err) {
+    console.error('[hq] updateProjectNarrative', err);
+    return { ok: false, error: projectPersistError(err) };
+  }
   recordHqActivity({
     projectId,
     entityType: 'project',

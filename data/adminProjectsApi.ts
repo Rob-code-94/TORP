@@ -116,7 +116,7 @@ function validateCreateProject(request: CreateProjectRequest) {
   if (request.dueDate && Number.isNaN(Date.parse(request.dueDate))) throw new Error('dueDate must be an ISO date.');
 }
 
-export function createProject(request: CreateProjectRequest): AdminProject {
+export async function createProject(request: CreateProjectRequest): Promise<AdminProject> {
   validateCreateProject(request);
   const created: AdminProject = {
     id: `p${Date.now()}`,
@@ -137,23 +137,32 @@ export function createProject(request: CreateProjectRequest): AdminProject {
     deliverables: [],
     contactEmail: '',
   };
-  void hqUpsertProject(getHqTenantForWrites(), created).catch((err) => console.error('[hq] createProject', err));
+  try {
+    await hqUpsertProject(getHqTenantForWrites(), created);
+  } catch (err) {
+    console.error('[hq] createProject', err);
+    throw err instanceof Error ? err : new Error('Could not create project.');
+  }
   return created;
 }
 
-export function moveProjectStage(projectId: string, toStage: ProjectStage, actorName: string): { ok: boolean; error?: string } {
+export async function moveProjectStage(
+  projectId: string,
+  toStage: ProjectStage,
+  actorName: string,
+): Promise<{ ok: boolean; error?: string }> {
   return hqTransitionProjectStage(projectId, toStage, actorName);
 }
 
-export function bulkAssignCrew(projectIds: string[], crewIds: string[], actorName: string) {
+export async function bulkAssignCrew(projectIds: string[], crewIds: string[], actorName: string) {
   return bulkAssignCrewToProjects(projectIds, crewIds, actorName);
 }
 
-export function archiveProjects(projectIds: string[], actorName: string) {
+export async function archiveProjects(projectIds: string[], actorName: string) {
   return bulkArchiveProjects(projectIds, actorName);
 }
 
-export function archiveProject(projectId: string, actorName: string): { ok: boolean; error?: string } {
+export async function archiveProject(projectId: string, actorName: string): Promise<{ ok: boolean; error?: string }> {
   return hqArchiveProject(projectId, actorName);
 }
 
@@ -238,11 +247,11 @@ export function listCrew() {
   return { items: getHqCrewDirectory() };
 }
 
-export function createCrew(request: CreateCrewRequest) {
+export async function createCrew(request: CreateCrewRequest) {
   return createCrewMemberProfile(request);
 }
 
-export function updateCrew(crewId: string, request: UpdateCrewRequest) {
+export async function updateCrew(crewId: string, request: UpdateCrewRequest) {
   return updateCrewMemberProfile(crewId, request);
 }
 
@@ -265,6 +274,10 @@ export interface UpdateProjectNarrativeRequest {
   nextMilestone: string;
 }
 
-export function saveProjectNarrative(projectId: string, request: UpdateProjectNarrativeRequest, actorName: string) {
+export async function saveProjectNarrative(
+  projectId: string,
+  request: UpdateProjectNarrativeRequest,
+  actorName: string,
+): Promise<{ ok: boolean; error?: string }> {
   return hqUpdateProjectNarrative(projectId, request, actorName);
 }

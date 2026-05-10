@@ -143,7 +143,7 @@ const AdminProjectWizard: React.FC<AdminProjectWizardProps> = ({ open, onClose, 
         clientName: selectedClient?.company || form.clientName,
         ownerName: selectedOwner?.displayName || form.ownerName,
       };
-      createProject(payload);
+      await createProject(payload);
       onCreated();
       closeAndReset();
     } catch (e) {

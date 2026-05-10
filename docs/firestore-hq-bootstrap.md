@@ -20,7 +20,7 @@ export GCLOUD_PROJECT=torp-hub
 - Each **record** is a **document** inside that collection (for example crew doc IDs `cr-4`, `cr-6`).
 - Crew members do **not** each get their own collection; they share **`crew`**.
 
-See also [**HQ data source matrix**](hq-data-source-matrix.md) for routes and getters.
+See also [**HQ data source matrix**](hq-data-source-matrix.md) for routes and getters. If HQ **Crew** lists are empty in the app, see [**Crew directory troubleshooting**](crew-directory-troubleshooting.md).
 
 ## Why run bootstrap?
 

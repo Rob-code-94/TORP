@@ -15,6 +15,7 @@ import {
   where,
   writeBatch,
   type Firestore,
+  type QueryDocumentSnapshot,
   type Unsubscribe,
 } from 'firebase/firestore';
 import type { Timestamp } from 'firebase/firestore';
@@ -399,8 +400,9 @@ export function subscribeHqOrgData(
   db: Firestore,
   tenantId: string,
   onUpdate?: () => void,
+  onListenerError?: (err: unknown, collectionLabel: string) => void,
 ): () => void {
-  const q = (name: string) => query(collection(db, name), where('tenantId', '==', tenantId));
+  const tenantQuery = (name: string) => query(collection(db, name), where('tenantId', '==', tenantId));
 
   let coalescePending = false;
   const bump = () => {
@@ -436,107 +438,129 @@ export function subscribeHqOrgData(
   };
 
   const subs: Unsubscribe[] = [];
-  subs.push(
-    onSnapshot(q(HQ_COLLECTION.crew), (snap) => {
-      apply.crew(snap.docs.map((d) => parseCrew(d.id, d.data() as Record<string, unknown>)));
-      bump();
-    }),
+
+  const attach = <T>(
+    collectionLabel: string,
+    collectionPath: string,
+    parse: (docSnap: QueryDocumentSnapshot) => T,
+    applyRows: (rows: T[]) => void,
+  ) => {
+    subs.push(
+      onSnapshot(
+        tenantQuery(collectionPath),
+        (snap) => {
+          applyRows(snap.docs.map((d) => parse(d)));
+          bump();
+        },
+        (err) => {
+          console.error(`[hq] Firestore listener error (${collectionLabel})`, err);
+          onListenerError?.(err, collectionLabel);
+        },
+      ),
+    );
+  };
+
+  attach(
+    HQ_COLLECTION.crew,
+    HQ_COLLECTION.crew,
+    (d) => parseCrew(d.id, d.data() as Record<string, unknown>),
+    apply.crew,
   );
-  subs.push(
-    onSnapshot(q(HQ_COLLECTION.clients), (snap) => {
-      apply.clients(snap.docs.map((d) => parseClient(d.id, d.data() as Record<string, unknown>)));
-      bump();
-    }),
+  attach(
+    HQ_COLLECTION.clients,
+    HQ_COLLECTION.clients,
+    (d) => parseClient(d.id, d.data() as Record<string, unknown>),
+    apply.clients,
   );
-  subs.push(
-    onSnapshot(q(HQ_COLLECTION.hqProjects), (snap) => {
-      apply.projects(snap.docs.map((d) => parseAdminProject(d.id, d.data() as Record<string, unknown>)));
-      bump();
-    }),
+  attach(
+    HQ_COLLECTION.hqProjects,
+    HQ_COLLECTION.hqProjects,
+    (d) => parseAdminProject(d.id, d.data() as Record<string, unknown>),
+    apply.projects,
   );
-  subs.push(
-    onSnapshot(q(HQ_COLLECTION.plannerItems), (snap) => {
-      apply.planner(snap.docs.map((d) => parsePlannerItem(d.id, d.data() as Record<string, unknown>)));
-      bump();
-    }),
+  attach(
+    HQ_COLLECTION.plannerItems,
+    HQ_COLLECTION.plannerItems,
+    (d) => parsePlannerItem(d.id, d.data() as Record<string, unknown>),
+    apply.planner,
   );
-  subs.push(
-    onSnapshot(q(HQ_COLLECTION.shoots), (snap) => {
-      apply.shoots(snap.docs.map((d) => parseShoot(d.id, d.data() as Record<string, unknown>)));
-      bump();
-    }),
+  attach(
+    HQ_COLLECTION.shoots,
+    HQ_COLLECTION.shoots,
+    (d) => parseShoot(d.id, d.data() as Record<string, unknown>),
+    apply.shoots,
   );
-  subs.push(
-    onSnapshot(q(HQ_COLLECTION.meetings), (snap) => {
-      apply.meetings(snap.docs.map((d) => parseMeeting(d.id, d.data() as Record<string, unknown>)));
-      bump();
-    }),
+  attach(
+    HQ_COLLECTION.meetings,
+    HQ_COLLECTION.meetings,
+    (d) => parseMeeting(d.id, d.data() as Record<string, unknown>),
+    apply.meetings,
   );
-  subs.push(
-    onSnapshot(q(HQ_COLLECTION.hqActivity), (snap) => {
-      apply.activity(snap.docs.map((d) => parseActivity(d.id, d.data() as Record<string, unknown>)));
-      bump();
-    }),
+  attach(
+    HQ_COLLECTION.hqActivity,
+    HQ_COLLECTION.hqActivity,
+    (d) => parseActivity(d.id, d.data() as Record<string, unknown>),
+    apply.activity,
   );
-  subs.push(
-    onSnapshot(q(HQ_COLLECTION.hqProjectAssets), (snap) => {
-      apply.assets(snap.docs.map((d) => parseAsset(d.id, d.data() as Record<string, unknown>)));
-      bump();
-    }),
+  attach(
+    HQ_COLLECTION.hqProjectAssets,
+    HQ_COLLECTION.hqProjectAssets,
+    (d) => parseAsset(d.id, d.data() as Record<string, unknown>),
+    apply.assets,
   );
-  subs.push(
-    onSnapshot(q(HQ_COLLECTION.hqInvoices), (snap) => {
-      apply.invoices(snap.docs.map((d) => parseInvoice(d.id, d.data() as Record<string, unknown>)));
-      bump();
-    }),
+  attach(
+    HQ_COLLECTION.hqInvoices,
+    HQ_COLLECTION.hqInvoices,
+    (d) => parseInvoice(d.id, d.data() as Record<string, unknown>),
+    apply.invoices,
   );
-  subs.push(
-    onSnapshot(q(HQ_COLLECTION.hqProposals), (snap) => {
-      apply.proposals(snap.docs.map((d) => parseProposal(d.id, d.data() as Record<string, unknown>)));
-      bump();
-    }),
+  attach(
+    HQ_COLLECTION.hqProposals,
+    HQ_COLLECTION.hqProposals,
+    (d) => parseProposal(d.id, d.data() as Record<string, unknown>),
+    apply.proposals,
   );
-  subs.push(
-    onSnapshot(q(HQ_COLLECTION.hqExpenses), (snap) => {
-      apply.expenses(snap.docs.map((d) => parseExpense(d.id, d.data() as Record<string, unknown>)));
-      bump();
-    }),
+  attach(
+    HQ_COLLECTION.hqExpenses,
+    HQ_COLLECTION.hqExpenses,
+    (d) => parseExpense(d.id, d.data() as Record<string, unknown>),
+    apply.expenses,
   );
-  subs.push(
-    onSnapshot(q(HQ_COLLECTION.hqDeliverables), (snap) => {
-      apply.deliverables(snap.docs.map((d) => parseDeliverable(d.id, d.data() as Record<string, unknown>)));
-      bump();
-    }),
+  attach(
+    HQ_COLLECTION.hqDeliverables,
+    HQ_COLLECTION.hqDeliverables,
+    (d) => parseDeliverable(d.id, d.data() as Record<string, unknown>),
+    apply.deliverables,
   );
-  subs.push(
-    onSnapshot(q(HQ_COLLECTION.hqRisks), (snap) => {
-      apply.risks(snap.docs.map((d) => parseRisk(d.id, d.data() as Record<string, unknown>)));
-      bump();
-    }),
+  attach(
+    HQ_COLLECTION.hqRisks,
+    HQ_COLLECTION.hqRisks,
+    (d) => parseRisk(d.id, d.data() as Record<string, unknown>),
+    apply.risks,
   );
-  subs.push(
-    onSnapshot(q(HQ_COLLECTION.hqBlockers), (snap) => {
-      apply.blockers(snap.docs.map((d) => parseBlocker(d.id, d.data() as Record<string, unknown>)));
-      bump();
-    }),
+  attach(
+    HQ_COLLECTION.hqBlockers,
+    HQ_COLLECTION.hqBlockers,
+    (d) => parseBlocker(d.id, d.data() as Record<string, unknown>),
+    apply.blockers,
   );
-  subs.push(
-    onSnapshot(q(HQ_COLLECTION.hqDependencies), (snap) => {
-      apply.dependencies(snap.docs.map((d) => parseDependency(d.id, d.data() as Record<string, unknown>)));
-      bump();
-    }),
+  attach(
+    HQ_COLLECTION.hqDependencies,
+    HQ_COLLECTION.hqDependencies,
+    (d) => parseDependency(d.id, d.data() as Record<string, unknown>),
+    apply.dependencies,
   );
-  subs.push(
-    onSnapshot(q(HQ_COLLECTION.hqChangeOrders), (snap) => {
-      apply.changeOrders(snap.docs.map((d) => parseChangeOrder(d.id, d.data() as Record<string, unknown>)));
-      bump();
-    }),
+  attach(
+    HQ_COLLECTION.hqChangeOrders,
+    HQ_COLLECTION.hqChangeOrders,
+    (d) => parseChangeOrder(d.id, d.data() as Record<string, unknown>),
+    apply.changeOrders,
   );
-  subs.push(
-    onSnapshot(q(HQ_COLLECTION.hqStorageOpsEvents), (snap) => {
-      apply.storageOps(snap.docs.map((d) => parseStorageOps(d.id, d.data() as Record<string, unknown>)));
-      bump();
-    }),
+  attach(
+    HQ_COLLECTION.hqStorageOpsEvents,
+    HQ_COLLECTION.hqStorageOpsEvents,
+    (d) => parseStorageOps(d.id, d.data() as Record<string, unknown>),
+    apply.storageOps,
   );
 
   return () => subs.forEach((u) => u());
@@ -573,35 +597,60 @@ function crewToFirestorePayload(c: CrewProfile, tenantId: string): Record<string
   };
 }
 
-export async function hqUpsertCrew(tenantId: string, crew: CrewProfile, uid?: string | null): Promise<void> {
+/** Non-empty tenant required for Cloud writes when rules enforce `request.auth.token.tenantId`. */
+function requireCloudTenant(tenantId: string | null | undefined): string | null {
+  const t = tenantId?.trim();
+  return t && t.length > 0 ? t : null;
+}
+
+/** Error message when Firebase is configured but HQ write tenant is missing (JWT claim). */
+export const HQ_TENANT_SCOPE_MISSING = 'HQ_TENANT_SCOPE_MISSING';
+
+export async function hqUpsertCrew(tenantId: string | null, crew: CrewProfile, uid?: string | null): Promise<void> {
   const prev = getHqCrewDirectory();
   const idx = prev.findIndex((c) => c.id === crew.id);
   const next = idx >= 0 ? prev.map((c) => (c.id === crew.id ? crew : c)) : [...prev, crew];
-  setHqCrewDirectory(next);
 
-  if (!isFirebaseConfigured()) return;
+  if (!isFirebaseConfigured()) {
+    setHqCrewDirectory(next);
+    return;
+  }
+
+  const cloudTenant = requireCloudTenant(tenantId);
+  if (!cloudTenant) {
+    throw new Error(HQ_TENANT_SCOPE_MISSING);
+  }
 
   const db = getFirebaseFirestoreInstance();
-  const payload = crewToFirestorePayload(crew, tenantId);
+  const payload = crewToFirestorePayload(crew, cloudTenant);
   if (uid) payload.uid = uid;
   await setDoc(doc(db, HQ_COLLECTION.crew, crew.id), payload, { merge: true });
+  setHqCrewDirectory(next);
 }
 
-export async function hqDeleteCrew(tenantId: string, crewId: string): Promise<void> {
+export async function hqDeleteCrew(tenantId: string | null, crewId: string): Promise<void> {
+  if (!isFirebaseConfigured()) return;
+  const cloudTenant = requireCloudTenant(tenantId);
+  if (!cloudTenant) return;
+
   const db = getFirebaseFirestoreInstance();
   const ref = doc(db, HQ_COLLECTION.crew, crewId);
   const snap = await import('firebase/firestore').then(({ getDoc }) => getDoc(ref));
   const data = snap.data();
-  if (data?.tenantId !== tenantId) throw new Error('Crew not in tenant.');
+  if (data?.tenantId !== cloudTenant) throw new Error('Crew not in tenant.');
   await deleteDoc(ref);
 }
 
-export async function hqUpsertClient(tenantId: string, client: ClientProfile): Promise<void> {
+export async function hqUpsertClient(tenantId: string | null, client: ClientProfile): Promise<void> {
+  if (!isFirebaseConfigured()) return;
+  const cloudTenant = requireCloudTenant(tenantId);
+  if (!cloudTenant) return;
+
   const db = getFirebaseFirestoreInstance();
   await setDoc(
     doc(db, HQ_COLLECTION.clients, client.id),
     {
-      tenantId,
+      tenantId: cloudTenant,
       name: client.name,
       company: client.company,
       email: client.email,
@@ -624,20 +673,30 @@ export async function hqUpsertClient(tenantId: string, client: ClientProfile): P
   );
 }
 
-export async function hqDeleteClient(tenantId: string, clientId: string): Promise<void> {
+export async function hqDeleteClient(tenantId: string | null, clientId: string): Promise<void> {
+  if (!isFirebaseConfigured()) return;
+  const cloudTenant = requireCloudTenant(tenantId);
+  if (!cloudTenant) return;
+
   const db = getFirebaseFirestoreInstance();
   const ref = doc(db, HQ_COLLECTION.clients, clientId);
   const { getDoc } = await import('firebase/firestore');
   const snap = await getDoc(ref);
-  if (!snap.exists() || (snap.data() as { tenantId?: string }).tenantId !== tenantId) {
+  if (!snap.exists() || (snap.data() as { tenantId?: string }).tenantId !== cloudTenant) {
     throw new Error('Client not found.');
   }
   await deleteDoc(ref);
 }
 
-export async function hqUpsertProject(tenantId: string, project: AdminProject): Promise<void> {
+export async function hqUpsertProject(tenantId: string | null, project: AdminProject): Promise<void> {
+  if (!isFirebaseConfigured()) return;
+  const cloudTenant = requireCloudTenant(tenantId);
+  if (!cloudTenant) {
+    throw new Error(HQ_TENANT_SCOPE_MISSING);
+  }
+
   const db = getFirebaseFirestoreInstance();
-  await setDoc(doc(db, HQ_COLLECTION.hqProjects, project.id), { tenantId, ...stripIds(project) }, { merge: true });
+  await setDoc(doc(db, HQ_COLLECTION.hqProjects, project.id), { tenantId: cloudTenant, ...stripIds(project) }, { merge: true });
 }
 
 function stripIds(p: AdminProject): Record<string, unknown> {
@@ -645,22 +704,30 @@ function stripIds(p: AdminProject): Record<string, unknown> {
   return rest as Record<string, unknown>;
 }
 
-export async function hqUpsertPlannerItem(tenantId: string, item: PlannerItem): Promise<void> {
+export async function hqUpsertPlannerItem(tenantId: string | null, item: PlannerItem): Promise<void> {
   const assigneeCrewIds =
     item.assigneeCrewIds?.length ? item.assigneeCrewIds : item.assigneeCrewId ? [item.assigneeCrewId] : [];
   const prev = getPlannerItemsSync();
   const idx = prev.findIndex((p) => p.id === item.id);
   const mergedList = idx >= 0 ? prev.map((p) => (p.id === item.id ? item : p)) : [item, ...prev];
-  setHqPlannerDirectory(mergedList);
 
-  if (!isFirebaseConfigured()) return;
+  if (!isFirebaseConfigured()) {
+    setHqPlannerDirectory(mergedList);
+    return;
+  }
+
+  const cloudTenant = requireCloudTenant(tenantId);
+  if (!cloudTenant) {
+    throw new Error(HQ_TENANT_SCOPE_MISSING);
+  }
 
   const db = getFirebaseFirestoreInstance();
   await setDoc(doc(db, HQ_COLLECTION.plannerItems, item.id), {
-    tenantId,
+    tenantId: cloudTenant,
     ...stripPlannerIds(item),
     assigneeCrewIds,
   }, { merge: true });
+  setHqPlannerDirectory(mergedList);
 }
 
 function stripPlannerIds(item: PlannerItem): Record<string, unknown> {
@@ -668,18 +735,25 @@ function stripPlannerIds(item: PlannerItem): Record<string, unknown> {
   return rest as Record<string, unknown>;
 }
 
-export async function hqDeletePlannerItem(tenantId: string, itemId: string): Promise<void> {
-  setHqPlannerDirectory(getPlannerItemsSync().filter((p) => p.id !== itemId));
+export async function hqDeletePlannerItem(tenantId: string | null, itemId: string): Promise<void> {
+  if (!isFirebaseConfigured()) {
+    setHqPlannerDirectory(getPlannerItemsSync().filter((p) => p.id !== itemId));
+    return;
+  }
 
-  if (!isFirebaseConfigured()) return;
+  const cloudTenant = requireCloudTenant(tenantId);
+  if (!cloudTenant) {
+    throw new Error(HQ_TENANT_SCOPE_MISSING);
+  }
 
   const db = getFirebaseFirestoreInstance();
   const ref = doc(db, HQ_COLLECTION.plannerItems, itemId);
   const snap = await getDoc(ref);
-  if (!snap.exists() || (snap.data() as { tenantId?: string }).tenantId !== tenantId) {
+  if (!snap.exists() || (snap.data() as { tenantId?: string }).tenantId !== cloudTenant) {
     throw new Error('Planner item not found.');
   }
   await deleteDoc(ref);
+  setHqPlannerDirectory(getPlannerItemsSync().filter((p) => p.id !== itemId));
 }
 
 async function hqDeleteWhereProject(
@@ -711,12 +785,16 @@ async function hqDeleteWhereProject(
   return total;
 }
 
-export async function hqUpsertActivity(tenantId: string, entry: ActivityEntry): Promise<void> {
+export async function hqUpsertActivity(tenantId: string | null, entry: ActivityEntry): Promise<void> {
+  if (!isFirebaseConfigured()) return;
+  const cloudTenant = requireCloudTenant(tenantId);
+  if (!cloudTenant) return;
+
   const db = getFirebaseFirestoreInstance();
   await setDoc(
     doc(db, HQ_COLLECTION.hqActivity, entry.id),
     {
-      tenantId,
+      tenantId: cloudTenant,
       projectId: entry.projectId,
       projectTitle: entry.projectTitle,
       entityType: entry.entityType,
@@ -729,85 +807,137 @@ export async function hqUpsertActivity(tenantId: string, entry: ActivityEntry): 
   );
 }
 
-export async function hqUpsertShoot(tenantId: string, shoot: AdminShoot): Promise<void> {
+export async function hqUpsertShoot(tenantId: string | null, shoot: AdminShoot): Promise<void> {
+  if (!isFirebaseConfigured()) return;
+  const cloudTenant = requireCloudTenant(tenantId);
+  if (!cloudTenant) {
+    throw new Error(HQ_TENANT_SCOPE_MISSING);
+  }
+
   const db = getFirebaseFirestoreInstance();
   const { id, ...rest } = shoot;
-  await setDoc(doc(db, HQ_COLLECTION.shoots, id), { tenantId, ...rest }, { merge: true });
+  await setDoc(doc(db, HQ_COLLECTION.shoots, id), { tenantId: cloudTenant, ...rest }, { merge: true });
 }
 
-export async function hqUpsertMeeting(tenantId: string, meeting: AdminMeeting): Promise<void> {
+export async function hqUpsertMeeting(tenantId: string | null, meeting: AdminMeeting): Promise<void> {
+  if (!isFirebaseConfigured()) return;
+  const cloudTenant = requireCloudTenant(tenantId);
+  if (!cloudTenant) {
+    throw new Error(HQ_TENANT_SCOPE_MISSING);
+  }
+
   const db = getFirebaseFirestoreInstance();
   const { id, ...rest } = meeting;
-  await setDoc(doc(db, HQ_COLLECTION.meetings, id), { tenantId, ...rest }, { merge: true });
+  await setDoc(doc(db, HQ_COLLECTION.meetings, id), { tenantId: cloudTenant, ...rest }, { merge: true });
 }
 
-export async function hqDeleteShoot(tenantId: string, shootId: string): Promise<void> {
+export async function hqDeleteShoot(tenantId: string | null, shootId: string): Promise<void> {
+  if (!isFirebaseConfigured()) return;
+  const cloudTenant = requireCloudTenant(tenantId);
+  if (!cloudTenant) {
+    throw new Error(HQ_TENANT_SCOPE_MISSING);
+  }
+
   const db = getFirebaseFirestoreInstance();
   const ref = doc(db, HQ_COLLECTION.shoots, shootId);
   const snap = await getDoc(ref);
-  if (!snap.exists() || (snap.data() as { tenantId?: string }).tenantId !== tenantId) {
+  if (!snap.exists() || (snap.data() as { tenantId?: string }).tenantId !== cloudTenant) {
     throw new Error('Shoot not found.');
   }
   await deleteDoc(ref);
 }
 
-export async function hqDeleteMeeting(tenantId: string, meetingId: string): Promise<void> {
+export async function hqDeleteMeeting(tenantId: string | null, meetingId: string): Promise<void> {
+  if (!isFirebaseConfigured()) return;
+  const cloudTenant = requireCloudTenant(tenantId);
+  if (!cloudTenant) {
+    throw new Error(HQ_TENANT_SCOPE_MISSING);
+  }
+
   const db = getFirebaseFirestoreInstance();
   const ref = doc(db, HQ_COLLECTION.meetings, meetingId);
   const snap = await getDoc(ref);
-  if (!snap.exists() || (snap.data() as { tenantId?: string }).tenantId !== tenantId) {
+  if (!snap.exists() || (snap.data() as { tenantId?: string }).tenantId !== cloudTenant) {
     throw new Error('Meeting not found.');
   }
   await deleteDoc(ref);
 }
 
-export async function hqUpsertProjectAsset(tenantId: string, asset: ProjectAsset): Promise<void> {
+export async function hqUpsertProjectAsset(tenantId: string | null, asset: ProjectAsset): Promise<void> {
+  if (!isFirebaseConfigured()) return;
+  const cloudTenant = requireCloudTenant(tenantId);
+  if (!cloudTenant) return;
+
   const db = getFirebaseFirestoreInstance();
   const { id, ...rest } = asset;
-  await setDoc(doc(db, HQ_COLLECTION.hqProjectAssets, id), { tenantId, ...rest }, { merge: true });
+  await setDoc(doc(db, HQ_COLLECTION.hqProjectAssets, id), { tenantId: cloudTenant, ...rest }, { merge: true });
 }
 
-export async function hqDeleteProjectAsset(tenantId: string, assetId: string): Promise<void> {
+export async function hqDeleteProjectAsset(tenantId: string | null, assetId: string): Promise<void> {
+  if (!isFirebaseConfigured()) return;
+  const cloudTenant = requireCloudTenant(tenantId);
+  if (!cloudTenant) return;
+
   const db = getFirebaseFirestoreInstance();
   const ref = doc(db, HQ_COLLECTION.hqProjectAssets, assetId);
   const snap = await getDoc(ref);
-  if (!snap.exists() || (snap.data() as { tenantId?: string }).tenantId !== tenantId) {
+  if (!snap.exists() || (snap.data() as { tenantId?: string }).tenantId !== cloudTenant) {
     throw new Error('Asset not found.');
   }
   await deleteDoc(ref);
 }
 
-export async function hqUpsertDeliverable(tenantId: string, row: ProjectDeliverable): Promise<void> {
+export async function hqUpsertDeliverable(tenantId: string | null, row: ProjectDeliverable): Promise<void> {
+  if (!isFirebaseConfigured()) return;
+  const cloudTenant = requireCloudTenant(tenantId);
+  if (!cloudTenant) return;
+
   const db = getFirebaseFirestoreInstance();
   const { id, ...rest } = row;
-  await setDoc(doc(db, HQ_COLLECTION.hqDeliverables, id), { tenantId, ...rest }, { merge: true });
+  await setDoc(doc(db, HQ_COLLECTION.hqDeliverables, id), { tenantId: cloudTenant, ...rest }, { merge: true });
 }
 
-export async function hqUpsertRisk(tenantId: string, row: RiskItem): Promise<void> {
+export async function hqUpsertRisk(tenantId: string | null, row: RiskItem): Promise<void> {
+  if (!isFirebaseConfigured()) return;
+  const cloudTenant = requireCloudTenant(tenantId);
+  if (!cloudTenant) return;
+
   const db = getFirebaseFirestoreInstance();
   const { id, ...rest } = row;
-  await setDoc(doc(db, HQ_COLLECTION.hqRisks, id), { tenantId, ...rest }, { merge: true });
+  await setDoc(doc(db, HQ_COLLECTION.hqRisks, id), { tenantId: cloudTenant, ...rest }, { merge: true });
 }
 
-export async function hqUpsertBlocker(tenantId: string, row: BlockerItem): Promise<void> {
+export async function hqUpsertBlocker(tenantId: string | null, row: BlockerItem): Promise<void> {
+  if (!isFirebaseConfigured()) return;
+  const cloudTenant = requireCloudTenant(tenantId);
+  if (!cloudTenant) return;
+
   const db = getFirebaseFirestoreInstance();
   const { id, ...rest } = row;
-  await setDoc(doc(db, HQ_COLLECTION.hqBlockers, id), { tenantId, ...rest }, { merge: true });
+  await setDoc(doc(db, HQ_COLLECTION.hqBlockers, id), { tenantId: cloudTenant, ...rest }, { merge: true });
 }
 
-export async function hqUpsertDependency(tenantId: string, row: DependencyItem): Promise<void> {
+export async function hqUpsertDependency(tenantId: string | null, row: DependencyItem): Promise<void> {
+  if (!isFirebaseConfigured()) return;
+  const cloudTenant = requireCloudTenant(tenantId);
+  if (!cloudTenant) return;
+
   const db = getFirebaseFirestoreInstance();
   const { id, ...rest } = row;
-  await setDoc(doc(db, HQ_COLLECTION.hqDependencies, id), { tenantId, ...rest }, { merge: true });
+  await setDoc(doc(db, HQ_COLLECTION.hqDependencies, id), { tenantId: cloudTenant, ...rest }, { merge: true });
 }
 
-export async function hqUpsertChangeOrder(tenantId: string, row: ChangeOrder): Promise<void> {
+export async function hqUpsertChangeOrder(tenantId: string | null, row: ChangeOrder): Promise<void> {
+  if (!isFirebaseConfigured()) return;
+  const cloudTenant = requireCloudTenant(tenantId);
+  if (!cloudTenant) return;
+
   const db = getFirebaseFirestoreInstance();
   const { id, ...rest } = row;
-  await setDoc(doc(db, HQ_COLLECTION.hqChangeOrders, id), { tenantId, ...rest }, { merge: true });
+  await setDoc(doc(db, HQ_COLLECTION.hqChangeOrders, id), { tenantId: cloudTenant, ...rest }, { merge: true });
 }
 
-export async function hqUpsertInvoice(tenantId: string, row: AdminInvoice): Promise<void> {
+export async function hqUpsertInvoice(tenantId: string | null, row: AdminInvoice): Promise<void> {
   const prev = getHqInvoiceDirectory();
   const idx = prev.findIndex((i) => i.id === row.id);
   const next = idx >= 0 ? prev.map((i) => (i.id === row.id ? row : i)) : [row, ...prev];
@@ -815,44 +945,62 @@ export async function hqUpsertInvoice(tenantId: string, row: AdminInvoice): Prom
 
   if (!isFirebaseConfigured()) return;
 
+  const cloudTenant = requireCloudTenant(tenantId);
+  if (!cloudTenant) return;
+
   const db = getFirebaseFirestoreInstance();
   const { id, ...rest } = row;
   await setDoc(
     doc(db, HQ_COLLECTION.hqInvoices, id),
-    omitUndefinedRecord({ tenantId, ...(rest as Record<string, unknown>) }),
+    omitUndefinedRecord({ tenantId: cloudTenant, ...(rest as Record<string, unknown>) }),
     { merge: true },
   );
 }
 
-export async function hqUpsertProposal(tenantId: string, row: AdminProposal): Promise<void> {
+export async function hqUpsertProposal(tenantId: string | null, row: AdminProposal): Promise<void> {
+  if (!isFirebaseConfigured()) return;
+  const cloudTenant = requireCloudTenant(tenantId);
+  if (!cloudTenant) return;
+
   const db = getFirebaseFirestoreInstance();
   const { id, ...rest } = row;
-  await setDoc(doc(db, HQ_COLLECTION.hqProposals, id), { tenantId, ...rest }, { merge: true });
+  await setDoc(doc(db, HQ_COLLECTION.hqProposals, id), { tenantId: cloudTenant, ...rest }, { merge: true });
 }
 
-export async function hqUpsertExpense(tenantId: string, row: ProjectExpense): Promise<void> {
+export async function hqUpsertExpense(tenantId: string | null, row: ProjectExpense): Promise<void> {
+  if (!isFirebaseConfigured()) return;
+  const cloudTenant = requireCloudTenant(tenantId);
+  if (!cloudTenant) return;
+
   const db = getFirebaseFirestoreInstance();
   const { id, ...rest } = row;
-  await setDoc(doc(db, HQ_COLLECTION.hqExpenses, id), { tenantId, ...rest }, { merge: true });
+  await setDoc(doc(db, HQ_COLLECTION.hqExpenses, id), { tenantId: cloudTenant, ...rest }, { merge: true });
 }
 
-export async function hqUpsertStorageOpsEvent(tenantId: string, row: StorageOpsEvent): Promise<void> {
+export async function hqUpsertStorageOpsEvent(tenantId: string | null, row: StorageOpsEvent): Promise<void> {
   const prev = getStorageOpsSync();
   const without = prev.filter((e) => e.id !== row.id);
   setHqStorageOpsDirectory([row, ...without]);
 
   if (!isFirebaseConfigured()) return;
 
+  const cloudTenant = requireCloudTenant(tenantId);
+  if (!cloudTenant) return;
+
   const db = getFirebaseFirestoreInstance();
   const { id, ...rest } = row;
-  await setDoc(doc(db, HQ_COLLECTION.hqStorageOpsEvents, id), { tenantId, ...rest }, { merge: true });
+  await setDoc(doc(db, HQ_COLLECTION.hqStorageOpsEvents, id), { tenantId: cloudTenant, ...rest }, { merge: true });
 }
 
-export async function hqDeleteDeliverable(tenantId: string, id: string): Promise<void> {
+export async function hqDeleteDeliverable(tenantId: string | null, id: string): Promise<void> {
+  if (!isFirebaseConfigured()) return;
+  const cloudTenant = requireCloudTenant(tenantId);
+  if (!cloudTenant) return;
+
   const db = getFirebaseFirestoreInstance();
   const ref = doc(db, HQ_COLLECTION.hqDeliverables, id);
   const snap = await getDoc(ref);
-  if (!snap.exists() || (snap.data() as { tenantId?: string }).tenantId !== tenantId) {
+  if (!snap.exists() || (snap.data() as { tenantId?: string }).tenantId !== cloudTenant) {
     throw new Error('Deliverable not found.');
   }
   await deleteDoc(ref);
@@ -860,28 +1008,36 @@ export async function hqDeleteDeliverable(tenantId: string, id: string): Promise
 
 /** Hard-delete a project and all HQ rows that reference it (same collections as legacy mock cascade). */
 export async function hqDeleteProjectCascade(
-  tenantId: string,
+  tenantId: string | null,
   projectId: string,
   _actorName: string,
 ): Promise<{
   counts: Record<string, number>;
 }> {
+  if (!isFirebaseConfigured()) {
+    return { counts: {} };
+  }
+  const cloudTenant = requireCloudTenant(tenantId);
+  if (!cloudTenant) {
+    return { counts: {} };
+  }
+
   const db = getFirebaseFirestoreInstance();
 
   const counts: Record<string, number> = {};
-  counts.planner = await hqDeleteWhereProject(db, HQ_COLLECTION.plannerItems, tenantId, projectId);
-  counts.shoots = await hqDeleteWhereProject(db, HQ_COLLECTION.shoots, tenantId, projectId);
-  counts.meetings = await hqDeleteWhereProject(db, HQ_COLLECTION.meetings, tenantId, projectId);
-  counts.assets = await hqDeleteWhereProject(db, HQ_COLLECTION.hqProjectAssets, tenantId, projectId);
-  counts.invoices = await hqDeleteWhereProject(db, HQ_COLLECTION.hqInvoices, tenantId, projectId);
-  counts.proposals = await hqDeleteWhereProject(db, HQ_COLLECTION.hqProposals, tenantId, projectId);
-  counts.expenses = await hqDeleteWhereProject(db, HQ_COLLECTION.hqExpenses, tenantId, projectId);
-  counts.deliverables = await hqDeleteWhereProject(db, HQ_COLLECTION.hqDeliverables, tenantId, projectId);
-  counts.risks = await hqDeleteWhereProject(db, HQ_COLLECTION.hqRisks, tenantId, projectId);
-  counts.blockers = await hqDeleteWhereProject(db, HQ_COLLECTION.hqBlockers, tenantId, projectId);
-  counts.dependencies = await hqDeleteWhereProject(db, HQ_COLLECTION.hqDependencies, tenantId, projectId);
-  counts.changeOrders = await hqDeleteWhereProject(db, HQ_COLLECTION.hqChangeOrders, tenantId, projectId);
-  counts.activity = await hqDeleteWhereProject(db, HQ_COLLECTION.hqActivity, tenantId, projectId);
+  counts.planner = await hqDeleteWhereProject(db, HQ_COLLECTION.plannerItems, cloudTenant, projectId);
+  counts.shoots = await hqDeleteWhereProject(db, HQ_COLLECTION.shoots, cloudTenant, projectId);
+  counts.meetings = await hqDeleteWhereProject(db, HQ_COLLECTION.meetings, cloudTenant, projectId);
+  counts.assets = await hqDeleteWhereProject(db, HQ_COLLECTION.hqProjectAssets, cloudTenant, projectId);
+  counts.invoices = await hqDeleteWhereProject(db, HQ_COLLECTION.hqInvoices, cloudTenant, projectId);
+  counts.proposals = await hqDeleteWhereProject(db, HQ_COLLECTION.hqProposals, cloudTenant, projectId);
+  counts.expenses = await hqDeleteWhereProject(db, HQ_COLLECTION.hqExpenses, cloudTenant, projectId);
+  counts.deliverables = await hqDeleteWhereProject(db, HQ_COLLECTION.hqDeliverables, cloudTenant, projectId);
+  counts.risks = await hqDeleteWhereProject(db, HQ_COLLECTION.hqRisks, cloudTenant, projectId);
+  counts.blockers = await hqDeleteWhereProject(db, HQ_COLLECTION.hqBlockers, cloudTenant, projectId);
+  counts.dependencies = await hqDeleteWhereProject(db, HQ_COLLECTION.hqDependencies, cloudTenant, projectId);
+  counts.changeOrders = await hqDeleteWhereProject(db, HQ_COLLECTION.hqChangeOrders, cloudTenant, projectId);
+  counts.activity = await hqDeleteWhereProject(db, HQ_COLLECTION.hqActivity, cloudTenant, projectId);
 
   await deleteDoc(doc(db, HQ_COLLECTION.hqProjects, projectId));
   return { counts };

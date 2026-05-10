@@ -1,7 +1,7 @@
 import type { CrewProfile } from '../types';
 import { UserRole } from '../types';
 import { getHqCrewDirectory, getHqProjectDirectory } from './hqSyncDirectory';
-import { hqDeleteCrew, hqUpsertCrew } from './hqFirestoreService';
+import { HQ_TENANT_SCOPE_MISSING, hqDeleteCrew, hqUpsertCrew } from './hqFirestoreService';
 import { getHqTenantForWrites } from './hqWriteContext';
 
 function normalizeEmail(value: string) {
@@ -45,6 +45,14 @@ function summarizeAvailability(detail: CrewProfile['availabilityDetail']) {
   return `${weekdays} weekday window${weekdays === 1 ? '' : 's'} configured`;
 }
 
+function crewPersistErrorMessage(err: unknown): string {
+  if (err instanceof Error && err.message === HQ_TENANT_SCOPE_MISSING) {
+    return 'HQ data needs a tenant on your account. Sign out and sign back in, or ask an admin to set your tenantId claim so saves reach Firestore.';
+  }
+  if (err instanceof Error && err.message) return err.message;
+  return 'Could not save crew profile to Firestore.';
+}
+
 function validateAvailability(detail: CrewProfile['availabilityDetail']): string | null {
   if (!detail.timezone.trim()) return 'Availability timezone is required.';
   if (!detail.windows.length) return 'Select at least one availability day.';
@@ -57,7 +65,7 @@ function validateAvailability(detail: CrewProfile['availabilityDetail']): string
   return null;
 }
 
-export function createCrewMemberProfile(input: {
+export async function createCrewMemberProfile(input: {
   displayName: string;
   role: CrewProfile['role'];
   email: string;
@@ -67,7 +75,7 @@ export function createCrewMemberProfile(input: {
   active?: boolean;
   systemRole?: CrewProfile['systemRole'];
   featureAccess?: CrewProfile['featureAccess'];
-}): { ok: true; crew: CrewProfile } | { ok: false; error: string } {
+}): Promise<{ ok: true; crew: CrewProfile } | { ok: false; error: string }> {
   const displayName = input.displayName.trim();
   const email = normalizeEmail(input.email);
   if (!displayName) return { ok: false, error: 'Crew member name is required.' };
@@ -94,11 +102,16 @@ export function createCrewMemberProfile(input: {
     availability: summarizeAvailability(availabilityDetail),
     availabilityDetail,
   };
-  void hqUpsertCrew(getHqTenantForWrites(), crew).catch((err) => console.error('[hq] createCrewMemberProfile', err));
+  try {
+    await hqUpsertCrew(getHqTenantForWrites(), crew);
+  } catch (err) {
+    console.error('[hq] createCrewMemberProfile', err);
+    return { ok: false, error: crewPersistErrorMessage(err) };
+  }
   return { ok: true, crew };
 }
 
-export function updateCrewMemberProfile(
+export async function updateCrewMemberProfile(
   crewId: string,
   patch: Partial<{
     displayName: string;
@@ -112,7 +125,7 @@ export function updateCrewMemberProfile(
     active: boolean;
     availabilityDetail: CrewProfile['availabilityDetail'];
   }>,
-): { ok: true; crew: CrewProfile } | { ok: false; error: string } {
+): Promise<{ ok: true; crew: CrewProfile } | { ok: false; error: string }> {
   const crew = getHqCrewDirectory().find((item) => item.id === crewId);
   if (!crew) return { ok: false, error: 'Crew member not found.' };
 
@@ -152,7 +165,12 @@ export function updateCrewMemberProfile(
       availability: summarizeAvailability(patch.availabilityDetail),
     };
   }
-  void hqUpsertCrew(getHqTenantForWrites(), next).catch((err) => console.error('[hq] updateCrewMemberProfile', err));
+  try {
+    await hqUpsertCrew(getHqTenantForWrites(), next);
+  } catch (err) {
+    console.error('[hq] updateCrewMemberProfile', err);
+    return { ok: false, error: crewPersistErrorMessage(err) };
+  }
   return { ok: true, crew: next };
 }
 

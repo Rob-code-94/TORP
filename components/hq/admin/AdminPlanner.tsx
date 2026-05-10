@@ -142,16 +142,19 @@ const AdminPlanner: React.FC = () => {
   }, [items]);
 
   const onBoardStatus = useCallback(
-    (task: PlannerItem, next: PlannerTaskStatus) => {
-      if (updatePlannerTask(task.id, { status: next }, actorName)) {
+    async (task: PlannerItem, next: PlannerTaskStatus) => {
+      const result = await updatePlannerTask(task.id, { status: next }, actorName);
+      if (result.ok) {
         setPlannerVersion((n) => n + 1);
+      } else if (result.error) {
+        setAttachmentMessage(result.error);
       }
     },
     [actorName]
   );
 
   const onRescheduleItem = useCallback(
-    (
+    async (
       task: PlannerItem,
       next: { dueDate: string; startTime?: string; endTime?: string; allDay?: boolean }
     ) => {
@@ -166,7 +169,7 @@ const AdminPlanner: React.FC = () => {
         endTime: allDay ? undefined : next.endTime,
         allDay,
       };
-      const result = updatePlannerTask(task.id, patch, actorName);
+      const result = await updatePlannerTask(task.id, patch, actorName);
       if (result.ok) {
         setPlannerVersion((n) => n + 1);
         setAttachmentMessage(
@@ -174,6 +177,8 @@ const AdminPlanner: React.FC = () => {
             allDay ? 'all day' : `${next.startTime}${next.endTime ? '–' + next.endTime : ''}`
           } on ${next.dueDate}.`
         );
+      } else if (result.error) {
+        setAttachmentMessage(result.error);
       }
     },
     [actorName, user?.role, user?.crewId]
@@ -183,8 +188,8 @@ const AdminPlanner: React.FC = () => {
     setScheduleTask(task);
   }, []);
 
-  const onAttachExisting = (task: PlannerItem, assetId: string) => {
-    const result = attachAssetToPlannerItem(task.id, assetId, actorName);
+  const onAttachExisting = async (task: PlannerItem, assetId: string) => {
+    const result = await attachAssetToPlannerItem(task.id, assetId, actorName);
     if (result.ok) {
       setPlannerVersion((n) => n + 1);
       setAttachmentMessage('Asset attached to planner item.');
@@ -193,8 +198,8 @@ const AdminPlanner: React.FC = () => {
     }
   };
 
-  const onDetachExisting = (task: PlannerItem, assetId: string) => {
-    const result = removeAssetFromPlannerItem(task.id, assetId, actorName);
+  const onDetachExisting = async (task: PlannerItem, assetId: string) => {
+    const result = await removeAssetFromPlannerItem(task.id, assetId, actorName);
     if (result.ok) {
       setPlannerVersion((n) => n + 1);
       setAttachmentMessage('Attachment removed.');
@@ -235,7 +240,7 @@ const AdminPlanner: React.FC = () => {
       },
       actorName
     );
-    const attachResult = attachAssetToPlannerItem(task.id, created.id, actorName);
+    const attachResult = await attachAssetToPlannerItem(task.id, created.id, actorName);
     if (attachResult.ok) {
       setPlannerVersion((n) => n + 1);
       setAttachmentMessage('Lightweight attachment uploaded and linked.');

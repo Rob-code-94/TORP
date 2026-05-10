@@ -684,10 +684,10 @@ const AdminProjectDetail: React.FC = () => {
           <div className="flex flex-wrap items-center justify-end gap-2">
             <select
               value={project.stage}
-              onChange={(e) => {
+              onChange={async (e) => {
                 if (!canMoveStage) return;
                 const nextStage = e.target.value as ProjectStage;
-                const result = transitionProjectStage(project.id, nextStage, user?.displayName || 'System');
+                const result = await transitionProjectStage(project.id, nextStage, user?.displayName || 'System');
                 setStageMessage(result.ok ? `Stage updated to ${formatStage(nextStage)}.` : result.error || 'Unable to update stage.');
                 if (result.ok) setRefreshTick((value) => value + 1);
               }}
@@ -771,8 +771,12 @@ const AdminProjectDetail: React.FC = () => {
                   <button
                     key={crewId}
                     type="button"
-                    onClick={() => {
-                      removeCrewFromProject(project.id, crewId, actorName);
+                    onClick={async () => {
+                      const r = await removeCrewFromProject(project.id, crewId, actorName);
+                      if (!r.ok) {
+                        setMessage(r.error || 'Could not remove crew member.', 'error');
+                        return;
+                      }
                       setRefreshTick((value) => value + 1);
                     }}
                     className="rounded-full border border-zinc-700 px-2.5 py-1 text-xs text-zinc-200"
@@ -790,8 +794,12 @@ const AdminProjectDetail: React.FC = () => {
                 <button
                   key={crew.id}
                   type="button"
-                  onClick={() => {
-                    assignCrewToProject(project.id, crew.id, actorName);
+                  onClick={async () => {
+                    const r = await assignCrewToProject(project.id, crew.id, actorName);
+                    if (!r.ok) {
+                      setMessage(r.error || 'Could not assign crew member.', 'error');
+                      return;
+                    }
                     setRefreshTick((value) => value + 1);
                   }}
                   className="rounded-md border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300"
@@ -814,8 +822,8 @@ const AdminProjectDetail: React.FC = () => {
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    const result = saveProjectNarrative(
+                  onClick={async () => {
+                    const result = await saveProjectNarrative(
                       project.id,
                       { summary: summaryDraft, brief: briefDraft || project.brief, goals: goalsDraft || project.goals, nextMilestone: milestoneDraft },
                       actorName
@@ -874,8 +882,8 @@ const AdminProjectDetail: React.FC = () => {
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={() => {
-                  const result = saveProjectNarrative(
+                onClick={async () => {
+                  const result = await saveProjectNarrative(
                     project.id,
                     { summary: summaryDraft || project.summary, brief: briefDraft, goals: goalsDraft, nextMilestone: milestoneDraft || project.nextMilestone },
                     actorName
@@ -966,10 +974,11 @@ const AdminProjectDetail: React.FC = () => {
                       <select
                         value={t.type}
                         disabled={isStaff}
-                        onChange={(e) => {
+                        onChange={async (e) => {
                           const next = e.target.value as PlannerItemType;
-                          updatePlannerTask(t.id, { type: next }, actorName);
-                          setRefreshTick((value) => value + 1);
+                          const r = await updatePlannerTask(t.id, { type: next }, actorName);
+                          if (r.ok) setRefreshTick((value) => value + 1);
+                          else setMessage(r.error || 'Could not update task.', 'error');
                         }}
                         className={`rounded-md border px-2 py-1 text-xs ${
             isDark ? 'border-zinc-700 bg-zinc-900 text-zinc-100' : 'border-zinc-300 bg-white text-zinc-900'
@@ -989,12 +998,18 @@ const AdminProjectDetail: React.FC = () => {
                       <select
                         value={plannerStatusFromItem(t)}
                         disabled={isStaff}
-                        onChange={(e) => {
+                        onChange={async (e) => {
                           const next = e.target.value as PlannerTaskStatus;
                           const mapped = plannerStatusToLegacy(next);
-                          updatePlannerTask(t.id, { status: next, column: mapped.column, done: mapped.done }, actorName);
-                          setRefreshTick((value) => value + 1);
-                          setMessage(`Task moved to ${next.replace('_', ' ')}.`);
+                          const r = await updatePlannerTask(
+                            t.id,
+                            { status: next, column: mapped.column, done: mapped.done },
+                            actorName
+                          );
+                          if (r.ok) {
+                            setRefreshTick((value) => value + 1);
+                            setMessage(`Task moved to ${next.replace('_', ' ')}.`);
+                          } else setMessage(r.error || 'Could not update task.', 'error');
                         }}
                         className={`rounded-md border px-2 py-1 text-xs ${
             isDark ? 'border-zinc-700 bg-zinc-900 text-zinc-100' : 'border-zinc-300 bg-white text-zinc-900'
@@ -1010,10 +1025,11 @@ const AdminProjectDetail: React.FC = () => {
                       <select
                         value={t.priority}
                         disabled={isStaff}
-                        onChange={(e) => {
+                        onChange={async (e) => {
                           const next = e.target.value as PlannerItemPriority;
-                          updatePlannerTask(t.id, { priority: next }, actorName);
-                          setRefreshTick((value) => value + 1);
+                          const r = await updatePlannerTask(t.id, { priority: next }, actorName);
+                          if (r.ok) setRefreshTick((value) => value + 1);
+                          else setMessage(r.error || 'Could not update task.', 'error');
                         }}
                         className={`rounded-md border px-2 py-1 text-xs ${
             isDark ? 'border-zinc-700 bg-zinc-900 text-zinc-100' : 'border-zinc-300 bg-white text-zinc-900'
@@ -1048,9 +1064,10 @@ const AdminProjectDetail: React.FC = () => {
                         </button>
                         <button
                           type="button"
-                          onClick={() => {
-                            deletePlannerTask(t.id, actorName);
-                            setRefreshTick((value) => value + 1);
+                          onClick={async () => {
+                            const r = await deletePlannerTask(t.id, actorName);
+                            if (r.ok) setRefreshTick((value) => value + 1);
+                            else setMessage(r.error || 'Could not delete task.', 'error');
                           }}
                           className="text-[11px] underline text-red-300"
                         >
@@ -1087,7 +1104,7 @@ const AdminProjectDetail: React.FC = () => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                       const selectedNames = taskDraft.assigneeCrewIds
                         .map((crewId) => assignableCrew.find((crew) => crew.id === crewId)?.displayName)
                         .filter((name): name is string => Boolean(name));
@@ -1097,7 +1114,7 @@ const AdminProjectDetail: React.FC = () => {
                           return;
                         }
                         if (openTaskId === '__new__') {
-                          createPlannerTask({
+                          await createPlannerTask({
                             projectId: project.id,
                             projectTitle: project.title,
                             clientName: project.clientName,
@@ -1118,7 +1135,7 @@ const AdminProjectDetail: React.FC = () => {
                           }, actorName);
                           setMessage('Task added to planner.');
                         } else {
-                          updatePlannerTask(
+                          const ur = await updatePlannerTask(
                             openTaskId,
                             {
                               title: taskDraft.title,
@@ -1135,6 +1152,10 @@ const AdminProjectDetail: React.FC = () => {
                             },
                             actorName
                           );
+                          if (!ur.ok) {
+                            setMessage(ur.error || 'Could not update task.', 'error');
+                            return;
+                          }
                           setMessage('Task updated.');
                         }
                         setActiveDrawer(null);
@@ -1284,8 +1305,12 @@ const AdminProjectDetail: React.FC = () => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      deleteShoot(s.id, actorName);
+                    onClick={async () => {
+                      const r = await deleteShoot(s.id, actorName);
+                      if (!r.ok) {
+                        setMessage(r.error || 'Could not delete shoot.', 'error');
+                        return;
+                      }
                       setRefreshTick((value) => value + 1);
                     }}
                     className="text-[11px] underline text-red-300"
@@ -1325,8 +1350,12 @@ const AdminProjectDetail: React.FC = () => {
                   <button type="button" onClick={() => openScheduleEditor('meeting', m.id)} className="text-[11px] underline text-zinc-400">Open</button>
                   <button
                     type="button"
-                    onClick={() => {
-                      deleteMeeting(m.id, actorName);
+                    onClick={async () => {
+                      const r = await deleteMeeting(m.id, actorName);
+                      if (!r.ok) {
+                        setMessage(r.error || 'Could not delete meeting.', 'error');
+                        return;
+                      }
                       setRefreshTick((value) => value + 1);
                     }}
                     className="text-[11px] underline text-red-300"
@@ -1362,11 +1391,11 @@ const AdminProjectDetail: React.FC = () => {
                     </button>
                     <button
                       type="button"
-                      onClick={() => {
+                      onClick={async () => {
                         try {
                           if (openSchedule.kind === 'shoot') {
                             if (openSchedule.id === '__new__') {
-                              createShoot({
+                              await createShoot({
                                 projectId: project.id,
                                 projectTitle: project.title,
                                 title: scheduleDraft.title,
@@ -1378,7 +1407,7 @@ const AdminProjectDetail: React.FC = () => {
                                 crew: scheduleDraft.participants,
                               }, actorName);
                             } else {
-                              updateShoot(
+                              const sr = await updateShoot(
                                 openSchedule.id,
                                 {
                                   title: scheduleDraft.title,
@@ -1391,9 +1420,13 @@ const AdminProjectDetail: React.FC = () => {
                                 },
                                 actorName
                               );
+                              if (!sr.ok) {
+                                setMessage(sr.error || 'Could not update shoot.', 'error');
+                                return;
+                              }
                             }
                           } else if (openSchedule.id === '__new__') {
-                            createMeeting({
+                            await createMeeting({
                               projectId: project.id,
                               projectTitle: project.title,
                               title: scheduleDraft.title,
@@ -1404,7 +1437,7 @@ const AdminProjectDetail: React.FC = () => {
                               participants: scheduleDraft.participants,
                             }, actorName);
                           } else {
-                            updateMeeting(
+                            const mr = await updateMeeting(
                               openSchedule.id,
                               {
                                 title: scheduleDraft.title,
@@ -1416,6 +1449,10 @@ const AdminProjectDetail: React.FC = () => {
                               },
                               actorName
                             );
+                            if (!mr.ok) {
+                              setMessage(mr.error || 'Could not update meeting.', 'error');
+                              return;
+                            }
                           }
                           setActiveDrawer(null);
                           setOpenSchedule(null);

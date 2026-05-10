@@ -125,13 +125,13 @@ const AdminProjects: React.FC = () => {
     setAssignPickerOpen(true);
   };
 
-  const confirmBulkAssign = () => {
+  const confirmBulkAssign = async () => {
     if (!canBulkAssign) return;
     if (pickerCrewIds.length === 0) {
       setFeedback('Pick at least one crew member.');
       return;
     }
-    const result = bulkAssignCrew(selectedIds, pickerCrewIds, user?.displayName || 'System');
+    const result = await bulkAssignCrew(selectedIds, pickerCrewIds, user?.displayName || 'System');
     setFeedback(
       result.ok
         ? `Assigned ${pickerCrewIds.length} crew to ${result.affected.length} project(s).`
@@ -151,9 +151,9 @@ const AdminProjects: React.FC = () => {
     setArchiveConfirmOpen(true);
   };
 
-  const confirmBulkArchive = () => {
+  const confirmBulkArchive = async () => {
     if (!canBulkArchive) return;
-    const result = archiveProjects(selectedIds, user?.displayName || 'System');
+    const result = await archiveProjects(selectedIds, user?.displayName || 'System');
     setFeedback(
       result.ok
         ? `Archived ${result.affected.length} project(s).`
@@ -164,7 +164,7 @@ const AdminProjects: React.FC = () => {
     setVersion((n) => n + 1);
   };
 
-  const applyBulkMoveToPost = () => {
+  const applyBulkMoveToPost = async () => {
     if (!bulkMode) return;
     if (!canMoveStage) return;
     if (selectedIds.length === 0) {
@@ -175,7 +175,7 @@ const AdminProjects: React.FC = () => {
     let moved = 0;
     let failed = 0;
     for (const id of selectedIds) {
-      const r = transitionProjectStage(id, 'post', actorName);
+      const r = await transitionProjectStage(id, 'post', actorName);
       if (r.ok) moved += 1;
       else failed += 1;
     }
@@ -259,9 +259,9 @@ const AdminProjects: React.FC = () => {
     setDeleteConfirmText('');
   };
 
-  const confirmRowArchive = () => {
+  const confirmRowArchive = async () => {
     if (!rowArchiveTarget || !canArchive) return;
-    const result = archiveProject(rowArchiveTarget.id, user?.displayName || 'System');
+    const result = await archiveProject(rowArchiveTarget.id, user?.displayName || 'System');
     setFeedback(
       result.ok
         ? `Archived ${rowArchiveTarget.title}.`
@@ -290,14 +290,14 @@ const AdminProjects: React.FC = () => {
     setVersion((n) => n + 1);
   };
 
-  const onDropToStage = (targetStage: ProjectStage) => {
+  const onDropToStage = async (targetStage: ProjectStage) => {
     if (!draggingId || !hasProjectCapability(user?.role, 'project.stage.move')) {
       setDraggingId(null);
       setDragOverStage(null);
       return;
     }
     const moved = getHqProjectDirectory().find((item) => item.id === draggingId);
-    const result = transitionProjectStage(draggingId, targetStage, user?.displayName || 'System');
+    const result = await transitionProjectStage(draggingId, targetStage, user?.displayName || 'System');
     setFeedback(
       result.ok
         ? `Moved ${moved?.title || 'project'} to ${formatStage(targetStage)}.`

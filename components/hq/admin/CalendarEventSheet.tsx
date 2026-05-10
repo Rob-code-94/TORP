@@ -201,7 +201,7 @@ const CalendarEventSheet: React.FC<CalendarEventSheetProps> = ({
     window.location.href = href;
   };
 
-  const onSaveToProjectSchedule = () => {
+  const onSaveToProjectSchedule = async () => {
     const p = buildPayload();
     if (!p) return;
     const projectId = projectContext?.id || selectedProjectId;
@@ -218,7 +218,7 @@ const CalendarEventSheet: React.FC<CalendarEventSheetProps> = ({
     try {
       if (saveKind === 'meeting') {
         const startTime = p.allDay ? '10:00' : (timeHm || '10:00');
-        createMeeting(
+        await createMeeting(
           {
             projectId: project.id,
             projectTitle: project.title,
@@ -233,7 +233,7 @@ const CalendarEventSheet: React.FC<CalendarEventSheetProps> = ({
         );
       } else {
         const callTime = p.allDay ? '09:00' : (timeHm || '09:00');
-        createShoot(
+        await createShoot(
           {
             projectId: project.id,
             projectTitle: project.title,

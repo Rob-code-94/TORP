@@ -8,6 +8,7 @@ import type {
 } from '../types';
 import { getProjectAssetStorageAdapter } from '../lib/projectAssetStorage';
 import {
+  HQ_TENANT_SCOPE_MISSING,
   hqDeleteMeeting,
   hqDeletePlannerItem,
   hqDeleteProjectAsset,
@@ -28,6 +29,14 @@ import {
 } from './hqSyncDirectory';
 import { getHqTenantForWrites } from './hqWriteContext';
 import { validateCrewAvailabilityForDate, validateProjectAssignees, validateProjectParticipants } from './hqSchedulingGuards';
+
+function plannerPersistError(err: unknown): string {
+  if (err instanceof Error && err.message === HQ_TENANT_SCOPE_MISSING) {
+    return 'HQ data needs a tenant on your account. Sign out and sign back in, or ask an admin to set your tenantId claim so saves reach Firestore.';
+  }
+  if (err instanceof Error && err.message) return err.message;
+  return 'Could not save to Firestore.';
+}
 
 export function plannerStatusFromItem(item: PlannerItem): PlannerTaskStatus {
   if (item.status) return item.status;
@@ -51,7 +60,7 @@ export function plannerStatusToLegacy(status: PlannerTaskStatus): { column: Plan
   }
 }
 
-export function createPlannerTask(input: Omit<PlannerItem, 'id'>, actorName: string): PlannerItem {
+export async function createPlannerTask(input: Omit<PlannerItem, 'id'>, actorName: string): Promise<PlannerItem> {
   if (!input.title.trim()) throw new Error('Task title is required.');
   const assigneeIds = input.assigneeCrewIds?.length ? input.assigneeCrewIds : [input.assigneeCrewId];
   const assignees = validateProjectAssignees(input.projectId, assigneeIds);
@@ -68,7 +77,12 @@ export function createPlannerTask(input: Omit<PlannerItem, 'id'>, actorName: str
   item.assigneeCrewId = assigneeIds[0] || input.assigneeCrewId;
   item.assigneeName = normalizedNames[0] || input.assigneeName;
   item.dueDate = dueDate;
-  void hqUpsertPlannerItem(getHqTenantForWrites(), item).catch((err) => console.error('[hq] createPlannerTask', err));
+  try {
+    await hqUpsertPlannerItem(getHqTenantForWrites(), item);
+  } catch (err) {
+    console.error('[hq] createPlannerTask', err);
+    throw new Error(plannerPersistError(err));
+  }
   recordHqActivity({
     projectId: item.projectId,
     entityType: 'planner',
@@ -79,7 +93,11 @@ export function createPlannerTask(input: Omit<PlannerItem, 'id'>, actorName: str
   return item;
 }
 
-export function updatePlannerTask(taskId: string, patch: Partial<PlannerItem>, actorName: string): { ok: boolean } {
+export async function updatePlannerTask(
+  taskId: string,
+  patch: Partial<PlannerItem>,
+  actorName: string,
+): Promise<{ ok: boolean; error?: string }> {
   const item = getPlannerItemsSync().find((t) => t.id === taskId);
   if (!item) return { ok: false };
   const requestedAssignees = patch.assigneeCrewIds?.length ? patch.assigneeCrewIds : patch.assigneeCrewId ? [patch.assigneeCrewId] : undefined;
@@ -113,7 +131,12 @@ export function updatePlannerTask(taskId: string, patch: Partial<PlannerItem>, a
     allDay: item.allDay,
   };
   const merged: PlannerItem = { ...item, ...nextPatch };
-  void hqUpsertPlannerItem(getHqTenantForWrites(), merged).catch((err) => console.error('[hq] updatePlannerTask', err));
+  try {
+    await hqUpsertPlannerItem(getHqTenantForWrites(), merged);
+  } catch (err) {
+    console.error('[hq] updatePlannerTask', err);
+    return { ok: false, error: plannerPersistError(err) };
+  }
   const scheduleChanged = scheduleKeys.some((k) => k in nextPatch && nextPatch[k] !== beforeSchedule[k as keyof typeof beforeSchedule]);
   const onlyScheduleChanged =
     scheduleChanged && Object.keys(nextPatch).every((k) => (scheduleKeys as string[]).includes(k));
@@ -141,7 +164,11 @@ export function updatePlannerTask(taskId: string, patch: Partial<PlannerItem>, a
   return { ok: true };
 }
 
-export function attachAssetToPlannerItem(taskId: string, assetId: string, actorName: string): { ok: boolean; error?: string } {
+export async function attachAssetToPlannerItem(
+  taskId: string,
+  assetId: string,
+  actorName: string,
+): Promise<{ ok: boolean; error?: string }> {
   const item = getPlannerItemsSync().find((t) => t.id === taskId);
   if (!item) return { ok: false, error: 'Planner item not found.' };
   const asset = getAssetsByProjectSync(item.projectId).find((a) => a.id === assetId);
@@ -151,7 +178,12 @@ export function attachAssetToPlannerItem(taskId: string, assetId: string, actorN
   const existing = new Set(item.attachmentAssetIds || []);
   existing.add(assetId);
   const merged: PlannerItem = { ...item, attachmentAssetIds: [...existing] };
-  void hqUpsertPlannerItem(getHqTenantForWrites(), merged).catch((err) => console.error('[hq] attachAssetToPlannerItem', err));
+  try {
+    await hqUpsertPlannerItem(getHqTenantForWrites(), merged);
+  } catch (err) {
+    console.error('[hq] attachAssetToPlannerItem', err);
+    return { ok: false, error: plannerPersistError(err) };
+  }
   recordHqActivity({
     projectId: item.projectId,
     entityType: 'planner',
@@ -162,14 +194,23 @@ export function attachAssetToPlannerItem(taskId: string, assetId: string, actorN
   return { ok: true };
 }
 
-export function removeAssetFromPlannerItem(taskId: string, assetId: string, actorName: string): { ok: boolean; error?: string } {
+export async function removeAssetFromPlannerItem(
+  taskId: string,
+  assetId: string,
+  actorName: string,
+): Promise<{ ok: boolean; error?: string }> {
   const item = getPlannerItemsSync().find((t) => t.id === taskId);
   if (!item) return { ok: false, error: 'Planner item not found.' };
   const merged: PlannerItem = {
     ...item,
     attachmentAssetIds: (item.attachmentAssetIds || []).filter((id) => id !== assetId),
   };
-  void hqUpsertPlannerItem(getHqTenantForWrites(), merged).catch((err) => console.error('[hq] removeAssetFromPlannerItem', err));
+  try {
+    await hqUpsertPlannerItem(getHqTenantForWrites(), merged);
+  } catch (err) {
+    console.error('[hq] removeAssetFromPlannerItem', err);
+    return { ok: false, error: plannerPersistError(err) };
+  }
   recordHqActivity({
     projectId: item.projectId,
     entityType: 'planner',
@@ -180,10 +221,15 @@ export function removeAssetFromPlannerItem(taskId: string, assetId: string, acto
   return { ok: true };
 }
 
-export function deletePlannerTask(taskId: string, actorName: string): { ok: boolean } {
+export async function deletePlannerTask(taskId: string, actorName: string): Promise<{ ok: boolean; error?: string }> {
   const item = getPlannerItemsSync().find((t) => t.id === taskId);
-  if (!item) return { ok: false };
-  void hqDeletePlannerItem(getHqTenantForWrites(), taskId).catch((err) => console.error('[hq] deletePlannerTask', err));
+  if (!item) return { ok: false, error: 'Planner item not found.' };
+  try {
+    await hqDeletePlannerItem(getHqTenantForWrites(), taskId);
+  } catch (err) {
+    console.error('[hq] deletePlannerTask', err);
+    return { ok: false, error: plannerPersistError(err) };
+  }
   recordHqActivity({
     projectId: item.projectId,
     entityType: 'planner',
@@ -194,7 +240,7 @@ export function deletePlannerTask(taskId: string, actorName: string): { ok: bool
   return { ok: true };
 }
 
-export function createShoot(input: Omit<AdminShoot, 'id'>, actorName: string): AdminShoot {
+export async function createShoot(input: Omit<AdminShoot, 'id'>, actorName: string): Promise<AdminShoot> {
   if (!input.title.trim()) throw new Error('Shoot title is required.');
   if (!input.date) throw new Error('Shoot date is required.');
   const participants = validateProjectParticipants(input.projectId, input.crew);
@@ -207,7 +253,12 @@ export function createShoot(input: Omit<AdminShoot, 'id'>, actorName: string): A
     crew: participants.names || input.crew,
     crewIds: participants.crewIds,
   };
-  void hqUpsertShoot(getHqTenantForWrites(), item).catch((err) => console.error('[hq] createShoot', err));
+  try {
+    await hqUpsertShoot(getHqTenantForWrites(), item);
+  } catch (err) {
+    console.error('[hq] createShoot', err);
+    throw new Error(plannerPersistError(err));
+  }
   recordHqActivity({
     projectId: item.projectId,
     entityType: 'shoot',
@@ -218,7 +269,7 @@ export function createShoot(input: Omit<AdminShoot, 'id'>, actorName: string): A
   return item;
 }
 
-export function createMeeting(input: Omit<AdminMeeting, 'id'>, actorName: string): AdminMeeting {
+export async function createMeeting(input: Omit<AdminMeeting, 'id'>, actorName: string): Promise<AdminMeeting> {
   if (!input.title.trim()) throw new Error('Meeting title is required.');
   if (!input.date) throw new Error('Meeting date is required.');
   const participants = validateProjectParticipants(input.projectId, input.participants);
@@ -231,7 +282,12 @@ export function createMeeting(input: Omit<AdminMeeting, 'id'>, actorName: string
     participants: participants.names || input.participants,
     participantCrewIds: participants.crewIds,
   };
-  void hqUpsertMeeting(getHqTenantForWrites(), item).catch((err) => console.error('[hq] createMeeting', err));
+  try {
+    await hqUpsertMeeting(getHqTenantForWrites(), item);
+  } catch (err) {
+    console.error('[hq] createMeeting', err);
+    throw new Error(plannerPersistError(err));
+  }
   recordHqActivity({
     projectId: item.projectId,
     entityType: 'meeting',
@@ -242,7 +298,11 @@ export function createMeeting(input: Omit<AdminMeeting, 'id'>, actorName: string
   return item;
 }
 
-export function updateShoot(shootId: string, patch: Partial<AdminShoot>, actorName: string): { ok: boolean } {
+export async function updateShoot(
+  shootId: string,
+  patch: Partial<AdminShoot>,
+  actorName: string,
+): Promise<{ ok: boolean; error?: string }> {
   const found = getShootsSync().find((s) => s.id === shootId);
   if (!found) return { ok: false };
   let next: AdminShoot = { ...found };
@@ -264,7 +324,12 @@ export function updateShoot(shootId: string, patch: Partial<AdminShoot>, actorNa
   } else {
     next = { ...found, ...patch };
   }
-  void hqUpsertShoot(getHqTenantForWrites(), next).catch((err) => console.error('[hq] updateShoot', err));
+  try {
+    await hqUpsertShoot(getHqTenantForWrites(), next);
+  } catch (err) {
+    console.error('[hq] updateShoot', err);
+    return { ok: false, error: plannerPersistError(err) };
+  }
   recordHqActivity({
     projectId: next.projectId,
     entityType: 'shoot',
@@ -275,10 +340,15 @@ export function updateShoot(shootId: string, patch: Partial<AdminShoot>, actorNa
   return { ok: true };
 }
 
-export function deleteShoot(shootId: string, actorName: string): { ok: boolean } {
+export async function deleteShoot(shootId: string, actorName: string): Promise<{ ok: boolean; error?: string }> {
   const item = getShootsSync().find((s) => s.id === shootId);
-  if (!item) return { ok: false };
-  void hqDeleteShoot(getHqTenantForWrites(), shootId).catch((err) => console.error('[hq] deleteShoot', err));
+  if (!item) return { ok: false, error: 'Shoot not found.' };
+  try {
+    await hqDeleteShoot(getHqTenantForWrites(), shootId);
+  } catch (err) {
+    console.error('[hq] deleteShoot', err);
+    return { ok: false, error: plannerPersistError(err) };
+  }
   recordHqActivity({
     projectId: item.projectId,
     entityType: 'shoot',
@@ -289,7 +359,11 @@ export function deleteShoot(shootId: string, actorName: string): { ok: boolean }
   return { ok: true };
 }
 
-export function updateMeeting(meetingId: string, patch: Partial<AdminMeeting>, actorName: string): { ok: boolean } {
+export async function updateMeeting(
+  meetingId: string,
+  patch: Partial<AdminMeeting>,
+  actorName: string,
+): Promise<{ ok: boolean; error?: string }> {
   const item = getMeetingsSync().find((m) => m.id === meetingId);
   if (!item) return { ok: false };
   let next: AdminMeeting = { ...item };
@@ -311,7 +385,12 @@ export function updateMeeting(meetingId: string, patch: Partial<AdminMeeting>, a
   } else {
     next = { ...item, ...patch };
   }
-  void hqUpsertMeeting(getHqTenantForWrites(), next).catch((err) => console.error('[hq] updateMeeting', err));
+  try {
+    await hqUpsertMeeting(getHqTenantForWrites(), next);
+  } catch (err) {
+    console.error('[hq] updateMeeting', err);
+    return { ok: false, error: plannerPersistError(err) };
+  }
   recordHqActivity({
     projectId: next.projectId,
     entityType: 'meeting',
@@ -322,10 +401,15 @@ export function updateMeeting(meetingId: string, patch: Partial<AdminMeeting>, a
   return { ok: true };
 }
 
-export function deleteMeeting(meetingId: string, actorName: string): { ok: boolean } {
+export async function deleteMeeting(meetingId: string, actorName: string): Promise<{ ok: boolean; error?: string }> {
   const item = getMeetingsSync().find((m) => m.id === meetingId);
-  if (!item) return { ok: false };
-  void hqDeleteMeeting(getHqTenantForWrites(), meetingId).catch((err) => console.error('[hq] deleteMeeting', err));
+  if (!item) return { ok: false, error: 'Meeting not found.' };
+  try {
+    await hqDeleteMeeting(getHqTenantForWrites(), meetingId);
+  } catch (err) {
+    console.error('[hq] deleteMeeting', err);
+    return { ok: false, error: plannerPersistError(err) };
+  }
   recordHqActivity({
     projectId: item.projectId,
     entityType: 'meeting',
