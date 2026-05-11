@@ -138,6 +138,35 @@ function formatTime(min: number): string {
   return m === 0 ? `${hour12}${ampm}` : `${hour12}:${pad2(m)}${ampm}`;
 }
 
+type PlannerScheduleChipKind = 'shoot' | 'meeting';
+
+interface PlannerScheduleChip {
+  id: string;
+  kind: PlannerScheduleChipKind;
+  title: string;
+  projectId: string;
+  subtitle?: string;
+  href: string;
+  timeLabel: string;
+  sortKey: number;
+}
+
+function plannerScheduleChipLabel(
+  startHm: string | undefined,
+  endHm: string | undefined | null,
+  defaultSpanMin: number,
+): { timeLabel: string; sortKey: number } {
+  const sm = hmToMinutes(startHm);
+  if (sm == null) return { timeLabel: '', sortKey: 99_999 };
+  const emExplicit = hmToMinutes(endHm);
+  const end =
+    emExplicit != null && emExplicit >= sm ? emExplicit : Math.min(24 * 60, sm + defaultSpanMin);
+  return {
+    timeLabel: `${minutesToHm(sm)}–${minutesToHm(end)}`,
+    sortKey: sm,
+  };
+}
+
 const PlannerCalendar: React.FC<PlannerCalendarProps> = ({
   items,
   shoots,
@@ -190,6 +219,45 @@ const PlannerCalendar: React.FC<PlannerCalendarProps> = ({
   const todayYMD = toYMD(startOfDay(new Date()));
 
   const getItemsForYmd = (ymd: string) => byKey.get(ymd) ?? [];
+
+  const scheduleChipsByYmd = useMemo(() => {
+    const map = new Map<string, PlannerScheduleChip[]>();
+    const push = (ymd: string, chip: PlannerScheduleChip) => {
+      if (!chip.timeLabel) return;
+      if (!map.has(ymd)) map.set(ymd, []);
+      map.get(ymd)!.push(chip);
+    };
+    for (const s of shoots ?? []) {
+      const { timeLabel, sortKey } = plannerScheduleChipLabel(s.callTime, s.endTime, 8 * 60);
+      push(s.date, {
+        id: `shoot:${s.id}`,
+        kind: 'shoot',
+        title: s.title,
+        projectId: s.projectId,
+        subtitle: s.projectTitle,
+        href: `/hq/admin/projects/${s.projectId}`,
+        timeLabel,
+        sortKey,
+      });
+    }
+    for (const m of meetings ?? []) {
+      const { timeLabel, sortKey } = plannerScheduleChipLabel(m.startTime, m.endTime, 60);
+      push(m.date, {
+        id: `meeting:${m.id}`,
+        kind: 'meeting',
+        title: m.title,
+        projectId: m.projectId,
+        subtitle: m.projectTitle,
+        href: `/hq/admin/projects/${m.projectId}`,
+        timeLabel,
+        sortKey,
+      });
+    }
+    for (const arr of map.values()) {
+      arr.sort((a, b) => a.sortKey - b.sortKey || a.title.localeCompare(b.title));
+    }
+    return map;
+  }, [shoots, meetings]);
 
   /**
    * Compute the visible date window so we can request just enough free/busy.
@@ -533,7 +601,7 @@ const PlannerCalendar: React.FC<PlannerCalendarProps> = ({
   return (
     <div className="space-y-4 w-full min-w-0 max-w-6xl overflow-x-hidden">
       <p className={`text-sm ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>
-        Month, week, and day grids — shoots and meetings render at their call/start time. Tasks with a time appear in the day schedule; date-only tasks live on the all-day strip.
+        Month and week cells list planner tasks and show shoots and meetings as time-labeled chips; the day grid positions those events by start/end time. Tasks with a time appear in the day schedule; date-only tasks live on the all-day strip.
       </p>
 
       <div
@@ -641,6 +709,7 @@ const PlannerCalendar: React.FC<PlannerCalendarProps> = ({
               const ymd = toYMD(date);
               const isToday = ymd === todayYMD;
               const list = getItemsForYmd(ymd);
+              const scheduleChips = scheduleChipsByYmd.get(ymd) ?? [];
               return (
                 <div
                   key={idx}
@@ -742,6 +811,41 @@ const PlannerCalendar: React.FC<PlannerCalendarProps> = ({
                       </div>
                     ))}
                     {list.length > 3 && <div className="text-[9px] text-zinc-500">+{list.length - 3} more</div>}
+                    {scheduleChips.length > 0 && (
+                      <div
+                        className={`mt-0.5 pt-0.5 border-t space-y-0.5 min-h-0 ${
+                          isDark ? 'border-zinc-800/70' : 'border-zinc-200/90'
+                        }`}
+                      >
+                        {scheduleChips.slice(0, 2).map((c) => (
+                          <Link
+                            key={c.id}
+                            to={c.href}
+                            onClick={(e) => e.stopPropagation()}
+                            title={`${c.kind === 'shoot' ? 'Shoot' : 'Meeting'} · ${c.timeLabel} · ${c.title}`}
+                            className={
+                              c.kind === 'shoot'
+                                ? isDark
+                                  ? 'flex items-start gap-0.5 rounded border border-amber-900/40 bg-zinc-900/80 px-0.5 py-0.5 text-amber-100/95 leading-tight min-w-0'
+                                  : 'flex items-start gap-0.5 rounded border border-amber-200 bg-amber-50/90 px-0.5 py-0.5 text-amber-950 leading-tight min-w-0'
+                                : isDark
+                                  ? 'flex items-start gap-0.5 rounded border border-sky-900/45 bg-zinc-900/80 px-0.5 py-0.5 text-sky-100/95 leading-tight min-w-0'
+                                  : 'flex items-start gap-0.5 rounded border border-sky-200 bg-sky-50/90 px-0.5 py-0.5 text-sky-950 leading-tight min-w-0'
+                            }
+                          >
+                            <span className="shrink-0 text-[8px] font-bold uppercase opacity-80">
+                              {c.kind === 'shoot' ? 'Shoot' : 'Meet'}
+                            </span>
+                            <span className="truncate min-w-0">
+                              <span className="font-mono text-[9px] opacity-90">{c.timeLabel}</span> · {c.title}
+                            </span>
+                          </Link>
+                        ))}
+                        {scheduleChips.length > 2 && (
+                          <div className="text-[9px] text-zinc-500">+{scheduleChips.length - 2} event(s)</div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -764,6 +868,7 @@ const PlannerCalendar: React.FC<PlannerCalendarProps> = ({
             {weekDays.map((d) => {
               const ymd = toYMD(d);
               const list = getItemsForYmd(ymd);
+              const scheduleChips = scheduleChipsByYmd.get(ymd) ?? [];
               const isToday = ymd === todayYMD;
               const busyMinutes = busyByDay.get(ymd) ?? 0;
               return (
@@ -803,8 +908,10 @@ const PlannerCalendar: React.FC<PlannerCalendarProps> = ({
                       </div>
                     )}
                   </div>
-                  <div className="p-1.5 space-y-1.5 flex-1">
-                    {list.length === 0 && <p className="text-[10px] text-zinc-600 text-center py-2">—</p>}
+                  <div className="p-1.5 space-y-1.5 flex-1 min-h-0">
+                    {list.length === 0 && scheduleChips.length === 0 && (
+                      <p className="text-[10px] text-zinc-600 text-center py-2">—</p>
+                    )}
                     {list.map((t) => (
                       <div
                         key={t.id}
@@ -856,6 +963,44 @@ const PlannerCalendar: React.FC<PlannerCalendarProps> = ({
                         </p>
                       </div>
                     ))}
+                    {scheduleChips.length > 0 && (
+                      <div
+                        className={`space-y-1 pt-1 border-t ${isDark ? 'border-zinc-800/80' : 'border-zinc-200'}`}
+                      >
+                        <p className="text-[9px] font-bold uppercase tracking-wide text-zinc-500">Shoots & meetings</p>
+                        {scheduleChips.slice(0, 4).map((c) => (
+                          <Link
+                            key={c.id}
+                            to={c.href}
+                            className={
+                              c.kind === 'shoot'
+                                ? isDark
+                                  ? 'block rounded-lg border border-amber-900/40 bg-zinc-900/60 p-2 text-left'
+                                  : 'block rounded-lg border border-amber-200 bg-amber-50/80 p-2 text-left'
+                                : isDark
+                                  ? 'block rounded-lg border border-sky-900/45 bg-zinc-900/60 p-2 text-left'
+                                  : 'block rounded-lg border border-sky-200 bg-sky-50/80 p-2 text-left'
+                            }
+                          >
+                            <p className={`text-[10px] font-bold uppercase ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                              {c.kind === 'shoot' ? 'Shoot' : 'Meeting'}
+                            </p>
+                            <p className={`text-xs font-medium leading-snug min-w-0 ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+                              {c.title}
+                            </p>
+                            <p className={`text-[10px] font-mono mt-0.5 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                              {c.timeLabel}
+                            </p>
+                            {c.subtitle && (
+                              <p className="text-[9px] text-zinc-500 mt-0.5 truncate">{c.subtitle}</p>
+                            )}
+                          </Link>
+                        ))}
+                        {scheduleChips.length > 4 && (
+                          <p className="text-[10px] text-zinc-500">+{scheduleChips.length - 4} more on this day</p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               );

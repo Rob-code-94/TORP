@@ -13,6 +13,8 @@ interface ImportMetaEnv {
   readonly VITE_MARKETING_TENANT_ID?: string;
   /** When `"true"`, show the demo-data notice until dismissed for the session. */
   readonly VITE_DEMO_BANNER?: string;
+  /** Google Maps JavaScript API key (Places) for HQ schedule location autocomplete. */
+  readonly VITE_GOOGLE_MAPS_API_KEY?: string;
 }
 
 interface ImportMeta {

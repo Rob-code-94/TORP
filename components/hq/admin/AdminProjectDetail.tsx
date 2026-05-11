@@ -90,7 +90,9 @@ import {
   invoiceStatusClassForTheme,
   proposalStatusClassForTheme,
 } from './adminFormat';
+import AdminCompactYmdCalendar from './AdminCompactYmdCalendar';
 import AdminFormDrawer from './AdminFormDrawer';
+import ScheduleLocationInput from './ScheduleLocationInput';
 import CalendarEventSheet from './CalendarEventSheet';
 import ProjectAssetUploader from './ProjectAssetUploader';
 import DeliveryLinksPanel from './DeliveryLinksPanel';
@@ -124,6 +126,41 @@ type DrawerForm =
   | 'expense'
   | 'invoice'
   | 'changeOrder';
+
+function pad2Schedule(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+/** Parse "HH:mm" (24h) to minutes from midnight; null if invalid. */
+function hmToMinutesSchedule(hm: string): number | null {
+  if (!hm || !/^\d{1,2}:\d{2}$/.test(hm.trim())) return null;
+  const [hRaw, mRaw] = hm.trim().split(':');
+  const h = Number.parseInt(hRaw, 10);
+  const m = Number.parseInt(mRaw, 10);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+  const t = h * 60 + m;
+  if (t < 0 || t > 24 * 60) return null;
+  return t;
+}
+
+function minutesToHmSchedule(min: number): string {
+  const c = Math.max(0, Math.min(24 * 60 - 1, Math.round(min)));
+  return `${pad2Schedule(Math.floor(c / 60))}:${pad2Schedule(c % 60)}`;
+}
+
+function defaultEndTimeForSchedule(start: string, kind: ScheduleFormType): string {
+  const s = hmToMinutesSchedule(start);
+  if (s == null) return kind === 'shoot' ? '16:00' : '11:00';
+  const delta = kind === 'shoot' ? 8 * 60 : 60;
+  return minutesToHmSchedule(s + delta);
+}
+
+function ensureEndTimeFromStored(start: string, end: string | undefined, kind: ScheduleFormType): string {
+  const sm = hmToMinutesSchedule(start);
+  const em = end ? hmToMinutesSchedule(end) : null;
+  if (sm != null && em != null && em >= sm) return end!;
+  return defaultEndTimeForSchedule(start, kind);
+}
 
 const AdminProjectDetail: React.FC = () => {
   const { user } = useAuth();
@@ -218,6 +255,7 @@ const AdminProjectDetail: React.FC = () => {
     title: '',
     date: '',
     time: '',
+    endTime: '',
     location: '',
     description: '',
     participants: [] as string[],
@@ -391,10 +429,12 @@ const AdminProjectDetail: React.FC = () => {
   const openScheduleEditor = (kind: ScheduleFormType, id: string) => {
     if (id === '__new__') {
       setScheduleQuickType(kind);
+      const start = kind === 'shoot' ? '08:00' : '10:00';
       setScheduleDraft({
         title: '',
         date: '',
-        time: kind === 'shoot' ? '08:00' : '10:00',
+        time: start,
+        endTime: defaultEndTimeForSchedule(start, kind),
         location: '',
         description: '',
         participants: [project.ownerCrewId],
@@ -410,6 +450,7 @@ const AdminProjectDetail: React.FC = () => {
         title: shoot.title,
         date: shoot.date,
         time: shoot.callTime,
+        endTime: ensureEndTimeFromStored(shoot.callTime, shoot.endTime, 'shoot'),
         location: shoot.location,
         description: shoot.description || shoot.gearSummary,
         participants: shoot.crewIds?.length ? shoot.crewIds : (shoot.crew ?? []),
@@ -421,6 +462,7 @@ const AdminProjectDetail: React.FC = () => {
         title: meeting.title,
         date: meeting.date,
         time: meeting.startTime,
+        endTime: ensureEndTimeFromStored(meeting.startTime, meeting.endTime, 'meeting'),
         location: meeting.location,
         description: meeting.description || '',
         participants: meeting.participantCrewIds?.length ? meeting.participantCrewIds : meeting.participants,
@@ -1269,7 +1311,18 @@ const AdminProjectDetail: React.FC = () => {
                 <div>
                   <p className="text-white font-medium">{s.title}</p>
                   <p className="text-sm text-zinc-500">
-                    {formatAdminDate(s.date)} @ {s.callTime} — {s.location}
+                    {formatAdminDate(s.date)} @{' '}
+                    {(() => {
+                      const sm = hmToMinutesSchedule(s.callTime);
+                      const em = s.endTime ? hmToMinutesSchedule(s.endTime) : null;
+                      const range =
+                        sm != null && em != null && em >= sm ? `${s.callTime}–${s.endTime}` : s.callTime;
+                      return (
+                        <>
+                          {range} — {s.location}
+                        </>
+                      );
+                    })()}
                   </p>
                   <p className="text-xs text-zinc-600 mt-1">Crew: {(s.crew ?? []).join(', ')}</p>
                   {s.description && <p className="text-xs text-zinc-500 mt-1">{s.description}</p>}
@@ -1324,7 +1377,20 @@ const AdminProjectDetail: React.FC = () => {
               <div key={m.id} className={`rounded-xl p-4 min-w-0 flex flex-col sm:flex-row sm:justify-between gap-2 ${appPanelClass(isDark)}`}>
                 <div>
                   <p className="text-white font-medium">{m.title} <span className="text-[11px] text-zinc-400">(Meeting)</span></p>
-                  <p className="text-sm text-zinc-500">{formatAdminDate(m.date)} @ {m.startTime} — {m.location}</p>
+                  <p className="text-sm text-zinc-500">
+                    {formatAdminDate(m.date)} @{' '}
+                    {(() => {
+                      const sm = hmToMinutesSchedule(m.startTime);
+                      const em = m.endTime ? hmToMinutesSchedule(m.endTime) : null;
+                      const range =
+                        sm != null && em != null && em >= sm ? `${m.startTime}–${m.endTime}` : m.startTime;
+                      return (
+                        <>
+                          {range} — {m.location}
+                        </>
+                      );
+                    })()}
+                  </p>
                   <p className="text-xs text-zinc-600 mt-1">Participants: {m.participants.join(', ')}</p>
                   {m.description && <p className="text-xs text-zinc-500 mt-1">{m.description}</p>}
                 </div>
@@ -1393,6 +1459,16 @@ const AdminProjectDetail: React.FC = () => {
                       type="button"
                       onClick={async () => {
                         try {
+                          const startM = hmToMinutesSchedule(scheduleDraft.time);
+                          const endM = hmToMinutesSchedule(scheduleDraft.endTime);
+                          if (startM == null || endM == null) {
+                            setMessage('Enter valid start and end times.', 'error');
+                            return;
+                          }
+                          if (endM < startM) {
+                            setMessage('End time must be on or after start time.', 'error');
+                            return;
+                          }
                           if (openSchedule.kind === 'shoot') {
                             if (openSchedule.id === '__new__') {
                               await createShoot({
@@ -1401,6 +1477,7 @@ const AdminProjectDetail: React.FC = () => {
                                 title: scheduleDraft.title,
                                 date: scheduleDraft.date,
                                 callTime: scheduleDraft.time,
+                                endTime: scheduleDraft.endTime,
                                 location: scheduleDraft.location,
                                 gearSummary: scheduleDraft.description,
                                 description: scheduleDraft.description,
@@ -1413,6 +1490,7 @@ const AdminProjectDetail: React.FC = () => {
                                   title: scheduleDraft.title,
                                   date: scheduleDraft.date,
                                   callTime: scheduleDraft.time,
+                                  endTime: scheduleDraft.endTime,
                                   location: scheduleDraft.location,
                                   gearSummary: scheduleDraft.description,
                                   description: scheduleDraft.description,
@@ -1432,6 +1510,7 @@ const AdminProjectDetail: React.FC = () => {
                               title: scheduleDraft.title,
                               date: scheduleDraft.date,
                               startTime: scheduleDraft.time,
+                              endTime: scheduleDraft.endTime,
                               location: scheduleDraft.location,
                               description: scheduleDraft.description,
                               participants: scheduleDraft.participants,
@@ -1443,6 +1522,7 @@ const AdminProjectDetail: React.FC = () => {
                                 title: scheduleDraft.title,
                                 date: scheduleDraft.date,
                                 startTime: scheduleDraft.time,
+                                endTime: scheduleDraft.endTime,
                                 location: scheduleDraft.location,
                                 description: scheduleDraft.description,
                                 participants: scheduleDraft.participants,
@@ -1478,10 +1558,14 @@ const AdminProjectDetail: React.FC = () => {
                     const next = e.target.value as ScheduleFormType;
                     setScheduleQuickType(next);
                     setOpenSchedule((current) => (current ? { ...current, kind: next } : current));
-                    setScheduleDraft((current) => ({
-                      ...current,
-                      time: current.time || (next === 'shoot' ? '08:00' : '10:00'),
-                    }));
+                    setScheduleDraft((current) => {
+                      const start = current.time || (next === 'shoot' ? '08:00' : '10:00');
+                      return {
+                        ...current,
+                        time: start,
+                        endTime: ensureEndTimeFromStored(start, current.endTime, next),
+                      };
+                    });
                   }}
                   disabled={openSchedule.id !== '__new__'}
                   className={`${appInputClass(isDark)} disabled:opacity-50`}
@@ -1490,12 +1574,46 @@ const AdminProjectDetail: React.FC = () => {
                   <option value="meeting">Meeting</option>
                 </select>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <input value={scheduleDraft.title} onChange={(e) => setScheduleDraft((current) => ({ ...current, title: e.target.value }))} className={appInputClass(isDark)} placeholder="Title" />
-                <input type="date" value={scheduleDraft.date} onChange={(e) => setScheduleDraft((current) => ({ ...current, date: e.target.value }))} style={dateTimeInput.style} className={`${appInputClass(isDark)} ${dateTimeInput.className}`} />
-                <input type="time" value={scheduleDraft.time} onChange={(e) => setScheduleDraft((current) => ({ ...current, time: e.target.value }))} style={dateTimeInput.style} className={`${appInputClass(isDark)} ${dateTimeInput.className}`} />
-                <input value={scheduleDraft.location} onChange={(e) => setScheduleDraft((current) => ({ ...current, location: e.target.value }))} className={appInputClass(isDark)} placeholder="Location/Link" />
+              <input
+                value={scheduleDraft.title}
+                onChange={(e) => setScheduleDraft((current) => ({ ...current, title: e.target.value }))}
+                className={appInputClass(isDark)}
+                placeholder="Title"
+              />
+              <AdminCompactYmdCalendar
+                value={scheduleDraft.date}
+                onChange={(date) => setScheduleDraft((current) => ({ ...current, date }))}
+                isDark={isDark}
+              />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
+                <div className="space-y-0.5 min-w-0">
+                  <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">Start</label>
+                  <input
+                    type="time"
+                    value={scheduleDraft.time}
+                    onChange={(e) => setScheduleDraft((current) => ({ ...current, time: e.target.value }))}
+                    style={dateTimeInput.style}
+                    className={`${appInputClass(isDark)} ${dateTimeInput.className} w-full`}
+                  />
+                </div>
+                <div className="space-y-0.5 min-w-0">
+                  <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">End</label>
+                  <input
+                    type="time"
+                    value={scheduleDraft.endTime}
+                    onChange={(e) => setScheduleDraft((current) => ({ ...current, endTime: e.target.value }))}
+                    style={dateTimeInput.style}
+                    className={`${appInputClass(isDark)} ${dateTimeInput.className} w-full`}
+                  />
+                </div>
               </div>
+              <ScheduleLocationInput
+                enabled={Boolean(activeDrawer === 'schedule' && openSchedule)}
+                value={scheduleDraft.location}
+                onChange={(location) => setScheduleDraft((current) => ({ ...current, location }))}
+                className={appInputClass(isDark)}
+                placeholder="Location/Link"
+              />
               <textarea value={scheduleDraft.description} onChange={(e) => setScheduleDraft((current) => ({ ...current, description: e.target.value }))} rows={3} className={appInputClass(isDark)} placeholder="Description/context" />
               <div className="flex flex-wrap gap-2">
                 {assignableCrew.map((crew) => (

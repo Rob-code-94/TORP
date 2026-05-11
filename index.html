@@ -66,6 +66,27 @@
           -ms-overflow-style: none;  /* IE and Edge */
           scrollbar-width: none;  /* Firefox */
       }
+
+      /* Google Places `.pac-container` is appended to body; keep above HQ drawers (z-50) without widening the page */
+      .pac-container {
+        z-index: 10060 !important;
+        font-family: var(--font-body);
+        text-transform: none;
+        letter-spacing: 0;
+        background-color: #18181b;
+        border: 1px solid #3f3f46;
+      }
+      .pac-item {
+        color: #e4e4e7;
+        border-top: 1px solid #27272a;
+      }
+      .pac-item-query {
+        color: #fafafa;
+      }
+      .pac-item:hover,
+      .pac-item-selected {
+        background-color: #27272a;
+      }
     </style>
   <script type="importmap">
 {

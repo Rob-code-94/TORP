@@ -22,6 +22,34 @@ function defaultDateString(): string {
   return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
 }
 
+function pad2Cal(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+function hmToMinCal(hm: string): number | null {
+  if (!hm || !/^\d{1,2}:\d{2}$/.test(hm.trim())) return null;
+  const [hRaw, mRaw] = hm.trim().split(':');
+  const h = Number.parseInt(hRaw, 10);
+  const m = Number.parseInt(mRaw, 10);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+  const t = h * 60 + m;
+  if (t < 0 || t > 24 * 60) return null;
+  return t;
+}
+
+function minToHmCal(min: number): string {
+  const c = Math.max(0, Math.min(24 * 60 - 1, Math.round(min)));
+  return `${pad2Cal(Math.floor(c / 60))}:${pad2Cal(c % 60)}`;
+}
+
+/** Same defaults as project schedule drawer / planner gutter (8h shoot, 1h meeting). */
+function defaultEndHmForSheet(startHm: string, kind: 'shoot' | 'meeting'): string {
+  const s = hmToMinCal(startHm);
+  if (s == null) return kind === 'shoot' ? '17:00' : '11:00';
+  const delta = kind === 'shoot' ? 8 * 60 : 60;
+  return minToHmCal(s + delta);
+}
+
 export type CalendarProjectOption = {
   id: string;
   title: string;
@@ -218,6 +246,7 @@ const CalendarEventSheet: React.FC<CalendarEventSheetProps> = ({
     try {
       if (saveKind === 'meeting') {
         const startTime = p.allDay ? '10:00' : (timeHm || '10:00');
+        const endTime = defaultEndHmForSheet(startTime, 'meeting');
         await createMeeting(
           {
             projectId: project.id,
@@ -225,6 +254,7 @@ const CalendarEventSheet: React.FC<CalendarEventSheetProps> = ({
             title: p.title,
             date: dateYmd,
             startTime,
+            endTime,
             location: p.location || 'TBD',
             participants: [],
             description: p.description,
@@ -233,6 +263,7 @@ const CalendarEventSheet: React.FC<CalendarEventSheetProps> = ({
         );
       } else {
         const callTime = p.allDay ? '09:00' : (timeHm || '09:00');
+        const endTime = defaultEndHmForSheet(callTime, 'shoot');
         await createShoot(
           {
             projectId: project.id,
@@ -240,6 +271,7 @@ const CalendarEventSheet: React.FC<CalendarEventSheetProps> = ({
             title: p.title,
             date: dateYmd,
             callTime,
+            endTime,
             location: p.location || 'TBD',
             crew: [],
             gearSummary: 'Details TBD',
