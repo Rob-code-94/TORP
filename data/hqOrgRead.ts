@@ -26,6 +26,7 @@ import {
   getHqBlockerDirectory,
   getHqChangeOrderDirectory,
   getHqClientDirectory,
+  getHqDependencyDirectory,
   getHqInvoiceDirectory,
   getHqProposalDirectory,
   getHqProjectDirectory,

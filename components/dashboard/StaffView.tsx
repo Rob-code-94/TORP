@@ -750,7 +750,7 @@ function ShootCard({ shoot, appOrigin, gearChecked, setGear, busyIntervals }: Sh
             <User size={14} /> Crew
           </h4>
           <div className="flex flex-wrap gap-2">
-            {shoot.crew.map((member) => (
+            {(shoot.crew ?? []).map((member) => (
               <div
                 key={member}
                 className={`flex items-center gap-2 px-3 py-2 rounded-lg min-w-0 ${

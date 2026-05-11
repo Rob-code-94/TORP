@@ -412,7 +412,7 @@ const AdminProjectDetail: React.FC = () => {
         time: shoot.callTime,
         location: shoot.location,
         description: shoot.description || shoot.gearSummary,
-        participants: shoot.crewIds?.length ? shoot.crewIds : shoot.crew,
+        participants: shoot.crewIds?.length ? shoot.crewIds : (shoot.crew ?? []),
       });
     } else {
       const meeting = meetings.find((item) => item.id === id);
@@ -1271,7 +1271,7 @@ const AdminProjectDetail: React.FC = () => {
                   <p className="text-sm text-zinc-500">
                     {formatAdminDate(s.date)} @ {s.callTime} — {s.location}
                   </p>
-                  <p className="text-xs text-zinc-600 mt-1">Crew: {s.crew.join(', ')}</p>
+                  <p className="text-xs text-zinc-600 mt-1">Crew: {(s.crew ?? []).join(', ')}</p>
                   {s.description && <p className="text-xs text-zinc-500 mt-1">{s.description}</p>}
                 </div>
                 <p className="text-xs text-zinc-500 max-w-xs">{s.gearSummary}</p>

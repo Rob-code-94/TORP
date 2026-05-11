@@ -26,6 +26,7 @@ import HqProfileMenuCluster from '../HqProfileMenu';
 import HqProductGuidePanel from '../HqProductGuidePanel';
 import HqFirestoreListenerBanner from '../HqFirestoreListenerBanner';
 import HqTenantClaimBanner from '../HqTenantClaimBanner';
+import AdminRouteErrorBoundary from './AdminRouteErrorBoundary';
 import { getGuideSectionsForContext } from '../../../lib/hqProductGuideFilter';
 import { startHqAdminShellTour } from '../../../lib/hqAdminTour';
 import { HQ_GUIDE_TIP_EVENT } from '../../../lib/hqGuideTipStorage';
@@ -340,8 +341,10 @@ const AdminLayout: React.FC = () => {
         </header>
         <HqFirestoreListenerBanner />
         <HqTenantClaimBanner />
-        <div className="flex-1 overflow-y-auto no-scrollbar p-4 sm:p-6">
-          <Outlet />
+        <div className="flex-1 overflow-y-auto no-scrollbar p-4 sm:p-6 min-h-0">
+          <AdminRouteErrorBoundary key={pathname}>
+            <Outlet />
+          </AdminRouteErrorBoundary>
         </div>
       </main>
 

@@ -132,7 +132,7 @@ export default function CallSheetPrintView() {
             isDark ? 'text-zinc-200' : 'text-zinc-800'
           }`}
         >
-          {shoot.crew.map((name) => (
+          {(shoot.crew ?? []).map((name) => (
             <li key={name}>{name}</li>
           ))}
         </ul>

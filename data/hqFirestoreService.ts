@@ -45,6 +45,7 @@ import {
   getAssetsSync,
   getHqCrewDirectory,
   getHqInvoiceDirectory,
+  getHqProjectDirectory,
   getPlannerItemsSync,
   getStorageOpsSync,
   setHqActivityDirectory,
@@ -206,7 +207,19 @@ function parsePlannerItem(id: string, data: Record<string, unknown>): PlannerIte
   };
 }
 
+/** Display names for shoot roster: prefer stored `crew` array; else resolve `crewIds` via HQ crew directory. */
+function shootCrewDisplayList(data: Record<string, unknown>): string[] {
+  const fromDoc = (data.crew as string[] | undefined)?.filter((n) => n && String(n).trim());
+  if (fromDoc?.length) return fromDoc;
+  const crewIds = (data.crewIds as string[]) ?? [];
+  if (!crewIds.length) return [];
+  const dir = getHqCrewDirectory();
+  return crewIds.map((cid) => dir.find((c) => c.id === cid)?.displayName || cid);
+}
+
 function parseShoot(id: string, data: Record<string, unknown>): AdminShoot {
+  const crewIds = (data.crewIds as string[]) ?? [];
+  const crew = shootCrewDisplayList(data);
   return {
     id,
     projectId: String(data.projectId ?? ''),
@@ -219,7 +232,8 @@ function parseShoot(id: string, data: Record<string, unknown>): AdminShoot {
     gearSummary: String(data.gearSummary ?? ''),
     gearItems: data.gearItems as string[] | undefined,
     description: data.description as string | undefined,
-    crewIds: (data.crewIds as string[]) ?? [],
+    crewIds,
+    crew,
   };
 }
 
@@ -449,7 +463,15 @@ export function subscribeHqOrgData(
       onSnapshot(
         tenantQuery(collectionPath),
         (snap) => {
-          applyRows(snap.docs.map((d) => parse(d)));
+          const rows: T[] = [];
+          for (const d of snap.docs) {
+            try {
+              rows.push(parse(d));
+            } catch (err) {
+              console.error(`[hq] skipping malformed Firestore doc (${collectionLabel})`, d.id, err);
+            }
+          }
+          applyRows(rows);
           bump();
         },
         (err) => {
@@ -688,8 +710,18 @@ export async function hqDeleteClient(tenantId: string | null, clientId: string):
   await deleteDoc(ref);
 }
 
+function mergeProjectIntoLocalDirectory(project: AdminProject): void {
+  const prev = getHqProjectDirectory();
+  const idx = prev.findIndex((p) => p.id === project.id);
+  const next = idx >= 0 ? prev.map((p) => (p.id === project.id ? project : p)) : [project, ...prev];
+  setHqProjectDirectory(next);
+}
+
 export async function hqUpsertProject(tenantId: string | null, project: AdminProject): Promise<void> {
-  if (!isFirebaseConfigured()) return;
+  if (!isFirebaseConfigured()) {
+    mergeProjectIntoLocalDirectory(project);
+    return;
+  }
   const cloudTenant = requireCloudTenant(tenantId);
   if (!cloudTenant) {
     throw new Error(HQ_TENANT_SCOPE_MISSING);
@@ -697,6 +729,7 @@ export async function hqUpsertProject(tenantId: string | null, project: AdminPro
 
   const db = getFirebaseFirestoreInstance();
   await setDoc(doc(db, HQ_COLLECTION.hqProjects, project.id), { tenantId: cloudTenant, ...stripIds(project) }, { merge: true });
+  mergeProjectIntoLocalDirectory(project);
 }
 
 function stripIds(p: AdminProject): Record<string, unknown> {
