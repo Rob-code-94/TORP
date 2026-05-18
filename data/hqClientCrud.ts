@@ -1,4 +1,6 @@
 import type { ClientProfile } from '../types';
+import { autoEnsureSquareCustomer } from '../lib/square/ensure-customer';
+import { clientHasSyncableEmailForSquare } from '../lib/square/syncable-email';
 import { getHqClientDirectory } from './hqSyncDirectory';
 import { hqDeleteClient, hqUpsertClient } from './hqFirestoreService';
 import { getHqTenantForWrites } from './hqWriteContext';
@@ -152,6 +154,12 @@ export async function persistClientProfile(client: ClientProfile): Promise<void>
   await hqUpsertClient(getHqTenantForWrites(), client);
 }
 
+function afterNewClientPersisted(client: ClientProfile): void {
+  if (client.squareCustomerId?.trim()) return;
+  if (!clientHasSyncableEmailForSquare(client)) return;
+  void autoEnsureSquareCustomer(client.id);
+}
+
 export function createClientProfile(
   input: {
     company: string;
@@ -217,7 +225,9 @@ export function createClientProfile(
     projectIds: [],
     updatedAt: new Date().toISOString(),
   };
-  void persistClientProfile(client).catch((err) => console.error('[hq] createClientProfile', err));
+  void persistClientProfile(client)
+    .then(() => afterNewClientPersisted(client))
+    .catch((err) => console.error('[hq] createClientProfile', err));
   return { ok: true, client };
 }
 

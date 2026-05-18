@@ -78,6 +78,18 @@ done
 3. **Financials → Square collections**.
 4. In Square, update a test invoice; confirm Firestore `clients.billing` updates and `square_webhook_events` gets a dedup doc.
 
+## Invoice create from TORP (admin)
+
+Production access token must include **Invoices** read/write scopes (`INVOICES_READ`, `INVOICES_WRITE`).
+
+Admin-only routes (after deploy):
+
+- `POST /api/square/invoices/create` — draft invoice + optional `hqInvoices` link when `projectId` is sent
+- `POST /api/square/invoices/publish` — publish and refresh `clients.billing`
+- `GET /api/square/invoices/:squareInvoiceId` — status refresh
+
+UI: project **Financials** tab → **Square invoice**; org **Financials** → invoice row share actions.
+
 ## Sandbox (optional)
 
 Use sandbox token/location/signature key and `SQUARE_ENVIRONMENT=sandbox` in `.env.square.local`, sync secrets, and create a **Sandbox** webhook subscription with the **same** `run.app` notification URL path.

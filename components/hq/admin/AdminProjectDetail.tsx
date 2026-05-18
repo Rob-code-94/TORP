@@ -46,7 +46,7 @@ import {
   updateDependency,
   updateRisk,
 } from '../../../data/hqProjectControlsOps';
-import { getHqCrewDirectory } from '../../../data/hqSyncDirectory';
+import { getHqClientDirectory, getHqCrewDirectory } from '../../../data/hqSyncDirectory';
 import { useHqOrgTick } from '../HqFirestoreProvider';
 import {
   createExpense,
@@ -85,7 +85,6 @@ import {
   formatAdminDateTime,
   formatStage,
   invoiceStatusClassForTheme,
-  proposalStatusClassForTheme,
 } from './adminFormat';
 import AdminCompactYmdCalendar from './AdminCompactYmdCalendar';
 import AdminFormDrawer from './AdminFormDrawer';
@@ -93,6 +92,12 @@ import CalendarEventSheet from './CalendarEventSheet';
 import ScheduleEventDrawer, { type ScheduleFormType } from './ScheduleEventDrawer';
 import ProjectAssetUploader from './ProjectAssetUploader';
 import DeliveryLinksPanel from './DeliveryLinksPanel';
+import ContractCompletionChecklist from './square/ContractCompletionChecklist';
+import ProjectProposalPanel from './square/ProjectProposalPanel';
+import ProjectSquareBillingCard from './square/ProjectSquareBillingCard';
+import ProjectSquareInvoiceDrawer from './square/ProjectSquareInvoiceDrawer';
+import SquareInvoiceActions from './square/SquareInvoiceActions';
+import { squareBillingSummary } from '../../../lib/square/billing-summary';
 
 type Tab = 'overview' | 'brief' | 'planner' | 'schedule' | 'assets' | 'deliverables' | 'controls' | 'financials' | 'activity';
 const STAFF_PROJECT_TABS: Tab[] = ['overview', 'brief', 'planner', 'schedule', 'assets', 'deliverables'];
@@ -121,6 +126,7 @@ type DrawerForm =
   | 'dependency'
   | 'expense'
   | 'invoice'
+  | 'squareInvoice'
   | 'changeOrder';
 
 const AdminProjectDetail: React.FC = () => {
@@ -254,6 +260,21 @@ const AdminProjectDetail: React.FC = () => {
   const dependencies = useMemo(() => (projectId ? getDependenciesByProject(projectId) : []), [projectId, refreshTick, hqTick]);
   const changeOrders = useMemo(() => (projectId ? getChangeOrdersByProject(projectId) : []), [projectId, refreshTick, hqTick]);
   const assignableCrew = useMemo(() => (projectId ? projectAssignableCrew(projectId) : []), [projectId, refreshTick, hqTick]);
+  const projectClient = useMemo(() => {
+    if (!project) return undefined;
+    const clients = getHqClientDirectory();
+    if (project.clientId) {
+      const byId = clients.find((c) => c.id === project.clientId);
+      if (byId) return byId;
+    }
+    const name = project.clientName?.trim().toLowerCase();
+    if (!name) return undefined;
+    return clients.find(
+      (c) =>
+        c.company?.trim().toLowerCase() === name ||
+        c.name?.trim().toLowerCase() === name,
+    );
+  }, [project, hqTick]);
   const filteredActivity = useMemo(() => {
     if (activityFilter === 'all') return activity;
     if (activityFilter === 'unread') return activity.filter((item) => !readIds.includes(item.id));
@@ -277,6 +298,8 @@ const AdminProjectDetail: React.FC = () => {
 
   const openTotal = invoices.reduce((s, i) => s + (i.amount - i.amountPaid), 0);
   const expenseTotal = expenses.reduce((s, e) => s + e.amount, 0);
+  const squareSummary = squareBillingSummary(projectClient?.billing);
+  const canWriteSquare = user?.role === UserRole.ADMIN;
   const canMoveStage = hasProjectCapability(user?.role, 'project.stage.move');
   const canApproveFinance = hasProjectCapability(user?.role, 'project.financial.approve');
   const canRequestChangeOrder = hasProjectCapability(user?.role, 'project.changeOrder.request');
@@ -2008,40 +2031,45 @@ const AdminProjectDetail: React.FC = () => {
 
       {tab === 'financials' && withState('financials', true, (
         <div className="space-y-6">
-          {proposal && (
-            <div className={`rounded-xl p-4 min-w-0 ${appPanelClass(isDark)}`}>
-              <h3 className="text-sm font-bold text-white mb-2">Proposal & contract</h3>
-              <p className="text-sm text-zinc-400 mb-2">
-                Total: <span className="text-white font-mono">${proposal.total.toLocaleString()}</span> — deposit {proposal.depositPercent}%
-              </p>
-              <ul className="text-sm text-zinc-300 list-disc list-inside mb-2">
-                {proposal.lineItems.map((li) => (
-                  <li key={li.label}>
-                    {li.label} — ${li.amount.toLocaleString()}
-                  </li>
-                ))}
-              </ul>
-              {proposal.lastEvent && (
-                <p className="text-xs text-zinc-500">{proposal.lastEvent}</p>
-              )}
-              <span
-                className={`mt-2 inline-block text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${proposalStatusClassForTheme(proposal.contractStatus, theme)}`}
-              >
-                {proposal.contractStatus}
-              </span>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+          <ProjectSquareBillingCard
+            client={projectClient}
+            isDark={isDark}
+            canWriteSquare={canWriteSquare}
+            onRefresh={() => setRefreshTick((v) => v + 1)}
+          />
+          <ProjectProposalPanel
+            isDark={isDark}
+            theme={theme}
+            projectId={project.id}
+            clientName={project.clientName}
+            proposal={proposal}
+            canEdit={canApproveFinance}
+            onUpdated={() => setRefreshTick((v) => v + 1)}
+          />
+          <ContractCompletionChecklist
+            isDark={isDark}
+            proposal={proposal}
+            client={projectClient}
+            torpInvoices={invoices}
+            canWriteSquare={canWriteSquare}
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm min-w-0">
             <div className={`rounded-xl p-4 min-w-0 ${appPanelClass(isDark)}`}>
               <h3 className="text-xs font-bold uppercase text-zinc-500 mb-2">Budget (project)</h3>
               <p className="text-2xl font-bold text-white">${project.budget.toLocaleString()}</p>
             </div>
             <div className={`rounded-xl p-4 min-w-0 ${appPanelClass(isDark)}`}>
-              <h3 className="text-xs font-bold uppercase text-zinc-500 mb-2">Open balance (invoices)</h3>
+              <h3 className="text-xs font-bold uppercase text-zinc-500 mb-2">Open balance (TORP invoices)</h3>
               <p className="text-2xl font-bold text-white">${openTotal.toLocaleString()}</p>
             </div>
-            <div className={`rounded-xl p-4 sm:col-span-2 min-w-0 ${appPanelClass(isDark)}`}>
+            <div className={`rounded-xl p-4 min-w-0 ${appPanelClass(isDark)}`}>
+              <h3 className="text-xs font-bold uppercase text-zinc-500 mb-2">Square AR (client)</h3>
+              <p className="text-2xl font-bold text-white">
+                ${(squareSummary?.balance ?? 0).toLocaleString()}
+              </p>
+              <p className="text-[11px] text-zinc-500 mt-1">{squareSummary?.statusLabel ?? 'Not synced'}</p>
+            </div>
+            <div className={`rounded-xl p-4 sm:col-span-2 lg:col-span-3 min-w-0 ${appPanelClass(isDark)}`}>
               <h3 className="text-xs font-bold uppercase text-zinc-500 mb-2">Change Orders</h3>
               {changeOrders.length === 0 ? (
                 <p className="text-sm text-zinc-500">No change orders.</p>
@@ -2078,19 +2106,27 @@ const AdminProjectDetail: React.FC = () => {
                   <th className="text-left px-3 py-2">Invoice</th>
                   <th className="text-right px-3 py-2">Amount</th>
                   <th className="text-left px-3 py-2">Status</th>
+                  <th className="text-left px-3 py-2">Square</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800/80">
                 {invoices.length === 0 && (
                   <tr>
-                    <td colSpan={3} className="px-3 py-3 text-zinc-500 text-center">
+                    <td colSpan={4} className="px-3 py-3 text-zinc-500 text-center">
                       No project invoices
                     </td>
                   </tr>
                 )}
                 {invoices.map((inv) => (
                   <tr key={inv.id} className="text-zinc-200">
-                    <td className="px-3 py-2.5 font-mono text-zinc-300">{inv.id}</td>
+                    <td className="px-3 py-2.5 font-mono text-zinc-300">
+                      {inv.id}
+                      {inv.source === 'square' && (
+                        <span className="ml-1 text-[9px] uppercase font-bold text-zinc-500 border border-zinc-700 px-1 rounded">
+                          Square
+                        </span>
+                      )}
+                    </td>
                     <td className="px-3 py-2.5 text-right">
                       ${inv.amount.toLocaleString()}
                       <div className="text-[10px] text-zinc-500">Paid: ${inv.amountPaid.toLocaleString()}</div>
@@ -2115,6 +2151,16 @@ const AdminProjectDetail: React.FC = () => {
                         Mark {inv.status === 'sent' ? 'paid' : 'sent'}
                       </button>
                     </td>
+                    <td className="px-3 py-2.5">
+                      {(inv.squareInvoiceUrl || inv.squareInvoiceId) && (
+                        <SquareInvoiceActions
+                          isDark={isDark}
+                          compact
+                          invoiceUrl={inv.squareInvoiceUrl}
+                          squareInvoiceId={inv.squareInvoiceId}
+                        />
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -2137,7 +2183,15 @@ const AdminProjectDetail: React.FC = () => {
                 onClick={() => setActiveDrawer('invoice')}
                 className="rounded-md border border-zinc-700 px-3 py-2 text-xs text-zinc-100 disabled:opacity-50"
               >
-                Quick Add Invoice
+                TORP invoice
+              </button>
+              <button
+                type="button"
+                disabled={!canWriteSquare || !projectClient?.squareCustomerId}
+                onClick={() => setActiveDrawer('squareInvoice')}
+                className="rounded-md border border-zinc-500 px-3 py-2 text-xs text-white disabled:opacity-50"
+              >
+                Square invoice
               </button>
             </div>
             <ul className="text-sm text-zinc-300 space-y-1">
@@ -2161,6 +2215,21 @@ const AdminProjectDetail: React.FC = () => {
               </p>
             )}
           </div>
+          {projectClient && (
+            <ProjectSquareInvoiceDrawer
+              open={activeDrawer === 'squareInvoice'}
+              onClose={() => setActiveDrawer(null)}
+              isDark={isDark}
+              client={projectClient}
+              projectId={project.id}
+              projectTitle={project.title}
+              proposal={proposal}
+              onDone={() => {
+                setRefreshTick((v) => v + 1);
+                setMessage('Square invoice updated.');
+              }}
+            />
+          )}
           <AdminFormDrawer
             open={activeDrawer === 'changeOrder'}
             onClose={() => setActiveDrawer(null)}

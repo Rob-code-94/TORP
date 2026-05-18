@@ -41,6 +41,14 @@ export function setInvoiceLockStatus(id: string, lockStatus: 'locked' | 'unlocke
   return getFinanceRepository().setInvoiceLockStatus(id, lockStatus, _actorName);
 }
 
+export function createProposal(input: Omit<AdminProposal, 'id'>, _actorName?: string): AdminProposal {
+  return getFinanceRepository().createProposal(input);
+}
+
+export function updateProposal(id: string, patch: Partial<AdminProposal>, _actorName?: string): { ok: boolean } {
+  return getFinanceRepository().updateProposal(id, patch);
+}
+
 export function getFinanceDashboardMetrics() {
   return getFinanceRepository().getMetrics();
 }

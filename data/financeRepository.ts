@@ -5,7 +5,7 @@ import type {
   FinancialLockStatus,
   ProjectExpense,
 } from '../types';
-import { hqUpsertExpense, hqUpsertInvoice } from './hqFirestoreService';
+import { hqUpsertExpense, hqUpsertInvoice, hqUpsertProposal } from './hqFirestoreService';
 import {
   getHqExpenseDirectory,
   getHqInvoiceDirectory,
@@ -31,6 +31,8 @@ export interface FinanceRepository {
   createInvoice(input: Omit<AdminInvoice, 'id'>): AdminInvoice;
   updateInvoice(id: string, patch: Partial<AdminInvoice>): { ok: boolean };
   setInvoiceLockStatus(id: string, lockStatus: FinancialLockStatus, actor?: string): { ok: boolean };
+  createProposal(input: Omit<AdminProposal, 'id'>): AdminProposal;
+  updateProposal(id: string, patch: Partial<AdminProposal>): { ok: boolean };
   createExpense(input: Omit<ProjectExpense, 'id'>): ProjectExpense;
   getMetrics(now?: Date): FinanceMetrics;
 }
@@ -163,6 +165,46 @@ const firestoreFinanceRepository: FinanceRepository = {
       lockedBy: lockStatus === 'locked' ? actor : undefined,
     };
     void hqUpsertInvoice(getHqTenantForWrites(), next).catch((err) => console.error('[hq] setInvoiceLockStatus', err));
+    return { ok: true };
+  },
+  createProposal(input) {
+    if (!input.projectId.trim()) throw new Error('Project is required.');
+    if (!input.clientName.trim()) throw new Error('Client name is required.');
+    const total =
+      input.total > 0
+        ? input.total
+        : input.lineItems.reduce((s, li) => s + (Number.isFinite(li.amount) ? li.amount : 0), 0);
+    const proposal: AdminProposal = {
+      ...input,
+      id: `PROP-${input.projectId}`,
+      total,
+      lineItems: input.lineItems.map((li) => ({ ...li })),
+      contractStatus: input.contractStatus || 'draft',
+    };
+    void hqUpsertProposal(getHqTenantForWrites(), proposal).catch((err) =>
+      console.error('[hq] createProposal', err),
+    );
+    return proposal;
+  },
+  updateProposal(id, patch) {
+    const proposal = getHqProposalDirectory().find((item) => item.id === id);
+    if (!proposal) return { ok: false };
+    const merged: AdminProposal = {
+      ...proposal,
+      ...patch,
+      lineItems: patch.lineItems
+        ? patch.lineItems.map((li) => ({ ...li }))
+        : proposal.lineItems.map((li) => ({ ...li })),
+    };
+    if (patch.lineItems || patch.total !== undefined) {
+      merged.total =
+        merged.total > 0
+          ? merged.total
+          : merged.lineItems.reduce((s, li) => s + (Number.isFinite(li.amount) ? li.amount : 0), 0);
+    }
+    void hqUpsertProposal(getHqTenantForWrites(), merged).catch((err) =>
+      console.error('[hq] updateProposal', err),
+    );
     return { ok: true };
   },
   createExpense(input) {

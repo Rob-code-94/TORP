@@ -130,7 +130,7 @@ const SquareCard: React.FC<SquareCardProps> = ({ isDark }) => {
             ? 'Error'
             : 'Not configured'
       }
-      description="Sync customer billing from your TORP Square merchant account. Project invoices in Financials stay manual."
+      description="Sync customer billing from your TORP Square merchant account. New clients with a real email are added to your Square directory automatically. Project invoices in Financials stay manual."
     >
       <div className="space-y-3 min-w-0">
         {fetchError && <p className="text-xs text-rose-400 break-words">{fetchError}</p>}

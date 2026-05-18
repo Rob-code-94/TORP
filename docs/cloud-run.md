@@ -12,6 +12,7 @@ The **Dockerfile** does two things:
 | `GET /api/v1/tenant-only/ping` | Example **403** if `tenantId` claim is missing (tenant guard) |
 | `GET /api/square/health` | Square connection health (ADMIN Bearer token) |
 | `POST /api/square/link-by-email` | Link CRM client to Square customer by email |
+| `POST /api/square/ensure-customer` | Link by email, or create in Square directory if missing (auto on new client) |
 | `POST /api/square/sync-client` | Refresh one client’s `billing` from Square |
 | `POST /api/square/sync-location` | Sync all linked clients from recent location invoices |
 | `GET /api/square/activity` | Invoice + payment history for a linked client |

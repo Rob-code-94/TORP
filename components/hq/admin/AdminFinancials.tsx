@@ -17,6 +17,7 @@ import {
 import type { AdminInvoice, AdminInvoiceStatus, AdminProject } from '../../../types';
 import AdminFormDrawer from './AdminFormDrawer';
 import AdminFinancialsSquare from './AdminFinancialsSquare';
+import SquareInvoiceActions from './square/SquareInvoiceActions';
 import { formatAdminDate, invoiceStatusClassForTheme, proposalStatusClassForTheme } from './adminFormat';
 import { useHqOrgTick } from '../HqFirestoreProvider';
 
@@ -525,6 +526,11 @@ const AdminFinancials: React.FC = () => {
                         className={`px-3 py-2.5 font-mono ${isDark ? 'text-zinc-300' : 'text-zinc-600'}`}
                       >
                         {i.id}
+                        {i.source === 'square' && (
+                          <span className="ml-1 text-[9px] uppercase font-bold text-zinc-500 border border-zinc-700 px-1 rounded">
+                            Square
+                          </span>
+                        )}
                       </td>
                       <td
                         className={`px-3 py-2.5 min-w-0 max-w-xs ${
@@ -618,14 +624,26 @@ const AdminFinancials: React.FC = () => {
                           </button>
                         </div>
                       </td>
-                      <td className="px-3 py-2.5 text-right whitespace-nowrap">
-                        <Link
-                          to={`/hq/admin/projects/${i.projectId}`}
-                          onClick={(event) => event.stopPropagation()}
-                          className={`text-xs ${appLinkMutedClass(isDark)}`}
-                        >
-                          Project
-                        </Link>
+                      <td className="px-3 py-2.5 min-w-0">
+                        <div className="flex flex-col gap-1.5 items-end">
+                          {(i.squareInvoiceUrl || i.squareInvoiceId) && (
+                            <div onClick={(event) => event.stopPropagation()}>
+                              <SquareInvoiceActions
+                                isDark={isDark}
+                                compact
+                                invoiceUrl={i.squareInvoiceUrl}
+                                squareInvoiceId={i.squareInvoiceId}
+                              />
+                            </div>
+                          )}
+                          <Link
+                            to={`/hq/admin/projects/${i.projectId}`}
+                            onClick={(event) => event.stopPropagation()}
+                            className={`text-xs ${appLinkMutedClass(isDark)}`}
+                          >
+                            Project
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   );

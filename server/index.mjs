@@ -10,8 +10,12 @@ import { initializeApp, getApps, applicationDefault } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import {
   squareActivityHandler,
+  squareCreateInvoiceHandler,
+  squareEnsureCustomerHandler,
+  squareGetInvoiceHandler,
   squareHealthHandler,
   squareLinkByEmailHandler,
+  squarePublishInvoiceHandler,
   squareSyncClientHandler,
   squareSyncLocationHandler,
   squareWebhookHandler,
@@ -119,9 +123,13 @@ app.use(express.json());
 
 app.get('/api/square/health', squareHealthHandler);
 app.post('/api/square/link-by-email', squareLinkByEmailHandler);
+app.post('/api/square/ensure-customer', squareEnsureCustomerHandler);
 app.post('/api/square/sync-client', squareSyncClientHandler);
 app.post('/api/square/sync-location', squareSyncLocationHandler);
 app.get('/api/square/activity', squareActivityHandler);
+app.post('/api/square/invoices/create', squareCreateInvoiceHandler);
+app.post('/api/square/invoices/publish', squarePublishInvoiceHandler);
+app.get('/api/square/invoices/:squareInvoiceId', squareGetInvoiceHandler);
 
 app.use(
   express.static(distDir, {

@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ExternalLink, Link2, RefreshCcw } from 'lucide-react';
+import { Link2, RefreshCcw } from 'lucide-react';
+import SquareInvoiceActions from './square/SquareInvoiceActions';
 import { doc, updateDoc } from 'firebase/firestore';
 import { getFirebaseFirestoreInstance, isFirebaseConfigured } from '../../../lib/firebase';
 import { squareApiFetch } from '../../../lib/square/browser-fetch';
+import { clientHasSyncableEmailForSquare } from '../../../lib/square/syncable-email';
 import { appInputClass, appLinkMutedClass, appPanelClass } from '../../../lib/appThemeClasses';
 import type { ClientProfile } from '../../../types';
 
@@ -49,6 +51,7 @@ const ClientSquareBillingPanel: React.FC<ClientSquareBillingPanelProps> = ({
   const [showActivity, setShowActivity] = useState(false);
 
   const linked = Boolean(client.squareCustomerId?.trim());
+  const canCreateInSquare = clientHasSyncableEmailForSquare(client);
   const billing = client.billing;
 
   const loadActivity = useCallback(async () => {
@@ -81,6 +84,53 @@ const ClientSquareBillingPanel: React.FC<ClientSquareBillingPanelProps> = ({
   useEffect(() => {
     if (showActivity && linked) void loadActivity();
   }, [showActivity, linked, loadActivity]);
+
+  const ensureInSquare = async () => {
+    setLinkBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await squareApiFetch('/api/square/ensure-customer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: client.id }),
+      });
+      const data = (await res.json()) as {
+        error?: string;
+        status?: string;
+        matches?: SquareLinkMatch[];
+      };
+      if (!res.ok) {
+        setError(data.error ?? 'Could not create in Square');
+        return;
+      }
+      if (data.status === 'choose' && data.matches?.length) {
+        setLinkCandidates(data.matches);
+        setPickDialogOpen(true);
+        return;
+      }
+      if (data.status === 'created') {
+        setMessage('Created in Square directory and linked.');
+        onLinked?.();
+        return;
+      }
+      if (data.status === 'linked' || data.status === 'already_linked') {
+        setMessage(data.status === 'already_linked' ? 'Already linked to Square.' : 'Linked to Square.');
+        onLinked?.();
+        return;
+      }
+      if (data.status === 'skipped_no_email') {
+        setMessage('Add a real email to this client before creating in Square.');
+        return;
+      }
+      setMessage('Square ensure completed.');
+      onLinked?.();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Square create failed');
+    } finally {
+      setLinkBusy(false);
+    }
+  };
 
   const linkSquare = async (squareCustomerId?: string) => {
     setLinkBusy(true);
@@ -123,6 +173,11 @@ const ClientSquareBillingPanel: React.FC<ClientSquareBillingPanelProps> = ({
         );
         return;
       }
+      if (data.status === 'created') {
+        setMessage('Created in Square directory and linked.');
+        onLinked?.();
+        return;
+      }
       if (data.status === 'linked' || data.status === 'already_linked') {
         setMessage(data.status === 'already_linked' ? 'Already linked to Square.' : 'Linked to Square.');
         onLinked?.();
@@ -161,14 +216,26 @@ const ClientSquareBillingPanel: React.FC<ClientSquareBillingPanelProps> = ({
     setSyncing(false);
   };
 
-  const saveContractNotes = async (notes: string) => {
+  const saveBillingPatch = async (patch: Record<string, unknown>) => {
     if (!isFirebaseConfigured()) return;
     const db = getFirebaseFirestoreInstance();
     const prev = { ...(client.billing ?? {}) };
     await updateDoc(doc(db, 'clients', client.id), {
-      billing: { ...prev, contractNotes: notes || null },
+      billing: { ...prev, ...patch },
     });
     onLinked?.();
+  };
+
+  const saveContractNotes = async (notes: string) => {
+    await saveBillingPatch({ contractNotes: notes || null });
+  };
+
+  const toggleContractSigned = async (signed: boolean) => {
+    await saveBillingPatch({
+      contractSigned: signed,
+      contractSignedAt: signed ? new Date().toISOString().slice(0, 10) : null,
+    });
+    setMessage(signed ? 'Contract marked signed.' : 'Contract marked unsigned.');
   };
 
   return (
@@ -191,19 +258,35 @@ const ClientSquareBillingPanel: React.FC<ClientSquareBillingPanelProps> = ({
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap shrink-0">
           {!linked && (
-            <button
-              type="button"
-              disabled={linkBusy}
-              onClick={() => void linkSquare()}
-              className={
-                isDark
-                  ? 'w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-md border border-zinc-600 px-3 py-1.5 text-xs font-semibold text-zinc-100 disabled:opacity-50'
-                  : 'w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-900 disabled:opacity-50'
-              }
-            >
-              <Link2 size={14} />
-              {linkBusy ? 'Linking…' : 'Link from email'}
-            </button>
+            <>
+              <button
+                type="button"
+                disabled={linkBusy}
+                onClick={() => void linkSquare()}
+                className={
+                  isDark
+                    ? 'w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-md border border-zinc-600 px-3 py-1.5 text-xs font-semibold text-zinc-100 disabled:opacity-50'
+                    : 'w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-900 disabled:opacity-50'
+                }
+              >
+                <Link2 size={14} />
+                {linkBusy ? 'Linking…' : 'Link from email'}
+              </button>
+              {canCreateInSquare && (
+                <button
+                  type="button"
+                  disabled={linkBusy}
+                  onClick={() => void ensureInSquare()}
+                  className={
+                    isDark
+                      ? 'w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-md border border-zinc-500 bg-zinc-100/10 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50'
+                      : 'w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50'
+                  }
+                >
+                  {linkBusy ? 'Working…' : 'Create in Square'}
+                </button>
+              )}
+            </>
           )}
           {linked && (
             <button
@@ -246,21 +329,32 @@ const ClientSquareBillingPanel: React.FC<ClientSquareBillingPanelProps> = ({
             <dt className="text-zinc-500">Invoice</dt>
             <dd className="truncate">{billing.invoiceNumber ?? '—'}</dd>
           </div>
-          {billing.invoiceUrl && (
-            <div className="col-span-2 sm:col-span-3 min-w-0">
-              <a
-                href={billing.invoiceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={`inline-flex items-center gap-1 ${appLinkMutedClass(isDark)}`}
-              >
-                Open hosted invoice
-                <ExternalLink size={12} />
-              </a>
-            </div>
-          )}
+          <div className="col-span-2 sm:col-span-3 min-w-0">
+            <SquareInvoiceActions
+              isDark={isDark}
+              compact
+              invoiceUrl={billing.invoiceUrl}
+              invoiceNumber={billing.invoiceNumber}
+              squareInvoiceId={billing.squareInvoiceId}
+            />
+          </div>
         </dl>
       )}
+
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center min-w-0">
+        <label className="inline-flex items-center gap-2 text-sm text-zinc-300 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={Boolean(billing?.contractSigned)}
+            onChange={(e) => void toggleContractSigned(e.target.checked)}
+            className="rounded border-zinc-600"
+          />
+          Contract signed (CRM)
+        </label>
+        {billing?.contractSignedAt && (
+          <span className="text-xs text-zinc-500">Signed {billing.contractSignedAt}</span>
+        )}
+      </div>
 
       {linked && (
         <div className="space-y-2 min-w-0">

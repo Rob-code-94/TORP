@@ -370,6 +370,10 @@ export interface AdminInvoice {
   lockStatus?: FinancialLockStatus;
   lockedAt?: string;
   lockedBy?: string;
+  squareInvoiceId?: string;
+  squareInvoiceUrl?: string;
+  squareInvoiceStatus?: string;
+  source?: 'manual' | 'square';
 }
 
 export type ProposalContractStatus = 'draft' | 'sent' | 'viewed' | 'signed' | 'declined';

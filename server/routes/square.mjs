@@ -8,9 +8,8 @@ import {
   respondAdminAuthFailure,
 } from '../lib/require-admin.mjs';
 import { getSquareClient } from '../lib/square/client.mjs';
-import { countSquareDirectoryCustomers } from '../lib/square/directory-stats.mjs';
+import { ensureClientSquareCustomer } from '../lib/square/ensure-client-square.mjs';
 import {
-  getSquareEnvironmentLabel,
   getSquareLocationId,
   getSquareWebhookNotificationUrl,
   getSquareWebhookSignatureKey,
@@ -19,11 +18,12 @@ import { squareJsonSafe } from '../lib/square/json-safe.mjs';
 import { mergeBillingForFirestore } from '../lib/square/merge-client-billing.mjs';
 import { parseSquareWebhookPayload } from '../lib/square/parse-webhook.mjs';
 import {
-  emailsMatchSquareAndCrm,
-  normalizeEmailForMatch,
-  resolveClientContactEmail,
-  searchSquareCustomersMatchingCrmEmail,
-} from '../lib/square/search-customers-by-email.mjs';
+  createSquareInvoiceDraft,
+  getSquareInvoice,
+  publishSquareInvoice,
+  squareInvoiceToBillingPatch,
+} from '../lib/square/create-invoice.mjs';
+import { upsertHqInvoiceFromSquare } from '../lib/square/link-hq-invoice.mjs';
 import {
   fetchInvoicesForCustomer,
   fetchInvoicesForLocation,
@@ -34,30 +34,6 @@ import {
 const INVOICE_EVENT_PREFIX = 'invoice.';
 const MAX_SYNC_PAGES = 8;
 const MAX_CUSTOMERS_PER_RUN = 80;
-
-function toMatchRows(customers) {
-  return customers
-    .filter((c) => typeof c.id === 'string' && c.id.length > 0)
-    .map((c) => ({
-      id: c.id,
-      givenName: c.givenName,
-      familyName: c.familyName,
-      emailAddress: c.emailAddress,
-    }));
-}
-
-async function commitSquareCustomerLink(square, locationId, ref, data, squareCustomerId) {
-  const patch = await syncCustomerBillingData(square, locationId, squareCustomerId);
-  const existingBilling =
-    data.billing && typeof data.billing === 'object' ? data.billing : undefined;
-  const billing = mergeBillingForFirestore(existingBilling, patch);
-  await ref.update({
-    squareCustomerId,
-    billing,
-    billingSquareSyncedAt: FieldValue.serverTimestamp(),
-  });
-  return patch;
-}
 
 async function loadClientForAdmin(db, clientId, tenantId) {
   const ref = db.collection('clients').doc(clientId);
@@ -105,6 +81,31 @@ export async function squareHealthHandler(req, res) {
   }
 }
 
+function squareConfigOrError(res) {
+  const square = getSquareClient();
+  const locationId = getSquareLocationId();
+  if (!square) {
+    res.status(503).json({
+      error:
+        'Square not configured: missing SQUARE_ACCESS_TOKEN. Add it to Cloud Run env and restart.',
+    });
+    return null;
+  }
+  if (!locationId) {
+    res.status(503).json({ error: 'Square not configured: missing SQUARE_LOCATION_ID.' });
+    return null;
+  }
+  return { square, locationId };
+}
+
+function sendEnsureResult(res, result) {
+  if (!result.ok && result.status === 'error') {
+    return res.status(result.httpStatus ?? 500).json({ error: result.error });
+  }
+  const { ok: _ok, status, httpStatus: _hs, error: _err, ...payload } = result;
+  return res.json({ ok: true, status, ...payload });
+}
+
 export async function squareLinkByEmailHandler(req, res) {
   const auth = await requireAdminUser(req);
   if (respondAdminAuthFailure(res, auth)) return;
@@ -116,94 +117,52 @@ export async function squareLinkByEmailHandler(req, res) {
   const db = getAdminDb();
   if (!db) return res.status(503).json({ error: 'Firebase Admin not configured' });
 
-  const square = getSquareClient();
-  const locationId = getSquareLocationId();
-  if (!square) {
-    return res.status(503).json({
-      error:
-        'Square not configured: missing SQUARE_ACCESS_TOKEN. Add it to Cloud Run env and restart.',
-    });
-  }
-  if (!locationId) {
-    return res.status(503).json({
-      error: 'Square not configured: missing SQUARE_LOCATION_ID.',
-    });
-  }
+  const cfg = squareConfigOrError(res);
+  if (!cfg) return;
 
   const tenantId = getTenantIdFromDecoded(auth.decoded);
   const loaded = await loadClientForAdmin(db, clientId, tenantId);
   if (loaded.error) return res.status(loaded.status).json({ error: loaded.error });
-  const { ref, data } = loaded;
 
-  const existingSquareId =
-    typeof data.squareCustomerId === 'string' ? data.squareCustomerId.trim() : '';
-  const clientEmail = resolveClientContactEmail(data, searchEmail);
-  const emailNorm = normalizeEmailForMatch(clientEmail);
-  if (!emailNorm) {
-    return res.status(400).json({
-      error:
-        'Client has no usable email on file. Add an email, pass searchEmail, or set squareCustomerId manually.',
-    });
-  }
+  const result = await ensureClientSquareCustomer({
+    square: cfg.square,
+    locationId: cfg.locationId,
+    ref: loaded.ref,
+    data: loaded.data,
+    clientId,
+    createIfMissing: false,
+    searchEmail,
+    manualPickId: pickId,
+  });
+  return sendEnsureResult(res, result);
+}
 
-  const manualPick = typeof pickId === 'string' ? pickId.trim() : '';
-  if (manualPick) {
-    const getRes = await square.customers.get({ customerId: manualPick });
-    if (getRes.errors?.length) {
-      return res.status(400).json({
-        error: getRes.errors.map((e) => e.detail ?? e.code).join('; '),
-      });
-    }
-    if (!emailsMatchSquareAndCrm(getRes.customer?.emailAddress, clientEmail)) {
-      return res.status(400).json({ error: 'Selected Square customer email does not match this client.' });
-    }
-    try {
-      const billing = await commitSquareCustomerLink(square, locationId, ref, data, manualPick);
-      return res.json({ ok: true, status: 'linked', squareCustomerId: manualPick, billing });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Square sync failed';
-      return res.status(502).json({ error: msg });
-    }
-  }
+export async function squareEnsureCustomerHandler(req, res) {
+  const auth = await requireAdminUser(req);
+  if (respondAdminAuthFailure(res, auth)) return;
 
-  if (existingSquareId) {
-    return res.json({ ok: true, status: 'already_linked', squareCustomerId: existingSquareId });
-  }
+  const clientId = typeof req.body?.clientId === 'string' ? req.body.clientId.trim() : '';
+  if (!clientId) return res.status(400).json({ error: 'clientId required' });
 
-  const { customers, error: searchErr } = await searchSquareCustomersMatchingCrmEmail(square, clientEmail);
-  if (searchErr) return res.status(502).json({ error: searchErr });
+  const db = getAdminDb();
+  if (!db) return res.status(503).json({ error: 'Firebase Admin not configured' });
 
-  if (customers.length === 0) {
-    let directoryCustomerCount;
-    try {
-      directoryCustomerCount = await countSquareDirectoryCustomers(square);
-    } catch {
-      directoryCustomerCount = undefined;
-    }
-    return res.json({
-      ok: true,
-      status: 'no_match',
-      searchedEmail: clientEmail,
-      squareEnvironment: getSquareEnvironmentLabel(),
-      directoryCustomerCount,
-    });
-  }
+  const cfg = squareConfigOrError(res);
+  if (!cfg) return;
 
-  if (customers.length > 1) {
-    return res.json({ ok: true, status: 'choose', matches: toMatchRows(customers) });
-  }
+  const tenantId = getTenantIdFromDecoded(auth.decoded);
+  const loaded = await loadClientForAdmin(db, clientId, tenantId);
+  if (loaded.error) return res.status(loaded.status).json({ error: loaded.error });
 
-  const only = customers[0];
-  const sid = only.id;
-  if (!sid) return res.status(502).json({ error: 'Square customer missing id' });
-
-  try {
-    const billing = await commitSquareCustomerLink(square, locationId, ref, data, sid);
-    return res.json({ ok: true, status: 'linked', squareCustomerId: sid, billing });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Square sync failed';
-    return res.status(502).json({ error: msg });
-  }
+  const result = await ensureClientSquareCustomer({
+    square: cfg.square,
+    locationId: cfg.locationId,
+    ref: loaded.ref,
+    data: loaded.data,
+    clientId,
+    createIfMissing: true,
+  });
+  return sendEnsureResult(res, result);
 }
 
 export async function squareSyncClientHandler(req, res) {
@@ -306,6 +265,190 @@ export async function squareSyncLocationHandler(_req, res) {
     clientsUpdated: updated,
     errors: errors.slice(0, 10),
   });
+}
+
+function parseLineItems(body) {
+  const raw = body?.lineItems;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((li) => ({
+      label: typeof li?.label === 'string' ? li.label.trim() : '',
+      amount: Number(li?.amount),
+    }))
+    .filter((li) => li.label && Number.isFinite(li.amount) && li.amount > 0);
+}
+
+export async function squareCreateInvoiceHandler(req, res) {
+  const auth = await requireAdminUser(req);
+  if (respondAdminAuthFailure(res, auth)) return;
+
+  const cfg = squareConfigOrError(res);
+  if (!cfg) return;
+
+  const clientId = typeof req.body?.clientId === 'string' ? req.body.clientId.trim() : '';
+  if (!clientId) return res.status(400).json({ error: 'clientId required' });
+
+  const lineItems = parseLineItems(req.body);
+  if (!lineItems.length) return res.status(400).json({ error: 'lineItems required' });
+
+  const dueDate = typeof req.body?.dueDate === 'string' ? req.body.dueDate.trim() : undefined;
+  const memo = typeof req.body?.memo === 'string' ? req.body.memo.trim() : undefined;
+  const projectId = typeof req.body?.projectId === 'string' ? req.body.projectId.trim() : undefined;
+
+  const db = getAdminDb();
+  if (!db) return res.status(503).json({ error: 'Firebase Admin not configured' });
+
+  const tenantId = getTenantIdFromDecoded(auth.decoded);
+  const loaded = await loadClientForAdmin(db, clientId, tenantId);
+  if (loaded.error) return res.status(loaded.status).json({ error: loaded.error });
+  const { data } = loaded;
+
+  const squareCustomerId =
+    typeof data.squareCustomerId === 'string' ? data.squareCustomerId.trim() : '';
+  if (!squareCustomerId) {
+    return res.status(400).json({ error: 'Client has no squareCustomerId — link or create in Square first.' });
+  }
+
+  try {
+    const invoice = await createSquareInvoiceDraft(cfg.square, {
+      locationId: cfg.locationId,
+      squareCustomerId,
+      lineItems,
+      dueDate,
+      memo,
+    });
+
+    let hqInvoice;
+    const docTenant = typeof data.tenantId === 'string' ? data.tenantId : tenantId;
+    if (docTenant && projectId) {
+      const clientName =
+        typeof data.company === 'string' && data.company
+          ? data.company
+          : typeof data.name === 'string'
+            ? data.name
+            : 'Client';
+      hqInvoice = await upsertHqInvoiceFromSquare(db, {
+        tenantId: docTenant,
+        projectId,
+        clientName,
+        squareInvoice: invoice,
+      });
+    }
+
+    return res.json({
+      ok: true,
+      squareInvoiceId: invoice.id,
+      version: invoice.version,
+      status: invoice.status,
+      publicUrl: invoice.publicUrl ?? null,
+      hqInvoiceId: hqInvoice?.id ?? null,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Square invoice create failed';
+    return res.status(502).json({ error: msg });
+  }
+}
+
+export async function squarePublishInvoiceHandler(req, res) {
+  const auth = await requireAdminUser(req);
+  if (respondAdminAuthFailure(res, auth)) return;
+
+  const cfg = squareConfigOrError(res);
+  if (!cfg) return;
+
+  const squareInvoiceId =
+    typeof req.body?.squareInvoiceId === 'string' ? req.body.squareInvoiceId.trim() : '';
+  const clientId = typeof req.body?.clientId === 'string' ? req.body.clientId.trim() : '';
+  const versionRaw = req.body?.version;
+  const projectId = typeof req.body?.projectId === 'string' ? req.body.projectId.trim() : undefined;
+  const hqInvoiceId =
+    typeof req.body?.hqInvoiceId === 'string' ? req.body.hqInvoiceId.trim() : undefined;
+
+  if (!squareInvoiceId) return res.status(400).json({ error: 'squareInvoiceId required' });
+  if (!clientId) return res.status(400).json({ error: 'clientId required' });
+
+  const db = getAdminDb();
+  if (!db) return res.status(503).json({ error: 'Firebase Admin not configured' });
+
+  const tenantId = getTenantIdFromDecoded(auth.decoded);
+  const loaded = await loadClientForAdmin(db, clientId, tenantId);
+  if (loaded.error) return res.status(loaded.status).json({ error: loaded.error });
+  const { ref, data } = loaded;
+
+  try {
+    let version = versionRaw;
+    if (version == null) {
+      const current = await getSquareInvoice(cfg.square, squareInvoiceId);
+      if (!current?.version) {
+        return res.status(404).json({ error: 'Invoice not found in Square' });
+      }
+      version = current.version;
+    }
+
+    const published = await publishSquareInvoice(cfg.square, squareInvoiceId, version);
+    const patch = squareInvoiceToBillingPatch(published);
+    const existingBilling =
+      data.billing && typeof data.billing === 'object' ? data.billing : undefined;
+    const billing = mergeBillingForFirestore(existingBilling, patch);
+    await ref.update({
+      billing,
+      billingSquareSyncedAt: FieldValue.serverTimestamp(),
+    });
+
+    let hqInvoice;
+    const docTenant = typeof data.tenantId === 'string' ? data.tenantId : tenantId;
+    if (docTenant && projectId) {
+      const clientName =
+        typeof data.company === 'string' && data.company
+          ? data.company
+          : typeof data.name === 'string'
+            ? data.name
+            : 'Client';
+      hqInvoice = await upsertHqInvoiceFromSquare(db, {
+        tenantId: docTenant,
+        projectId,
+        clientName,
+        squareInvoice: published,
+        existingInvoiceId: hqInvoiceId,
+      });
+    }
+
+    return res.json({
+      ok: true,
+      squareInvoiceId: published.id,
+      status: published.status,
+      publicUrl: published.publicUrl ?? null,
+      billing: patch,
+      hqInvoiceId: hqInvoice?.id ?? hqInvoiceId ?? null,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Square invoice publish failed';
+    return res.status(502).json({ error: msg });
+  }
+}
+
+export async function squareGetInvoiceHandler(req, res) {
+  const auth = await requireAdminUser(req);
+  if (respondAdminAuthFailure(res, auth)) return;
+
+  const cfg = squareConfigOrError(res);
+  if (!cfg) return;
+
+  const squareInvoiceId =
+    typeof req.params?.squareInvoiceId === 'string' ? req.params.squareInvoiceId.trim() : '';
+  if (!squareInvoiceId) return res.status(400).json({ error: 'squareInvoiceId required' });
+
+  try {
+    const invoice = await getSquareInvoice(cfg.square, squareInvoiceId);
+    if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
+    return res.json({
+      ok: true,
+      invoice: squareJsonSafe(invoice),
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Square invoice fetch failed';
+    return res.status(502).json({ error: msg });
+  }
 }
 
 export async function squareActivityHandler(req, res) {

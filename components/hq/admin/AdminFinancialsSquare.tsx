@@ -13,6 +13,7 @@ import {
   type CollectionQuickFilter,
 } from '../../../lib/square/collections';
 import { squareApiFetch } from '../../../lib/square/browser-fetch';
+import SquareInvoiceActions from './square/SquareInvoiceActions';
 
 const FILTERS: { value: CollectionQuickFilter; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -155,13 +156,15 @@ const AdminFinancialsSquare: React.FC = () => {
               <th className="px-3 py-2 font-semibold">Balance</th>
               <th className="px-3 py-2 font-semibold">Status</th>
               <th className="px-3 py-2 font-semibold">Due</th>
+              <th className="px-3 py-2 font-semibold">Contract</th>
+              <th className="px-3 py-2 font-semibold">Share</th>
               <th className="px-3 py-2 font-semibold">Square</th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-3 py-4 text-zinc-500 text-xs">
+                <td colSpan={7} className="px-3 py-4 text-zinc-500 text-xs">
                   No clients match this filter.
                 </td>
               </tr>
@@ -182,6 +185,22 @@ const AdminFinancialsSquare: React.FC = () => {
                   </td>
                   <td className="px-3 py-2 text-xs">{c.billing?.status ?? '—'}</td>
                   <td className="px-3 py-2 text-xs whitespace-nowrap">{c.billing?.dueDate ?? '—'}</td>
+                  <td className="px-3 py-2 text-xs whitespace-nowrap">
+                    {c.billing?.contractSigned ? (
+                      <span className="text-emerald-400">Signed</span>
+                    ) : (
+                      <span className="text-zinc-500">Pending</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 min-w-0">
+                    <SquareInvoiceActions
+                      isDark={isDark}
+                      compact
+                      invoiceUrl={c.billing?.invoiceUrl}
+                      invoiceNumber={c.billing?.invoiceNumber}
+                      squareInvoiceId={c.billing?.squareInvoiceId}
+                    />
+                  </td>
                   <td className="px-3 py-2">
                     <Link
                       to="/hq/admin/clients"

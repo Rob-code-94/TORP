@@ -337,6 +337,10 @@ function parseInvoice(id: string, data: Record<string, unknown>): AdminInvoice {
     lockedAt: data.lockedAt as string | undefined,
     lockedBy: data.lockedBy as string | undefined,
     attachmentAssetIds: data.attachmentAssetIds as string[] | undefined,
+    squareInvoiceId: data.squareInvoiceId as string | undefined,
+    squareInvoiceUrl: data.squareInvoiceUrl as string | undefined,
+    squareInvoiceStatus: data.squareInvoiceStatus as string | undefined,
+    source: data.source as AdminInvoice['source'],
   };
 }
 
