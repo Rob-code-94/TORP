@@ -17,7 +17,14 @@ The **Dockerfile** does two things:
 | `GET /api/square/activity` | Invoice + payment history for a linked client |
 | `POST /api/webhooks/square` | Square invoice webhooks (HMAC, no auth) |
 
-**Cloud Run runtime:** the default service account should be able to verify ID tokens. If `whoami` returns 503, check Admin initialization and roles (see Firebase troubleshooting).
+**Cloud Run runtime:** the default service account must verify Firebase ID tokens via Admin SDK. If Square or `whoami` returns `invalid_token` while signed in, check Cloud Run logs for `insufficient permission` and run once:
+
+```bash
+chmod +x scripts/grant-cloud-run-firebase-auth.sh
+./scripts/grant-cloud-run-firebase-auth.sh
+```
+
+This grants `roles/firebaseauth.admin` to `483040408359-compute@developer.gserviceaccount.com`. Redeploy or wait for the next revision if needed.
 
 ## Square billing (runtime env — separate TORP merchant)
 

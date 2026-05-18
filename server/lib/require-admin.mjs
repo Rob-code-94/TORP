@@ -1,4 +1,5 @@
 import { getAuth } from 'firebase-admin/auth';
+import { mapVerifyIdTokenError } from './map-verify-id-token-error.mjs';
 
 const ROLE_CLAIM = 'role';
 const TENANT_CLAIM = 'tenantId';
@@ -9,7 +10,7 @@ const logPrefix = '[torp.require-admin]';
  * Verify Bearer Firebase ID token and require ADMIN role.
  * @returns {Promise<
  *   | { ok: true; decoded: import('firebase-admin/auth').DecodedIdToken }
- *   | { ok: false; status: number; error: string; role?: string | null }
+ *   | { ok: false; status: number; error: string; reason?: string; role?: string | null }
  * >}
  */
 export async function requireAdminUser(req) {
@@ -28,8 +29,9 @@ export async function requireAdminUser(req) {
     }
     return { ok: true, decoded };
   } catch (e) {
-    console.warn(logPrefix, 'verifyIdToken failed', e instanceof Error ? e.message : e);
-    return { ok: false, status: 401, error: 'invalid_token' };
+    const mapped = mapVerifyIdTokenError(e);
+    console.warn(logPrefix, 'verifyIdToken failed', mapped.reason ?? mapped.error, e instanceof Error ? e.message : e);
+    return { ok: false, status: mapped.status, error: mapped.error, reason: mapped.reason };
   }
 }
 
@@ -41,9 +43,8 @@ export async function requireAdminUser(req) {
 export function respondAdminAuthFailure(res, auth) {
   if (auth.ok) return false;
   const body = { error: auth.error };
-  if ('role' in auth && auth.role !== undefined) {
-    body.role = auth.role;
-  }
+  if ('reason' in auth && auth.reason) body.reason = auth.reason;
+  if ('role' in auth && auth.role !== undefined) body.role = auth.role;
   res.status(auth.status).json(body);
   return true;
 }

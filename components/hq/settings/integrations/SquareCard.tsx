@@ -6,9 +6,10 @@ import {
   type IntegrationRenderProps,
   type IntegrationStatus,
 } from '../../../../lib/integrations/registry';
-import { squareApiJson } from '../../../../lib/square/browser-fetch';
+import { squareApiJson, waitForFirebaseUser } from '../../../../lib/square/browser-fetch';
 import { SQUARE_CONTRACTS_DASHBOARD_URL } from '../../../../lib/square/contracts';
 import { useAuth } from '../../../../lib/auth';
+import { getFirebaseAuthInstance, isFirebaseConfigured } from '../../../../lib/firebase';
 import { UserRole } from '../../../../types';
 
 interface SquareCardProps {
@@ -27,7 +28,7 @@ type HealthPayload = {
 };
 
 const SquareCard: React.FC<SquareCardProps> = ({ isDark }) => {
-  const { user, loading: authLoading, refreshIdToken } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [health, setHealth] = useState<HealthPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<'health' | 'sync' | null>(null);
@@ -49,8 +50,9 @@ const SquareCard: React.FC<SquareCardProps> = ({ isDark }) => {
     } catch (e) {
       setFetchError(e instanceof Error ? e.message : 'Could not reach Square API');
       setHealth(null);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -60,8 +62,24 @@ const SquareCard: React.FC<SquareCardProps> = ({ isDark }) => {
       setFetchError('Square billing requires an admin account.');
       return;
     }
-    void refreshIdToken().then(() => refresh());
-  }, [authLoading, user?.role, refresh, refreshIdToken]);
+    let cancelled = false;
+    void (async () => {
+      if (isFirebaseConfigured()) {
+        const ready = await waitForFirebaseUser();
+        if (!ready && !getFirebaseAuthInstance().currentUser) {
+          if (!cancelled) {
+            setFetchError('Sign in required to connect Square.');
+            setLoading(false);
+          }
+          return;
+        }
+      }
+      if (!cancelled) await refresh();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, user?.role, refresh]);
 
   const onSyncLocation = async () => {
     setBusy('sync');

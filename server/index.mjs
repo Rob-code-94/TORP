@@ -16,6 +16,7 @@ import {
   squareSyncLocationHandler,
   squareWebhookHandler,
 } from './routes/square.mjs';
+import { mapVerifyIdTokenError } from './lib/map-verify-id-token-error.mjs';
 
 /** @see `lib/tenant.ts` (must match custom claims) */
 const TENANT_CLAIM = 'tenantId';
@@ -99,8 +100,12 @@ app.get('/api/v1/tenant-only/ping', async (req, res) => {
     }
     return res.json({ ok: true, tenantId });
   } catch (e) {
-    console.error(logPrefix, 'verifyIdToken (tenant-only)', e);
-    return res.status(401).json({ error: 'invalid_token' });
+    const mapped = mapVerifyIdTokenError(e);
+    console.error(logPrefix, 'verifyIdToken (tenant-only)', mapped.reason ?? mapped.error, e);
+    return res.status(mapped.status).json({
+      error: mapped.error,
+      ...(mapped.reason ? { reason: mapped.reason } : {}),
+    });
   }
 });
 
