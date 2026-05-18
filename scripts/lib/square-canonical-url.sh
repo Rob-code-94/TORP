@@ -14,16 +14,8 @@ square_canonical_base_url() {
     printf '%s' "${TORP_CANONICAL_CLOUD_RUN_URL%/}"
     return 0
   fi
-  if command -v gcloud >/dev/null 2>&1; then
-    local url
-    if url="$(gcloud run services describe "$TORP_CLOUD_RUN_SERVICE" \
-      --project "$TORP_GCP_PROJECT" \
-      --region "$TORP_GCP_REGION" \
-      --format='value(status.url)' 2>/dev/null)" && [[ -n "$url" ]]; then
-      printf '%s' "${url%/}"
-      return 0
-    fi
-  fi
+  # Prefer stable fallback: gcloud status.url can return a different hostname (e.g. ks75xiqola-uw.a.run.app)
+  # than the URL registered in Square; HMAC verification requires an exact string match.
   printf '%s' "${TORP_CANONICAL_CLOUD_RUN_URL_FALLBACK%/}"
 }
 

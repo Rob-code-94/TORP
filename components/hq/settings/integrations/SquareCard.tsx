@@ -6,7 +6,7 @@ import {
   type IntegrationRenderProps,
   type IntegrationStatus,
 } from '../../../../lib/integrations/registry';
-import { squareApiFetch } from '../../../../lib/square/browser-fetch';
+import { squareApiJson } from '../../../../lib/square/browser-fetch';
 import { SQUARE_CONTRACTS_DASHBOARD_URL } from '../../../../lib/square/contracts';
 import { UserRole } from '../../../../types';
 
@@ -37,13 +37,12 @@ const SquareCard: React.FC<SquareCardProps> = ({ isDark }) => {
     setLoading(true);
     setFetchError(null);
     try {
-      const res = await squareApiFetch('/api/square/health');
-      const data = (await res.json()) as HealthPayload;
-      if (!res.ok) {
-        setFetchError(data.error ?? `Health check failed (${res.status})`);
+      const result = await squareApiJson<HealthPayload>('/api/square/health');
+      if (!result.ok) {
+        setFetchError(result.error);
         setHealth(null);
       } else {
-        setHealth(data);
+        setHealth(result.data);
       }
     } catch (e) {
       setFetchError(e instanceof Error ? e.message : 'Could not reach Square API');
@@ -61,16 +60,16 @@ const SquareCard: React.FC<SquareCardProps> = ({ isDark }) => {
     setActionError(null);
     setSyncResult(null);
     try {
-      const res = await squareApiFetch('/api/square/sync-location', { method: 'POST' });
-      const data = (await res.json()) as {
+      const result = await squareApiJson<{
         error?: string;
         clientsUpdated?: number;
         customersConsidered?: number;
         errors?: string[];
-      };
-      if (!res.ok) {
-        setActionError(data.error ?? `Sync failed (${res.status})`);
+      }>('/api/square/sync-location', { method: 'POST' });
+      if (!result.ok) {
+        setActionError(result.error);
       } else {
+        const data = result.data;
         const errNote = data.errors?.length ? ` (${data.errors.length} errors)` : '';
         setSyncResult(
           `Updated ${data.clientsUpdated ?? 0} client(s) from ${data.customersConsidered ?? 0} Square customer(s).${errNote}`,

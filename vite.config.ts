@@ -30,14 +30,30 @@ function requireFirebaseEnvOnBuild(mode: string): Plugin {
   };
 }
 
-export default defineConfig(({ mode }) => ({
-  plugins: [react(), requireFirebaseEnvOnBuild(mode)],
-  server: {
-    host: '0.0.0.0',
-    port: 8080,
-  },
-  preview: {
-    host: '0.0.0.0',
-    port: 8080,
-  },
-}));
+const DEFAULT_TORP_API_PROXY =
+  'https://torp-cinematic-production-management-483040408359.us-west1.run.app';
+
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  const apiProxyTarget = (env.VITE_TORP_API_PROXY || DEFAULT_TORP_API_PROXY).replace(/\/$/, '');
+
+  return {
+    plugins: [react(), requireFirebaseEnvOnBuild(mode)],
+    server: {
+      host: '0.0.0.0',
+      port: 8080,
+      // Vite dev has no Express shell — proxy /api/* to Cloud Run (or `npm start` on another port).
+      proxy: {
+        '/api': {
+          target: apiProxyTarget,
+          changeOrigin: true,
+          secure: true,
+        },
+      },
+    },
+    preview: {
+      host: '0.0.0.0',
+      port: 8080,
+    },
+  };
+});

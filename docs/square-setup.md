@@ -57,7 +57,19 @@ After `gcloud auth login`:
 ./scripts/apply-square-cloud-run-env.sh
 ```
 
-Grant the Cloud Run runtime service account `roles/secretmanager.secretAccessor` on each `SQUARE_*` secret if updates fail.
+If `apply-square-cloud-run-env.sh` fails with **Permission denied on secret** for `483040408359-compute@developer.gserviceaccount.com`, grant Secret Manager access (run once):
+
+```bash
+SA="483040408359-compute@developer.gserviceaccount.com"
+for s in SQUARE_ACCESS_TOKEN SQUARE_LOCATION_ID SQUARE_ENVIRONMENT \
+         SQUARE_WEBHOOK_SIGNATURE_KEY SQUARE_WEBHOOK_NOTIFICATION_URL; do
+  gcloud secrets add-iam-policy-binding "$s" \
+    --project=torp-hub \
+    --member="serviceAccount:$SA" \
+    --role="roles/secretmanager.secretAccessor" --quiet
+done
+./scripts/apply-square-cloud-run-env.sh
+```
 
 ## 4. Verify
 
