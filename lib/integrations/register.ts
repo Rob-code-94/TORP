@@ -1,5 +1,6 @@
 import { registerGoogleCalendarIntegration } from '../../components/hq/settings/integrations/GoogleCalendarCard';
 import { registerAppleSubscribeIntegration } from '../../components/hq/settings/integrations/AppleSubscribeCard';
+import { registerSquareIntegration } from '../../components/hq/settings/integrations/SquareCard';
 
 let registered = false;
 
@@ -15,4 +16,5 @@ export function ensureIntegrationsRegistered() {
   registered = true;
   registerGoogleCalendarIntegration();
   registerAppleSubscribeIntegration();
+  registerSquareIntegration();
 }

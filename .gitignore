@@ -17,6 +17,13 @@ pnpm-debug.log*
 .env
 .env.*
 !.env.example
+!.env.square.example
+.env.square.local
+
+# Local Square credential notes (use .env.square.local instead)
+Square Keys
+Square Keys.*
+!Square Keys.example
 
 # OS / editor
 .DS_Store

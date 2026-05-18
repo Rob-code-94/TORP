@@ -16,6 +16,7 @@ import {
 } from '../../../lib/appThemeClasses';
 import type { AdminInvoice, AdminInvoiceStatus, AdminProject } from '../../../types';
 import AdminFormDrawer from './AdminFormDrawer';
+import AdminFinancialsSquare from './AdminFinancialsSquare';
 import { formatAdminDate, invoiceStatusClassForTheme, proposalStatusClassForTheme } from './adminFormat';
 import { useHqOrgTick } from '../HqFirestoreProvider';
 
@@ -29,11 +30,14 @@ const INVOICE_STATUS_FILTERS: Array<{ value: 'all' | AdminInvoiceStatus; label: 
   { value: 'void', label: 'Void' },
 ];
 
+type FinancialsView = 'invoices' | 'square';
+
 const AdminFinancials: React.FC = () => {
   const { theme } = useAdminTheme();
   const isDark = theme === 'dark';
   const { user } = useAuth();
   const canOverrideLock = user?.role === 'ADMIN';
+  const [finView, setFinView] = useState<FinancialsView>('invoices');
   const [statusFilter, setStatusFilter] = useState<'all' | AdminInvoiceStatus>('all');
   const [projectFilter, setProjectFilter] = useState<'all' | string>('all');
   const [dueFrom, setDueFrom] = useState('');
@@ -256,8 +260,44 @@ const AdminFinancials: React.FC = () => {
         {financeStatus === 'error' && (
           <p className="text-xs mt-2 text-rose-400">{financeError || 'Could not load financial records.'}</p>
         )}
+        <div className="flex flex-wrap gap-2 mt-4 min-w-0">
+          <button
+            type="button"
+            onClick={() => setFinView('invoices')}
+            className={
+              finView === 'invoices'
+                ? isDark
+                  ? 'rounded-md border border-zinc-500 bg-zinc-100/10 px-3 py-1.5 text-xs font-bold text-white'
+                  : 'rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs font-bold text-white'
+                : isDark
+                  ? 'rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-400'
+                  : 'rounded-md border border-zinc-300 px-3 py-1.5 text-xs text-zinc-600'
+            }
+          >
+            Project invoices
+          </button>
+          <button
+            type="button"
+            onClick={() => setFinView('square')}
+            className={
+              finView === 'square'
+                ? isDark
+                  ? 'rounded-md border border-zinc-500 bg-zinc-100/10 px-3 py-1.5 text-xs font-bold text-white'
+                  : 'rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs font-bold text-white'
+                : isDark
+                  ? 'rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-400'
+                  : 'rounded-md border border-zinc-300 px-3 py-1.5 text-xs text-zinc-600'
+            }
+          >
+            Square collections
+          </button>
+        </div>
       </div>
 
+      {finView === 'square' ? (
+        <AdminFinancialsSquare />
+      ) : (
+        <>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm min-w-0" data-tour="financials-kpis">
         <div className={`rounded-xl p-5 min-w-0 ${appKpiLinkClass(isDark, false)}`}>
           <p className="text-zinc-500 text-xs uppercase font-bold">Open AR</p>
@@ -839,6 +879,8 @@ const AdminFinancials: React.FC = () => {
           </div>
         </div>
       </AdminFormDrawer>
+        </>
+      )}
     </div>
   );
 };

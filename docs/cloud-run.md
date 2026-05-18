@@ -10,8 +10,46 @@ The **Dockerfile** does two things:
 | `GET /api/health` | Load balancer / quick smoke (no auth) |
 | `GET /api/v1/whoami` | Decode `Authorization: Bearer` Firebase ID token (requires Admin SDK; uses ADC on Cloud Run) |
 | `GET /api/v1/tenant-only/ping` | Example **403** if `tenantId` claim is missing (tenant guard) |
+| `GET /api/square/health` | Square connection health (ADMIN Bearer token) |
+| `POST /api/square/link-by-email` | Link CRM client to Square customer by email |
+| `POST /api/square/sync-client` | Refresh one client’s `billing` from Square |
+| `POST /api/square/sync-location` | Sync all linked clients from recent location invoices |
+| `GET /api/square/activity` | Invoice + payment history for a linked client |
+| `POST /api/webhooks/square` | Square invoice webhooks (HMAC, no auth) |
 
 **Cloud Run runtime:** the default service account should be able to verify ID tokens. If `whoami` returns 503, check Admin initialization and roles (see Firebase troubleshooting).
+
+## Square billing (runtime env — separate TORP merchant)
+
+Set these on the Cloud Run service (Secret Manager or console env vars). **Do not** reuse IW Capital credentials.
+
+| Variable | Purpose |
+|----------|---------|
+| `SQUARE_ACCESS_TOKEN` | Square API access token |
+| `SQUARE_LOCATION_ID` | Location used for invoice/payment search |
+| `SQUARE_ENVIRONMENT` | `sandbox` or omit for production |
+| `SQUARE_WEBHOOK_SIGNATURE_KEY` | Webhook signature key from Square Developer |
+| `SQUARE_WEBHOOK_NOTIFICATION_URL` | Exact public URL registered in Square (e.g. `https://<service-url>/api/webhooks/square`) |
+
+Register the webhook in [Square Developer](https://developer.squareup.com/) for invoice events. The notification URL must match `SQUARE_WEBHOOK_NOTIFICATION_URL` character-for-character (including `https` and no trailing slash mismatch).
+
+Square sync writes `squareCustomerId`, nested `billing`, and `billingSquareSyncedAt` on `clients` documents. Manual project invoicing remains in `hqInvoices`.
+
+### Canonical Square webhook URL (always use Cloud Run `run.app`)
+
+Use the **current Cloud Run service URL** for Square, not a custom domain, even if both hostnames serve the same app:
+
+```text
+https://torp-cinematic-production-management-483040408359.us-west1.run.app/api/webhooks/square
+```
+
+Print the latest value (falls back to the URL above if `gcloud` is offline):
+
+```bash
+./scripts/print-square-webhook-url.sh
+```
+
+Full setup (Secret Manager, Square Developer checklist, custom-domain policy): [square-setup.md](square-setup.md).
 
 ## One-time GCP setup (per project)
 

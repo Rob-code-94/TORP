@@ -158,4 +158,5 @@ If the Integrations cards display the "Coming Soon" badge on the deployed site, 
 - [`Dockerfile`](../Dockerfile) — `ARG` / `ENV` for Vite
 - [`vite.config.ts`](../vite.config.ts) — `torp-require-firebase-env-on-build` plugin (fail-fast guard)
 - [`scripts/sync-vite-secrets-from-env.sh`](../scripts/sync-vite-secrets-from-env.sh) — push `.env.local` into Secret Manager
+- [`docs/square-setup.md`](square-setup.md) — Square **runtime** secrets (`SQUARE_*`) via [`scripts/sync-square-secrets-from-env.sh`](../scripts/sync-square-secrets-from-env.sh) (not build-time)
 - [`lib/firebase.ts`](../lib/firebase.ts) — `isFirebaseConfigured()` (this is what flips Integrations from real → "Coming Soon" when config is missing)

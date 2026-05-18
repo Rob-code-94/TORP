@@ -65,6 +65,11 @@ service cloud.firestore {
       allow create, update, delete: if isSignedIn() && tenantMatchesCreate() && isAdmin();
     }
 
+    /** Square webhook dedup — server (Admin SDK) only. */
+    match /square_webhook_events/{eventId} {
+      allow read, write: if false;
+    }
+
     match /hqProjects/{projectId} {
       allow read: if isSignedIn() && tenantMatchesExisting();
       allow create, update, delete: if isSignedIn() && tenantMatchesCreate() && canWriteOrgProjectData();

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { getHqClientDirectory } from '../../../data/hqSyncDirectory';
 import { createClient, deleteClient, updateClient } from '../../../data/adminProjectsApi';
@@ -9,6 +9,7 @@ import { useAdminTheme } from '../../../lib/adminTheme';
 import { appInputClass, appLinkMutedClass, appPanelClass } from '../../../lib/appThemeClasses';
 import type { ClientProfile } from '../../../types';
 import ClientProfileForm, { EMPTY_CLIENT_PROFILE_DRAFT, type ClientProfileDraft } from './ClientProfileForm';
+import ClientSquareBillingPanel from './ClientSquareBillingPanel';
 
 const AdminClients: React.FC = () => {
   const { theme } = useAdminTheme();
@@ -26,6 +27,14 @@ const AdminClients: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<'all' | ClientProfile['clientStatus']>('all');
   const [listVersion, setListVersion] = useState(0);
   const hqTick = useHqOrgTick();
+
+  const editingClient = useMemo(
+    () =>
+      editingClientId
+        ? getHqClientDirectory().find((item) => item.id === editingClientId) ?? null
+        : null,
+    [editingClientId, listVersion, hqTick],
+  );
 
   const filteredClients = useMemo(() => {
     return getHqClientDirectory().filter((c) => {
@@ -76,6 +85,18 @@ const AdminClients: React.FC = () => {
     setDrawerOpen(true);
     setError(null);
   };
+
+  useEffect(() => {
+    try {
+      const pendingId = sessionStorage.getItem('torp_edit_client_id');
+      if (!pendingId) return;
+      sessionStorage.removeItem('torp_edit_client_id');
+      openEditDrawer(pendingId);
+    } catch {
+      /* ignore */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount for deep links
+  }, []);
 
   const onDeleteClient = (c: ClientProfile) => {
     if (
@@ -201,6 +222,15 @@ const AdminClients: React.FC = () => {
                   {c.city && ` · ${c.city}`}
                 </p>
                 <p className="text-[10px] uppercase text-zinc-600 mt-1">{c.clientStatus}</p>
+                {c.squareCustomerId && (
+                  <p className="text-[10px] text-emerald-500/80 mt-1">Square linked</p>
+                )}
+                {(c.billing?.balance ?? 0) > 0 && (
+                  <p className="text-xs text-zinc-400 mt-1">
+                    AR ${c.billing!.balance!.toLocaleString()}
+                    {c.billing?.dueDate ? ` · due ${c.billing.dueDate}` : ''}
+                  </p>
+                )}
                 {c.notes && <p className="text-sm text-zinc-500 mt-2 break-words">{c.notes}</p>}
               </div>
               <div className="text-xs text-zinc-500 flex flex-col items-start sm:items-end gap-1 shrink-0">
@@ -271,6 +301,13 @@ const AdminClients: React.FC = () => {
         }
       >
         <ClientProfileForm value={newClient} onChange={setNewClient} />
+        {editingClient && (
+          <ClientSquareBillingPanel
+            client={editingClient}
+            isDark={isDark}
+            onLinked={() => setListVersion((n) => n + 1)}
+          />
+        )}
         {error && <p className="text-xs text-red-300">{error}</p>}
       </AdminFormDrawer>
       </div>

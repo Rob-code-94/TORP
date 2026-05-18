@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Calendar, Mail, MessageSquare, CreditCard, Folder } from 'lucide-react';
+import { Calendar, Mail, MessageSquare, Folder } from 'lucide-react';
 import SettingsShell from './SettingsShell';
 import { useAuth } from '../../../lib/auth';
 import { useAdminTheme } from '../../../lib/adminTheme';
@@ -18,11 +18,6 @@ interface IntegrationsPageProps {
 const PLANNED: { name: string; blurb: string; icon: React.ReactNode }[] = [
   { name: 'Microsoft Outlook', blurb: 'Two-way calendar via Microsoft Graph.', icon: <Calendar size={14} /> },
   { name: 'Slack', blurb: 'Project channel notifications and approvals.', icon: <MessageSquare size={14} /> },
-  {
-    name: 'Square (coming soon)',
-    blurb: 'Planned for payment sync. Manual invoice and payment updates stay active in Financials for now.',
-    icon: <CreditCard size={14} />,
-  },
   { name: 'Google Drive', blurb: 'Asset deliverables and folder syncing.', icon: <Folder size={14} /> },
   { name: 'Email digest', blurb: 'Per-user weekly summary email.', icon: <Mail size={14} /> },
 ];
@@ -36,6 +31,11 @@ const IntegrationsPage: React.FC<IntegrationsPageProps> = ({ variant }) => {
 
   const personal: IntegrationDefinition[] = useMemo(
     () => (role ? getIntegrations(role, 'personal') : []),
+    [role],
+  );
+
+  const orgIntegrations: IntegrationDefinition[] = useMemo(
+    () => (role ? getIntegrations(role, 'org') : []),
     [role],
   );
 
@@ -79,6 +79,26 @@ const IntegrationsPage: React.FC<IntegrationsPageProps> = ({ variant }) => {
             </div>
           )}
         </section>
+
+        {showOrgPanel && orgIntegrations.length > 0 && (
+          <section className="space-y-3 min-w-0">
+            <header className="space-y-1 min-w-0">
+              <h3 className={`text-sm font-bold ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+                Organization
+              </h3>
+              <p className={`text-xs ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>
+                Org-wide payment and billing services. Admin only.
+              </p>
+            </header>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 min-w-0">
+              {orgIntegrations.map((def) => (
+                <div key={def.id} className="min-w-0">
+                  {def.render({ isDark, role })}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {showOrgPanel && (
           <section className="space-y-3 min-w-0">

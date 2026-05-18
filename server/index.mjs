@@ -8,6 +8,14 @@ import process from 'node:process';
 import express from 'express';
 import { initializeApp, getApps, applicationDefault } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
+import {
+  squareActivityHandler,
+  squareHealthHandler,
+  squareLinkByEmailHandler,
+  squareSyncClientHandler,
+  squareSyncLocationHandler,
+  squareWebhookHandler,
+} from './routes/square.mjs';
 
 /** @see `lib/tenant.ts` (must match custom claims) */
 const TENANT_CLAIM = 'tenantId';
@@ -95,6 +103,20 @@ app.get('/api/v1/tenant-only/ping', async (req, res) => {
     return res.status(401).json({ error: 'invalid_token' });
   }
 });
+
+app.post(
+  '/api/webhooks/square',
+  express.raw({ type: 'application/json' }),
+  squareWebhookHandler,
+);
+
+app.use(express.json());
+
+app.get('/api/square/health', squareHealthHandler);
+app.post('/api/square/link-by-email', squareLinkByEmailHandler);
+app.post('/api/square/sync-client', squareSyncClientHandler);
+app.post('/api/square/sync-location', squareSyncLocationHandler);
+app.get('/api/square/activity', squareActivityHandler);
 
 app.use(
   express.static(distDir, {

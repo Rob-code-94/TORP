@@ -130,6 +130,27 @@ function parseCrew(id: string, data: Record<string, unknown>): CrewProfile {
   };
 }
 
+function parseClientBilling(data: Record<string, unknown>): ClientProfile['billing'] {
+  const raw = data.billing;
+  if (!raw || typeof raw !== 'object') return undefined;
+  const b = raw as Record<string, unknown>;
+  return {
+    balance: typeof b.balance === 'number' ? b.balance : undefined,
+    totalAmount: typeof b.totalAmount === 'number' ? b.totalAmount : undefined,
+    lastPaymentAmount: typeof b.lastPaymentAmount === 'number' ? b.lastPaymentAmount : undefined,
+    lastPaymentDate: typeof b.lastPaymentDate === 'string' ? b.lastPaymentDate : undefined,
+    dueDate: typeof b.dueDate === 'string' ? b.dueDate : undefined,
+    invoiceNumber: typeof b.invoiceNumber === 'string' ? b.invoiceNumber : undefined,
+    invoiceUrl: typeof b.invoiceUrl === 'string' ? b.invoiceUrl : undefined,
+    status: typeof b.status === 'string' ? b.status : undefined,
+    squareInvoiceId: typeof b.squareInvoiceId === 'string' ? b.squareInvoiceId : undefined,
+    squareLastSyncedAt: typeof b.squareLastSyncedAt === 'string' ? b.squareLastSyncedAt : undefined,
+    contractSigned: typeof b.contractSigned === 'boolean' ? b.contractSigned : undefined,
+    contractSignedAt: typeof b.contractSignedAt === 'string' ? b.contractSignedAt : undefined,
+    contractNotes: typeof b.contractNotes === 'string' ? b.contractNotes : undefined,
+  };
+}
+
 function parseClient(id: string, data: Record<string, unknown>): ClientProfile {
   return {
     id,
@@ -150,6 +171,12 @@ function parseClient(id: string, data: Record<string, unknown>): ClientProfile {
     notes: String(data.notes ?? ''),
     projectIds: (data.projectIds as string[]) ?? [],
     updatedAt: tsIso(data.updatedAt) ?? undefined,
+    squareCustomerId:
+      typeof data.squareCustomerId === 'string' && data.squareCustomerId.trim()
+        ? data.squareCustomerId.trim()
+        : undefined,
+    billing: parseClientBilling(data),
+    billingSquareSyncedAt: tsIso(data.billingSquareSyncedAt) ?? undefined,
   };
 }
 

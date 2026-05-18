@@ -78,6 +78,23 @@ export type ProjectStage =
 
 export type AdminProjectStatus = 'active' | 'on_hold' | 'complete';
 
+/** Nested billing map on client doc — synced from Square + optional CRM fields. */
+export interface ClientBilling {
+  balance?: number;
+  totalAmount?: number;
+  lastPaymentAmount?: number;
+  lastPaymentDate?: string;
+  dueDate?: string;
+  invoiceNumber?: string;
+  invoiceUrl?: string;
+  status?: string;
+  squareInvoiceId?: string;
+  squareLastSyncedAt?: string;
+  contractSigned?: boolean;
+  contractSignedAt?: string;
+  contractNotes?: string;
+}
+
 export interface ClientProfile {
   id: string;
   name: string;
@@ -97,6 +114,10 @@ export interface ClientProfile {
   notes: string;
   projectIds: string[];
   updatedAt?: string;
+  squareCustomerId?: string;
+  billing?: ClientBilling;
+  /** Server timestamp ISO when Square sync last ran (metadata). */
+  billingSquareSyncedAt?: string;
 }
 
 export interface CrewAvailabilityWindow {
@@ -136,7 +157,7 @@ export type CrewFeatureAccess = Partial<Record<CrewFeatureKey, boolean>>;
 export interface CrewProfile {
   id: string;
   displayName: string;
-  role: 'director' | 'dp' | 'editor' | 'producer' | 'audio' | 'other';
+  role: 'director' | 'dp' | 'editor' | 'producer' | 'audio' | 'photography' | 'other';
   systemRole: CrewHqSystemRole;
   /** Optional per-user HQ feature toggles; explicit values override role defaults. */
   featureAccess?: CrewFeatureAccess;
