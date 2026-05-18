@@ -67,8 +67,13 @@ import {
   setHqStorageOpsDirectory,
 } from './hqSyncDirectory';
 
-function omitUndefinedRecord(obj: Record<string, unknown>): Record<string, unknown> {
+/** Strip undefined values so Firestore setDoc/merge does not reject optional fields. */
+export function omitUndefinedRecord(obj: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined));
+}
+
+function hqMergePayload(tenantId: string, rest: Record<string, unknown>): Record<string, unknown> {
+  return omitUndefinedRecord({ tenantId, ...rest });
 }
 
 export const HQ_COLLECTION = {
@@ -755,7 +760,11 @@ export async function hqUpsertProject(tenantId: string | null, project: AdminPro
   }
 
   const db = getFirebaseFirestoreInstance();
-  await setDoc(doc(db, HQ_COLLECTION.hqProjects, project.id), { tenantId: cloudTenant, ...stripIds(project) }, { merge: true });
+  await setDoc(
+    doc(db, HQ_COLLECTION.hqProjects, project.id),
+    hqMergePayload(cloudTenant, stripIds(project)),
+    { merge: true },
+  );
   mergeProjectIntoLocalDirectory(project);
 }
 
@@ -782,11 +791,11 @@ export async function hqUpsertPlannerItem(tenantId: string | null, item: Planner
   }
 
   const db = getFirebaseFirestoreInstance();
-  await setDoc(doc(db, HQ_COLLECTION.plannerItems, item.id), {
-    tenantId: cloudTenant,
-    ...stripPlannerIds(item),
-    assigneeCrewIds,
-  }, { merge: true });
+  await setDoc(
+    doc(db, HQ_COLLECTION.plannerItems, item.id),
+    hqMergePayload(cloudTenant, { ...stripPlannerIds(item), assigneeCrewIds }),
+    { merge: true },
+  );
   setHqPlannerDirectory(mergedList);
 }
 
@@ -876,7 +885,9 @@ export async function hqUpsertShoot(tenantId: string | null, shoot: AdminShoot):
 
   const db = getFirebaseFirestoreInstance();
   const { id, ...rest } = shoot;
-  await setDoc(doc(db, HQ_COLLECTION.shoots, id), { tenantId: cloudTenant, ...rest }, { merge: true });
+  await setDoc(doc(db, HQ_COLLECTION.shoots, id), hqMergePayload(cloudTenant, rest as Record<string, unknown>), {
+    merge: true,
+  });
 }
 
 export async function hqUpsertMeeting(tenantId: string | null, meeting: AdminMeeting): Promise<void> {
@@ -888,7 +899,9 @@ export async function hqUpsertMeeting(tenantId: string | null, meeting: AdminMee
 
   const db = getFirebaseFirestoreInstance();
   const { id, ...rest } = meeting;
-  await setDoc(doc(db, HQ_COLLECTION.meetings, id), { tenantId: cloudTenant, ...rest }, { merge: true });
+  await setDoc(doc(db, HQ_COLLECTION.meetings, id), hqMergePayload(cloudTenant, rest as Record<string, unknown>), {
+    merge: true,
+  });
 }
 
 export async function hqDeleteShoot(tenantId: string | null, shootId: string): Promise<void> {
@@ -930,7 +943,11 @@ export async function hqUpsertProjectAsset(tenantId: string | null, asset: Proje
 
   const db = getFirebaseFirestoreInstance();
   const { id, ...rest } = asset;
-  await setDoc(doc(db, HQ_COLLECTION.hqProjectAssets, id), { tenantId: cloudTenant, ...rest }, { merge: true });
+  await setDoc(
+    doc(db, HQ_COLLECTION.hqProjectAssets, id),
+    hqMergePayload(cloudTenant, rest as Record<string, unknown>),
+    { merge: true },
+  );
 }
 
 export async function hqDeleteProjectAsset(tenantId: string | null, assetId: string): Promise<void> {
@@ -954,7 +971,11 @@ export async function hqUpsertDeliverable(tenantId: string | null, row: ProjectD
 
   const db = getFirebaseFirestoreInstance();
   const { id, ...rest } = row;
-  await setDoc(doc(db, HQ_COLLECTION.hqDeliverables, id), { tenantId: cloudTenant, ...rest }, { merge: true });
+  await setDoc(
+    doc(db, HQ_COLLECTION.hqDeliverables, id),
+    hqMergePayload(cloudTenant, rest as Record<string, unknown>),
+    { merge: true },
+  );
 }
 
 export async function hqUpsertRisk(tenantId: string | null, row: RiskItem): Promise<void> {
@@ -964,7 +985,11 @@ export async function hqUpsertRisk(tenantId: string | null, row: RiskItem): Prom
 
   const db = getFirebaseFirestoreInstance();
   const { id, ...rest } = row;
-  await setDoc(doc(db, HQ_COLLECTION.hqRisks, id), { tenantId: cloudTenant, ...rest }, { merge: true });
+  await setDoc(
+    doc(db, HQ_COLLECTION.hqRisks, id),
+    hqMergePayload(cloudTenant, rest as Record<string, unknown>),
+    { merge: true },
+  );
 }
 
 export async function hqUpsertBlocker(tenantId: string | null, row: BlockerItem): Promise<void> {
@@ -974,7 +999,11 @@ export async function hqUpsertBlocker(tenantId: string | null, row: BlockerItem)
 
   const db = getFirebaseFirestoreInstance();
   const { id, ...rest } = row;
-  await setDoc(doc(db, HQ_COLLECTION.hqBlockers, id), { tenantId: cloudTenant, ...rest }, { merge: true });
+  await setDoc(
+    doc(db, HQ_COLLECTION.hqBlockers, id),
+    hqMergePayload(cloudTenant, rest as Record<string, unknown>),
+    { merge: true },
+  );
 }
 
 export async function hqUpsertDependency(tenantId: string | null, row: DependencyItem): Promise<void> {
@@ -984,7 +1013,11 @@ export async function hqUpsertDependency(tenantId: string | null, row: Dependenc
 
   const db = getFirebaseFirestoreInstance();
   const { id, ...rest } = row;
-  await setDoc(doc(db, HQ_COLLECTION.hqDependencies, id), { tenantId: cloudTenant, ...rest }, { merge: true });
+  await setDoc(
+    doc(db, HQ_COLLECTION.hqDependencies, id),
+    hqMergePayload(cloudTenant, rest as Record<string, unknown>),
+    { merge: true },
+  );
 }
 
 export async function hqUpsertChangeOrder(tenantId: string | null, row: ChangeOrder): Promise<void> {
@@ -994,7 +1027,11 @@ export async function hqUpsertChangeOrder(tenantId: string | null, row: ChangeOr
 
   const db = getFirebaseFirestoreInstance();
   const { id, ...rest } = row;
-  await setDoc(doc(db, HQ_COLLECTION.hqChangeOrders, id), { tenantId: cloudTenant, ...rest }, { merge: true });
+  await setDoc(
+    doc(db, HQ_COLLECTION.hqChangeOrders, id),
+    hqMergePayload(cloudTenant, rest as Record<string, unknown>),
+    { merge: true },
+  );
 }
 
 export async function hqUpsertInvoice(tenantId: string | null, row: AdminInvoice): Promise<void> {
@@ -1012,7 +1049,7 @@ export async function hqUpsertInvoice(tenantId: string | null, row: AdminInvoice
   const { id, ...rest } = row;
   await setDoc(
     doc(db, HQ_COLLECTION.hqInvoices, id),
-    omitUndefinedRecord({ tenantId: cloudTenant, ...(rest as Record<string, unknown>) }),
+    hqMergePayload(cloudTenant, rest as Record<string, unknown>),
     { merge: true },
   );
 }
@@ -1024,7 +1061,11 @@ export async function hqUpsertProposal(tenantId: string | null, row: AdminPropos
 
   const db = getFirebaseFirestoreInstance();
   const { id, ...rest } = row;
-  await setDoc(doc(db, HQ_COLLECTION.hqProposals, id), { tenantId: cloudTenant, ...rest }, { merge: true });
+  await setDoc(
+    doc(db, HQ_COLLECTION.hqProposals, id),
+    hqMergePayload(cloudTenant, rest as Record<string, unknown>),
+    { merge: true },
+  );
 }
 
 export async function hqUpsertExpense(tenantId: string | null, row: ProjectExpense): Promise<void> {
@@ -1034,7 +1075,11 @@ export async function hqUpsertExpense(tenantId: string | null, row: ProjectExpen
 
   const db = getFirebaseFirestoreInstance();
   const { id, ...rest } = row;
-  await setDoc(doc(db, HQ_COLLECTION.hqExpenses, id), { tenantId: cloudTenant, ...rest }, { merge: true });
+  await setDoc(
+    doc(db, HQ_COLLECTION.hqExpenses, id),
+    hqMergePayload(cloudTenant, rest as Record<string, unknown>),
+    { merge: true },
+  );
 }
 
 export async function hqUpsertStorageOpsEvent(tenantId: string | null, row: StorageOpsEvent): Promise<void> {
@@ -1049,7 +1094,11 @@ export async function hqUpsertStorageOpsEvent(tenantId: string | null, row: Stor
 
   const db = getFirebaseFirestoreInstance();
   const { id, ...rest } = row;
-  await setDoc(doc(db, HQ_COLLECTION.hqStorageOpsEvents, id), { tenantId: cloudTenant, ...rest }, { merge: true });
+  await setDoc(
+    doc(db, HQ_COLLECTION.hqStorageOpsEvents, id),
+    hqMergePayload(cloudTenant, rest as Record<string, unknown>),
+    { merge: true },
+  );
 }
 
 export async function hqDeleteDeliverable(tenantId: string | null, id: string): Promise<void> {

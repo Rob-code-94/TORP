@@ -112,6 +112,7 @@ const ADMIN_DATE_TIME_FMT = new Intl.DateTimeFormat('en-US', {
   year: 'numeric',
   hour: '2-digit',
   minute: '2-digit',
+  hour12: true,
 });
 
 /**

@@ -18,6 +18,7 @@ import { useAdminTheme } from '../../../lib/adminTheme';
 import { hasProjectCapability } from '../../../lib/projectPermissions';
 import type { AdminProject, ProjectStage } from '../../../types';
 import { formatAdminDate, formatStage, stageClassForTheme } from './adminFormat';
+import { formatCrewCraftRole } from '../../../lib/crewCraftRoles';
 import AdminProjectWizard from './AdminProjectWizard';
 import { PROJECT_WIZARD_DRAFT_KEY } from './AdminProjectWizard';
 import type { CreateProjectRequest } from '../../../data/adminProjectsApi';
@@ -812,7 +813,7 @@ const AdminProjects: React.FC = () => {
                       className={isDark ? 'accent-white' : 'accent-zinc-900'}
                     />
                     <span className="flex-1">{c.displayName}</span>
-                    <span className={`text-[11px] ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>{c.role}</span>
+                    <span className={`text-[11px] ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>{formatCrewCraftRole(c.role)}</span>
                   </label>
                 );
               })}

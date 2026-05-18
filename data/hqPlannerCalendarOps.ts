@@ -323,6 +323,13 @@ export async function updateShoot(
     };
   } else {
     next = { ...found, ...patch };
+    if (patch.date && patch.date !== found.date) {
+      const crewIds = next.crewIds ?? [];
+      if (crewIds.length) {
+        const availability = validateCrewAvailabilityForDate(found.projectId, crewIds, patch.date);
+        if (availability.ok === false) throw new Error(availability.error);
+      }
+    }
   }
   try {
     await hqUpsertShoot(getHqTenantForWrites(), next);
@@ -384,6 +391,13 @@ export async function updateMeeting(
     };
   } else {
     next = { ...item, ...patch };
+    if (patch.date && patch.date !== item.date) {
+      const crewIds = next.participantCrewIds ?? [];
+      if (crewIds.length) {
+        const availability = validateCrewAvailabilityForDate(item.projectId, crewIds, patch.date);
+        if (availability.ok === false) throw new Error(availability.error);
+      }
+    }
   }
   try {
     await hqUpsertMeeting(getHqTenantForWrites(), next);

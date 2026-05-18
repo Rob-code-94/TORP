@@ -22,6 +22,8 @@ import {
   type FreeBusyInterval,
 } from '../../lib/calendarIntegrations';
 import { isShootVisibleToCrew } from '../../lib/staffShoots';
+import { formatHm } from '../../lib/timeFormat';
+import { formatCrewCraftRole } from '../../lib/crewCraftRoles';
 import { useAdminTheme } from '../../lib/adminTheme';
 import { appInputClass, appPanelClass } from '../../lib/appThemeClasses';
 import type { AdminShoot, PlannerItem, PlannerTaskStatus } from '../../types';
@@ -333,7 +335,7 @@ const StaffView: React.FC = () => {
                 {crewProfile.displayName}
               </p>
               <p className={`text-sm mt-1 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
-                Role: <span className={isDark ? 'text-zinc-200' : 'text-zinc-800'}>{crewProfile.role}</span>
+                Role: <span className={isDark ? 'text-zinc-200' : 'text-zinc-800'}>{formatCrewCraftRole(crewProfile.role)}</span>
                 <span className="text-zinc-500 mx-2">·</span>
                 <span className={isDark ? 'text-zinc-200' : 'text-zinc-800'}>{crewProfile.email}</span>
               </p>
@@ -681,7 +683,7 @@ function ShootCard({ shoot, appOrigin, gearChecked, setGear, busyIntervals }: Sh
             <div className="flex items-center gap-2 min-w-0">
               <Clock size={16} className="shrink-0" />
               <span>
-                {shoot.date} · Call {shoot.callTime}
+                {shoot.date} · Call {formatHm(shoot.callTime) || '—'}
               </span>
             </div>
             <div className="flex items-center gap-2 min-w-0">

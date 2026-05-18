@@ -1,9 +1,17 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CalendarPlus, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { AdminMeeting, AdminShoot, PlannerItem } from '../../../types';
 import { useAdminTheme } from '../../../lib/adminTheme';
 import { columnLabel, formatAdminDate, typeLabel } from './adminFormat';
+import {
+  formatHmRange,
+  formatHourLabel,
+  formatMinutesCompact,
+  minutesToHm,
+  parseHm,
+  plannerScheduleTimeLabel,
+} from '../../../lib/timeFormat';
 import {
   getMyCalendarFreeBusy,
   isCalendarBackendAvailable,
@@ -84,6 +92,8 @@ interface PlannerCalendarProps {
     item: PlannerItem,
     next: { dueDate: string; startTime?: string; endTime?: string; allDay?: boolean }
   ) => void;
+  onEditShoot?: (shoot: AdminShoot) => void;
+  onEditMeeting?: (meeting: AdminMeeting) => void;
   initialMode?: CalMode;
   initialCursorYmd?: string;
 }
@@ -101,41 +111,20 @@ interface GutterEvent {
   href?: string;
   /** Used for drag-to-reschedule. */
   task?: PlannerItem;
+  shoot?: AdminShoot;
+  meeting?: AdminMeeting;
 }
 
 function hmToMinutes(hm: string | undefined | null): number | null {
-  if (!hm) return null;
-  const [h, m] = hm.split(':').map((s) => Number.parseInt(s, 10));
-  if (!Number.isFinite(h)) return null;
-  const minutes = (h || 0) * 60 + (Number.isFinite(m) ? m : 0);
-  if (minutes < 0 || minutes > 24 * 60) return null;
-  return minutes;
-}
-
-function minutesToHm(min: number): string {
-  const clamped = Math.max(0, Math.min(24 * 60 - 1, Math.round(min)));
-  const h = Math.floor(clamped / 60);
-  const m = clamped % 60;
-  return `${pad2(h)}:${pad2(m)}`;
-}
-
-function formatHourLabel(hour: number): string {
-  if (hour === 0) return '12am';
-  if (hour < 12) return `${hour}am`;
-  if (hour === 12) return '12pm';
-  return `${hour - 12}pm`;
+  return parseHm(hm);
 }
 
 function formatTimeRange(startMin: number, endMin: number): string {
-  return `${formatTime(startMin)} – ${formatTime(endMin)}`;
+  return `${formatMinutesCompact(startMin)} – ${formatMinutesCompact(endMin)}`;
 }
 
 function formatTime(min: number): string {
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  const hour12 = ((h + 11) % 12) + 1;
-  const ampm = h < 12 ? 'a' : 'p';
-  return m === 0 ? `${hour12}${ampm}` : `${hour12}:${pad2(m)}${ampm}`;
+  return formatMinutesCompact(min);
 }
 
 type PlannerScheduleChipKind = 'shoot' | 'meeting';
@@ -149,6 +138,8 @@ interface PlannerScheduleChip {
   href: string;
   timeLabel: string;
   sortKey: number;
+  shoot?: AdminShoot;
+  meeting?: AdminMeeting;
 }
 
 function plannerScheduleChipLabel(
@@ -156,15 +147,7 @@ function plannerScheduleChipLabel(
   endHm: string | undefined | null,
   defaultSpanMin: number,
 ): { timeLabel: string; sortKey: number } {
-  const sm = hmToMinutes(startHm);
-  if (sm == null) return { timeLabel: '', sortKey: 99_999 };
-  const emExplicit = hmToMinutes(endHm);
-  const end =
-    emExplicit != null && emExplicit >= sm ? emExplicit : Math.min(24 * 60, sm + defaultSpanMin);
-  return {
-    timeLabel: `${minutesToHm(sm)}–${minutesToHm(end)}`,
-    sortKey: sm,
-  };
+  return plannerScheduleTimeLabel(startHm, endHm, defaultSpanMin);
 }
 
 const PlannerCalendar: React.FC<PlannerCalendarProps> = ({
@@ -175,6 +158,8 @@ const PlannerCalendar: React.FC<PlannerCalendarProps> = ({
   onOpenCalendarSheet,
   onScheduleItem,
   onRescheduleItem,
+  onEditShoot,
+  onEditMeeting,
   initialMode,
   initialCursorYmd,
 }) => {
@@ -220,6 +205,87 @@ const PlannerCalendar: React.FC<PlannerCalendarProps> = ({
 
   const getItemsForYmd = (ymd: string) => byKey.get(ymd) ?? [];
 
+  const renderScheduleChip = useCallback(
+    (c: PlannerScheduleChip, className: string, variant: 'compact' | 'card') => {
+      const chipTitle = `${c.kind === 'shoot' ? 'Shoot' : 'Meeting'} · ${c.timeLabel} · ${c.title}`;
+      const onEdit =
+        c.kind === 'shoot' && c.shoot && onEditShoot
+          ? () => onEditShoot(c.shoot!)
+          : c.kind === 'meeting' && c.meeting && onEditMeeting
+            ? () => onEditMeeting(c.meeting!)
+            : null;
+      if (variant === 'card') {
+        const body = (
+          <>
+            <p className={`text-[10px] font-bold uppercase ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+              {c.kind === 'shoot' ? 'Shoot' : 'Meeting'}
+            </p>
+            <p className={`text-xs font-medium leading-snug min-w-0 ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+              {c.title}
+            </p>
+            <p className={`text-[10px] font-mono mt-0.5 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+              {c.timeLabel}
+            </p>
+            {c.subtitle && <p className="text-[9px] text-zinc-500 mt-0.5 truncate">{c.subtitle}</p>}
+          </>
+        );
+        if (onEdit) {
+          return (
+            <button
+              key={c.id}
+              type="button"
+              title={chipTitle}
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit();
+              }}
+              className={className}
+            >
+              {body}
+            </button>
+          );
+        }
+        return (
+          <Link key={c.id} to={c.href} title={chipTitle} className={className}>
+            {body}
+          </Link>
+        );
+      }
+      const body = (
+        <>
+          <span className="shrink-0 text-[8px] font-bold uppercase opacity-80">
+            {c.kind === 'shoot' ? 'Shoot' : 'Meet'}
+          </span>
+          <span className="truncate min-w-0">
+            <span className="font-mono text-[9px] opacity-90">{c.timeLabel}</span> · {c.title}
+          </span>
+        </>
+      );
+      if (onEdit) {
+        return (
+          <button
+            key={c.id}
+            type="button"
+            title={chipTitle}
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit();
+            }}
+            className={className}
+          >
+            {body}
+          </button>
+        );
+      }
+      return (
+        <Link key={c.id} to={c.href} onClick={(e) => e.stopPropagation()} title={chipTitle} className={className}>
+          {body}
+        </Link>
+      );
+    },
+    [isDark, onEditMeeting, onEditShoot],
+  );
+
   const scheduleChipsByYmd = useMemo(() => {
     const map = new Map<string, PlannerScheduleChip[]>();
     const push = (ymd: string, chip: PlannerScheduleChip) => {
@@ -238,6 +304,7 @@ const PlannerCalendar: React.FC<PlannerCalendarProps> = ({
         href: `/hq/admin/projects/${s.projectId}`,
         timeLabel,
         sortKey,
+        shoot: s,
       });
     }
     for (const m of meetings ?? []) {
@@ -251,6 +318,7 @@ const PlannerCalendar: React.FC<PlannerCalendarProps> = ({
         href: `/hq/admin/projects/${m.projectId}`,
         timeLabel,
         sortKey,
+        meeting: m,
       });
     }
     for (const arr of map.values()) {
@@ -394,6 +462,7 @@ const PlannerCalendar: React.FC<PlannerCalendarProps> = ({
         title: s.title,
         subtitle: s.projectTitle,
         href: `/hq/admin/projects/${s.projectId}`,
+        shoot: s,
       });
     }
     for (const m of meetings ?? []) {
@@ -409,6 +478,7 @@ const PlannerCalendar: React.FC<PlannerCalendarProps> = ({
         title: m.title,
         subtitle: m.projectTitle,
         href: `/hq/admin/projects/${m.projectId}`,
+        meeting: m,
       });
     }
     for (const t of items) {
@@ -817,30 +887,19 @@ const PlannerCalendar: React.FC<PlannerCalendarProps> = ({
                           isDark ? 'border-zinc-800/70' : 'border-zinc-200/90'
                         }`}
                       >
-                        {scheduleChips.slice(0, 2).map((c) => (
-                          <Link
-                            key={c.id}
-                            to={c.href}
-                            onClick={(e) => e.stopPropagation()}
-                            title={`${c.kind === 'shoot' ? 'Shoot' : 'Meeting'} · ${c.timeLabel} · ${c.title}`}
-                            className={
-                              c.kind === 'shoot'
-                                ? isDark
-                                  ? 'flex items-start gap-0.5 rounded border border-amber-900/40 bg-zinc-900/80 px-0.5 py-0.5 text-amber-100/95 leading-tight min-w-0'
-                                  : 'flex items-start gap-0.5 rounded border border-amber-200 bg-amber-50/90 px-0.5 py-0.5 text-amber-950 leading-tight min-w-0'
-                                : isDark
-                                  ? 'flex items-start gap-0.5 rounded border border-sky-900/45 bg-zinc-900/80 px-0.5 py-0.5 text-sky-100/95 leading-tight min-w-0'
-                                  : 'flex items-start gap-0.5 rounded border border-sky-200 bg-sky-50/90 px-0.5 py-0.5 text-sky-950 leading-tight min-w-0'
-                            }
-                          >
-                            <span className="shrink-0 text-[8px] font-bold uppercase opacity-80">
-                              {c.kind === 'shoot' ? 'Shoot' : 'Meet'}
-                            </span>
-                            <span className="truncate min-w-0">
-                              <span className="font-mono text-[9px] opacity-90">{c.timeLabel}</span> · {c.title}
-                            </span>
-                          </Link>
-                        ))}
+                        {scheduleChips.slice(0, 2).map((c) =>
+                          renderScheduleChip(
+                            c,
+                            c.kind === 'shoot'
+                              ? isDark
+                                ? 'flex w-full items-start gap-0.5 rounded border border-amber-900/40 bg-zinc-900/80 px-0.5 py-0.5 text-amber-100/95 leading-tight min-w-0 text-left'
+                                : 'flex w-full items-start gap-0.5 rounded border border-amber-200 bg-amber-50/90 px-0.5 py-0.5 text-amber-950 leading-tight min-w-0 text-left'
+                              : isDark
+                                ? 'flex w-full items-start gap-0.5 rounded border border-sky-900/45 bg-zinc-900/80 px-0.5 py-0.5 text-sky-100/95 leading-tight min-w-0 text-left'
+                                : 'flex w-full items-start gap-0.5 rounded border border-sky-200 bg-sky-50/90 px-0.5 py-0.5 text-sky-950 leading-tight min-w-0 text-left',
+                            'compact',
+                          ),
+                        )}
                         {scheduleChips.length > 2 && (
                           <div className="text-[9px] text-zinc-500">+{scheduleChips.length - 2} event(s)</div>
                         )}
@@ -968,34 +1027,19 @@ const PlannerCalendar: React.FC<PlannerCalendarProps> = ({
                         className={`space-y-1 pt-1 border-t ${isDark ? 'border-zinc-800/80' : 'border-zinc-200'}`}
                       >
                         <p className="text-[9px] font-bold uppercase tracking-wide text-zinc-500">Shoots & meetings</p>
-                        {scheduleChips.slice(0, 4).map((c) => (
-                          <Link
-                            key={c.id}
-                            to={c.href}
-                            className={
-                              c.kind === 'shoot'
-                                ? isDark
-                                  ? 'block rounded-lg border border-amber-900/40 bg-zinc-900/60 p-2 text-left'
-                                  : 'block rounded-lg border border-amber-200 bg-amber-50/80 p-2 text-left'
-                                : isDark
-                                  ? 'block rounded-lg border border-sky-900/45 bg-zinc-900/60 p-2 text-left'
-                                  : 'block rounded-lg border border-sky-200 bg-sky-50/80 p-2 text-left'
-                            }
-                          >
-                            <p className={`text-[10px] font-bold uppercase ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
-                              {c.kind === 'shoot' ? 'Shoot' : 'Meeting'}
-                            </p>
-                            <p className={`text-xs font-medium leading-snug min-w-0 ${isDark ? 'text-white' : 'text-zinc-900'}`}>
-                              {c.title}
-                            </p>
-                            <p className={`text-[10px] font-mono mt-0.5 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
-                              {c.timeLabel}
-                            </p>
-                            {c.subtitle && (
-                              <p className="text-[9px] text-zinc-500 mt-0.5 truncate">{c.subtitle}</p>
-                            )}
-                          </Link>
-                        ))}
+                        {scheduleChips.slice(0, 4).map((c) =>
+                          renderScheduleChip(
+                            c,
+                            c.kind === 'shoot'
+                              ? isDark
+                                ? 'block w-full rounded-lg border border-amber-900/40 bg-zinc-900/60 p-2 text-left'
+                                : 'block w-full rounded-lg border border-amber-200 bg-amber-50/80 p-2 text-left'
+                              : isDark
+                                ? 'block w-full rounded-lg border border-sky-900/45 bg-zinc-900/60 p-2 text-left'
+                                : 'block w-full rounded-lg border border-sky-200 bg-sky-50/80 p-2 text-left',
+                            'card',
+                          ),
+                        )}
                         {scheduleChips.length > 4 && (
                           <p className="text-[10px] text-zinc-500">+{scheduleChips.length - 4} more on this day</p>
                         )}
@@ -1119,8 +1163,7 @@ const PlannerCalendar: React.FC<PlannerCalendarProps> = ({
                                     : 'border border-zinc-300 bg-white text-zinc-700'
                                 }`}
                               >
-                                {t.startTime}
-                                {t.endTime ? `–${t.endTime}` : ''}
+                                {formatHmRange(t.startTime, t.endTime, 'compact')}
                               </span>
                             )}
                             {!timed && (t.allDay || !t.startTime) && (
@@ -1305,18 +1348,30 @@ const PlannerCalendar: React.FC<PlannerCalendarProps> = ({
                       if (isDraggable) beginDragTask(ev, e);
                     };
                     const handleClick = () => {
+                      if (ev.kind === 'shoot' && ev.shoot && onEditShoot) {
+                        onEditShoot(ev.shoot);
+                        return;
+                      }
+                      if (ev.kind === 'meeting' && ev.meeting && onEditMeeting) {
+                        onEditMeeting(ev.meeting);
+                        return;
+                      }
                       if (!ev.task) return;
                       if (onScheduleItem) onScheduleItem(ev.task);
                       else if (onOpenCalendarSheet) onOpenCalendarSheet(ev.task);
                     };
+                    const isInteractive =
+                      Boolean(ev.task) ||
+                      (ev.kind === 'shoot' && ev.shoot && onEditShoot) ||
+                      (ev.kind === 'meeting' && ev.meeting && onEditMeeting);
                     return (
                       <div
                         key={ev.id}
-                        role={ev.task ? 'button' : undefined}
-                        tabIndex={ev.task ? 0 : undefined}
-                        onClick={ev.task ? handleClick : undefined}
+                        role={isInteractive ? 'button' : undefined}
+                        tabIndex={isInteractive ? 0 : undefined}
+                        onClick={isInteractive ? handleClick : undefined}
                         onKeyDown={(e) => {
-                          if (!ev.task) return;
+                          if (!isInteractive) return;
                           if (e.key === 'Enter' || e.key === ' ') {
                             e.preventDefault();
                             handleClick();
@@ -1327,7 +1382,11 @@ const PlannerCalendar: React.FC<PlannerCalendarProps> = ({
                           'absolute rounded-md border px-1.5 py-1 text-[10px] leading-tight overflow-hidden min-w-0',
                           isDark ? baseToneDark : baseToneLight,
                           conflictTone,
-                          isDraggable ? 'cursor-grab active:cursor-grabbing select-none' : ev.task ? 'cursor-pointer' : '',
+                          isDraggable
+                            ? 'cursor-grab active:cursor-grabbing select-none'
+                            : isInteractive
+                              ? 'cursor-pointer'
+                              : '',
                           isDragging ? 'opacity-90 shadow-lg z-30' : 'z-10',
                         ].filter(Boolean).join(' ')}
                         style={{
@@ -1381,7 +1440,11 @@ const PlannerCalendar: React.FC<PlannerCalendarProps> = ({
                       }}
                     >
                       <span className={isDark ? 'rounded bg-zinc-900 px-1 py-0.5 border border-zinc-700' : 'rounded bg-white px-1 py-0.5 border border-zinc-300 shadow-sm'}>
-                        {minutesToHm(dragState.proposedStartMin)} – {minutesToHm(dragState.proposedStartMin + dragState.durationMin)}
+                        {formatHmRange(
+                          minutesToHm(dragState.proposedStartMin),
+                          minutesToHm(dragState.proposedStartMin + dragState.durationMin),
+                          'compact',
+                        )}
                       </span>
                     </div>
                   )}

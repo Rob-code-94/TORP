@@ -6,6 +6,7 @@ import { useHqOrgTick } from '../hq/HqFirestoreProvider';
 import { isShootVisibleToCrew } from '../../lib/staffShoots';
 import { UserRole } from '../../types';
 import { useAdminTheme } from '../../lib/adminTheme';
+import { formatHm } from '../../lib/timeFormat';
 
 /**
  * Print-only call sheet. Opens from StaffView; auto-invokes print dialog when ready.
@@ -110,7 +111,7 @@ export default function CallSheetPrintView() {
               isDark ? 'text-zinc-100' : 'text-zinc-800'
             }`}
           >
-            {shoot.date} · Call {shoot.callTime}
+            {shoot.date} · Call {formatHm(shoot.callTime) || '—'}
           </p>
         </div>
         <div>

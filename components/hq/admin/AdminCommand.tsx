@@ -36,6 +36,8 @@ import {
   revokeStorageOpsLink,
 } from '../../../data/hqStorageOps';
 import { useHqOrgTick } from '../HqFirestoreProvider';
+import { formatHm } from '../../../lib/timeFormat';
+import { projectAssignableCrew } from '../../../data/hqSchedulingGuards';
 import { createClient } from '../../../data/adminProjectsApi';
 import { getFinanceDashboardMetrics } from '../../../data/financeApi';
 import { useAdminTheme } from '../../../lib/adminTheme';
@@ -135,8 +137,14 @@ const AdminCommand: React.FC = () => {
       callTime: '08:00',
       location: '',
       description: '',
+      crewIds: project?.ownerCrewId ? [project.ownerCrewId] : ([] as string[]),
     };
   });
+
+  const quickShootAssignableCrew = useMemo(
+    () => (shootDraft.projectId ? projectAssignableCrew(shootDraft.projectId) : []),
+    [shootDraft.projectId, hqTick],
+  );
 
   useEffect(() => {
     const timer = window.setTimeout(() => setLoading(false), 250);
@@ -161,6 +169,7 @@ const AdminCommand: React.FC = () => {
       setShootDraft((current) => ({
         ...current,
         projectId: defaultProject.id,
+        crewIds: current.crewIds.length ? current.crewIds : [defaultProject.ownerCrewId],
       }));
     }
   }, [defaultProject?.id]);
@@ -320,7 +329,7 @@ const AdminCommand: React.FC = () => {
           location: shootDraft.location.trim() || 'TBD',
           description: shootDraft.description.trim(),
           gearSummary: '',
-          crew: [project.ownerCrewId],
+          crew: shootDraft.crewIds.length ? shootDraft.crewIds : [project.ownerCrewId],
         },
         user?.displayName || 'Admin'
       );
@@ -772,7 +781,7 @@ const AdminCommand: React.FC = () => {
                     {s.projectTitle}
                   </Link>
                   <p className={`text-xs ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>
-                    {formatAdminDate(s.date)} @ {s.callTime} — {s.location}
+                    {formatAdminDate(s.date)} @ {formatHm(s.callTime) || '—'} — {s.location}
                   </p>
                 </div>
                 <Link
@@ -1062,7 +1071,15 @@ const AdminCommand: React.FC = () => {
         <div className="space-y-2">
           <select
             value={shootDraft.projectId}
-            onChange={(e) => setShootDraft((v) => ({ ...v, projectId: e.target.value }))}
+            onChange={(e) => {
+              const projectId = e.target.value;
+              const project = projectById(projectId);
+              setShootDraft((v) => ({
+                ...v,
+                projectId,
+                crewIds: project?.ownerCrewId ? [project.ownerCrewId] : [],
+              }));
+            }}
             className={appInputClass(isDark)}
           >
             <option value="">Select project</option>
@@ -1105,6 +1122,39 @@ const AdminCommand: React.FC = () => {
             rows={3}
             className={appInputClass(isDark)}
           />
+          {quickShootAssignableCrew.length > 0 && (
+            <div>
+              <p className="text-[11px] uppercase tracking-wide text-zinc-500 mb-1.5">Crew on shoot</p>
+              <div className="flex flex-wrap gap-2">
+                {quickShootAssignableCrew.map((crew) => (
+                  <button
+                    key={crew.id}
+                    type="button"
+                    onClick={() =>
+                      setShootDraft((v) => ({
+                        ...v,
+                        crewIds: v.crewIds.includes(crew.id)
+                          ? v.crewIds.filter((id) => id !== crew.id)
+                          : [...v.crewIds, crew.id],
+                      }))
+                    }
+                    className={`rounded-full border px-2.5 py-1 text-xs ${
+                      shootDraft.crewIds.includes(crew.id)
+                        ? 'border-white bg-white text-black'
+                        : isDark
+                          ? 'border-zinc-700 text-zinc-300'
+                          : 'border-zinc-400 text-zinc-700'
+                    }`}
+                  >
+                    {crew.displayName}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {shootDraft.callTime && (
+            <p className="text-[11px] text-zinc-500">Call {formatHm(shootDraft.callTime)}</p>
+          )}
         </div>
       </AdminFormDrawer>
     </div>

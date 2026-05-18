@@ -21,22 +21,19 @@ import {
   transitionProjectStage,
 } from '../../../data/hqProjectOps';
 import {
-  createMeeting,
   createPlannerTask,
   createProjectAsset,
-  createShoot,
   deleteMeeting,
   deletePlannerTask,
   deleteProjectAsset,
   deleteShoot,
   plannerStatusFromItem,
   plannerStatusToLegacy,
-  updateMeeting,
   updatePlannerTask,
   updateProjectAsset,
-  updateShoot,
 } from '../../../data/hqPlannerCalendarOps';
 import { projectAssignableCrew } from '../../../data/hqSchedulingGuards';
+import { formatHmRange } from '../../../lib/timeFormat';
 import {
   createBlocker,
   createDeliverable,
@@ -92,8 +89,8 @@ import {
 } from './adminFormat';
 import AdminCompactYmdCalendar from './AdminCompactYmdCalendar';
 import AdminFormDrawer from './AdminFormDrawer';
-import ScheduleLocationInput from './ScheduleLocationInput';
 import CalendarEventSheet from './CalendarEventSheet';
+import ScheduleEventDrawer, { type ScheduleFormType } from './ScheduleEventDrawer';
 import ProjectAssetUploader from './ProjectAssetUploader';
 import DeliveryLinksPanel from './DeliveryLinksPanel';
 
@@ -113,7 +110,6 @@ const TAB_LABELS: Record<Tab, string> = {
 };
 type LoadState = 'loading' | 'empty' | 'error' | 'success';
 type ActivityFilter = 'all' | 'alerts' | 'mentions' | 'unread';
-type ScheduleFormType = 'shoot' | 'meeting';
 type DrawerStatus = { tone: 'ok' | 'error'; message: string } | null;
 type DrawerForm =
   | 'planner'
@@ -126,41 +122,6 @@ type DrawerForm =
   | 'expense'
   | 'invoice'
   | 'changeOrder';
-
-function pad2Schedule(n: number): string {
-  return String(n).padStart(2, '0');
-}
-
-/** Parse "HH:mm" (24h) to minutes from midnight; null if invalid. */
-function hmToMinutesSchedule(hm: string): number | null {
-  if (!hm || !/^\d{1,2}:\d{2}$/.test(hm.trim())) return null;
-  const [hRaw, mRaw] = hm.trim().split(':');
-  const h = Number.parseInt(hRaw, 10);
-  const m = Number.parseInt(mRaw, 10);
-  if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
-  const t = h * 60 + m;
-  if (t < 0 || t > 24 * 60) return null;
-  return t;
-}
-
-function minutesToHmSchedule(min: number): string {
-  const c = Math.max(0, Math.min(24 * 60 - 1, Math.round(min)));
-  return `${pad2Schedule(Math.floor(c / 60))}:${pad2Schedule(c % 60)}`;
-}
-
-function defaultEndTimeForSchedule(start: string, kind: ScheduleFormType): string {
-  const s = hmToMinutesSchedule(start);
-  if (s == null) return kind === 'shoot' ? '16:00' : '11:00';
-  const delta = kind === 'shoot' ? 8 * 60 : 60;
-  return minutesToHmSchedule(s + delta);
-}
-
-function ensureEndTimeFromStored(start: string, end: string | undefined, kind: ScheduleFormType): string {
-  const sm = hmToMinutesSchedule(start);
-  const em = end ? hmToMinutesSchedule(end) : null;
-  if (sm != null && em != null && em >= sm) return end!;
-  return defaultEndTimeForSchedule(start, kind);
-}
 
 const AdminProjectDetail: React.FC = () => {
   const { user } = useAuth();
@@ -217,7 +178,6 @@ const AdminProjectDetail: React.FC = () => {
     type: 'admin' as 'pre_production' | 'shoot' | 'edit' | 'review' | 'delivery' | 'admin' | 'invoice' | 'client_followup',
     priority: 'medium' as 'low' | 'medium' | 'high' | 'urgent',
   });
-  const [scheduleQuickType, setScheduleQuickType] = useState<ScheduleFormType>('shoot');
   const [openAssetId, setOpenAssetId] = useState<string | null>(null);
   const [assetDrawerBusy, setAssetDrawerBusy] = useState(false);
   const [assetDrawerStatus, setAssetDrawerStatus] = useState<DrawerStatus>(null);
@@ -251,15 +211,6 @@ const AdminProjectDetail: React.FC = () => {
     notes: '',
   });
   const [openSchedule, setOpenSchedule] = useState<{ kind: ScheduleFormType; id: string } | null>(null);
-  const [scheduleDraft, setScheduleDraft] = useState({
-    title: '',
-    date: '',
-    time: '',
-    endTime: '',
-    location: '',
-    description: '',
-    participants: [] as string[],
-  });
   const [calendarEventOpen, setCalendarEventOpen] = useState(false);
   const [calendarEventInitial, setCalendarEventInitial] = useState<{
     title?: string;
@@ -427,59 +378,12 @@ const AdminProjectDetail: React.FC = () => {
   };
 
   const openScheduleEditor = (kind: ScheduleFormType, id: string) => {
-    if (id === '__new__') {
-      setScheduleQuickType(kind);
-      const start = kind === 'shoot' ? '08:00' : '10:00';
-      setScheduleDraft({
-        title: '',
-        date: '',
-        time: start,
-        endTime: defaultEndTimeForSchedule(start, kind),
-        location: '',
-        description: '',
-        participants: [project.ownerCrewId],
-      });
-      setOpenSchedule({ kind, id: '__new__' });
-      setActiveDrawer('schedule');
-      return;
-    }
-    if (kind === 'shoot') {
-      const shoot = shoots.find((item) => item.id === id);
-      if (!shoot) return;
-      setScheduleDraft({
-        title: shoot.title,
-        date: shoot.date,
-        time: shoot.callTime,
-        endTime: ensureEndTimeFromStored(shoot.callTime, shoot.endTime, 'shoot'),
-        location: shoot.location,
-        description: shoot.description || shoot.gearSummary,
-        participants: shoot.crewIds?.length ? shoot.crewIds : (shoot.crew ?? []),
-      });
-    } else {
-      const meeting = meetings.find((item) => item.id === id);
-      if (!meeting) return;
-      setScheduleDraft({
-        title: meeting.title,
-        date: meeting.date,
-        time: meeting.startTime,
-        endTime: ensureEndTimeFromStored(meeting.startTime, meeting.endTime, 'meeting'),
-        location: meeting.location,
-        description: meeting.description || '',
-        participants: meeting.participantCrewIds?.length ? meeting.participantCrewIds : meeting.participants,
-      });
+    if (id !== '__new__') {
+      if (kind === 'shoot' && !shoots.find((item) => item.id === id)) return;
+      if (kind === 'meeting' && !meetings.find((item) => item.id === id)) return;
     }
     setOpenSchedule({ kind, id });
-    setScheduleQuickType(kind);
     setActiveDrawer('schedule');
-  };
-
-  const toggleParticipant = (crewId: string) => {
-    setScheduleDraft((current) => ({
-      ...current,
-      participants: current.participants.includes(crewId)
-        ? current.participants.filter((item) => item !== crewId)
-        : [...current.participants, crewId],
-    }));
   };
 
   const toggleTaskAssignee = (crewId: string) => {
@@ -1311,18 +1215,7 @@ const AdminProjectDetail: React.FC = () => {
                 <div>
                   <p className="text-white font-medium">{s.title}</p>
                   <p className="text-sm text-zinc-500">
-                    {formatAdminDate(s.date)} @{' '}
-                    {(() => {
-                      const sm = hmToMinutesSchedule(s.callTime);
-                      const em = s.endTime ? hmToMinutesSchedule(s.endTime) : null;
-                      const range =
-                        sm != null && em != null && em >= sm ? `${s.callTime}–${s.endTime}` : s.callTime;
-                      return (
-                        <>
-                          {range} — {s.location}
-                        </>
-                      );
-                    })()}
+                    {formatAdminDate(s.date)} @ {formatHmRange(s.callTime, s.endTime) || '—'} — {s.location}
                   </p>
                   <p className="text-xs text-zinc-600 mt-1">Crew: {(s.crew ?? []).join(', ')}</p>
                   {s.description && <p className="text-xs text-zinc-500 mt-1">{s.description}</p>}
@@ -1378,18 +1271,7 @@ const AdminProjectDetail: React.FC = () => {
                 <div>
                   <p className="text-white font-medium">{m.title} <span className="text-[11px] text-zinc-400">(Meeting)</span></p>
                   <p className="text-sm text-zinc-500">
-                    {formatAdminDate(m.date)} @{' '}
-                    {(() => {
-                      const sm = hmToMinutesSchedule(m.startTime);
-                      const em = m.endTime ? hmToMinutesSchedule(m.endTime) : null;
-                      const range =
-                        sm != null && em != null && em >= sm ? `${m.startTime}–${m.endTime}` : m.startTime;
-                      return (
-                        <>
-                          {range} — {m.location}
-                        </>
-                      );
-                    })()}
+                    {formatAdminDate(m.date)} @ {formatHmRange(m.startTime, m.endTime) || '—'} — {m.location}
                   </p>
                   <p className="text-xs text-zinc-600 mt-1">Participants: {m.participants.join(', ')}</p>
                   {m.description && <p className="text-xs text-zinc-500 mt-1">{m.description}</p>}
@@ -1433,201 +1315,24 @@ const AdminProjectDetail: React.FC = () => {
             ))}
             </>
           )}
-          {openSchedule && (
-            <AdminFormDrawer
+          {openSchedule && project && (
+            <ScheduleEventDrawer
               open={activeDrawer === 'schedule'}
+              kind={openSchedule.kind}
+              entityId={openSchedule.id}
+              projectId={project.id}
+              projectTitle={project.title}
+              ownerCrewId={project.ownerCrewId}
+              shoot={openSchedule.kind === 'shoot' ? shoots.find((s) => s.id === openSchedule.id) ?? null : null}
+              meeting={openSchedule.kind === 'meeting' ? meetings.find((m) => m.id === openSchedule.id) ?? null : null}
+              actorName={actorName}
               onClose={() => {
                 setActiveDrawer(null);
                 setOpenSchedule(null);
               }}
-              title={openSchedule.id === '__new__' ? 'Schedule Event' : openSchedule.kind === 'shoot' ? 'Edit Shoot' : 'Edit Meeting'}
-              subtitle="Set timing, location, and participants"
-              footer={
-                <div className="flex justify-end gap-2">
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveDrawer(null);
-                        setOpenSchedule(null);
-                      }}
-                      className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        try {
-                          const startM = hmToMinutesSchedule(scheduleDraft.time);
-                          const endM = hmToMinutesSchedule(scheduleDraft.endTime);
-                          if (startM == null || endM == null) {
-                            setMessage('Enter valid start and end times.', 'error');
-                            return;
-                          }
-                          if (endM < startM) {
-                            setMessage('End time must be on or after start time.', 'error');
-                            return;
-                          }
-                          if (openSchedule.kind === 'shoot') {
-                            if (openSchedule.id === '__new__') {
-                              await createShoot({
-                                projectId: project.id,
-                                projectTitle: project.title,
-                                title: scheduleDraft.title,
-                                date: scheduleDraft.date,
-                                callTime: scheduleDraft.time,
-                                endTime: scheduleDraft.endTime,
-                                location: scheduleDraft.location,
-                                gearSummary: scheduleDraft.description,
-                                description: scheduleDraft.description,
-                                crew: scheduleDraft.participants,
-                              }, actorName);
-                            } else {
-                              const sr = await updateShoot(
-                                openSchedule.id,
-                                {
-                                  title: scheduleDraft.title,
-                                  date: scheduleDraft.date,
-                                  callTime: scheduleDraft.time,
-                                  endTime: scheduleDraft.endTime,
-                                  location: scheduleDraft.location,
-                                  gearSummary: scheduleDraft.description,
-                                  description: scheduleDraft.description,
-                                  crew: scheduleDraft.participants,
-                                },
-                                actorName
-                              );
-                              if (!sr.ok) {
-                                setMessage(sr.error || 'Could not update shoot.', 'error');
-                                return;
-                              }
-                            }
-                          } else if (openSchedule.id === '__new__') {
-                            await createMeeting({
-                              projectId: project.id,
-                              projectTitle: project.title,
-                              title: scheduleDraft.title,
-                              date: scheduleDraft.date,
-                              startTime: scheduleDraft.time,
-                              endTime: scheduleDraft.endTime,
-                              location: scheduleDraft.location,
-                              description: scheduleDraft.description,
-                              participants: scheduleDraft.participants,
-                            }, actorName);
-                          } else {
-                            const mr = await updateMeeting(
-                              openSchedule.id,
-                              {
-                                title: scheduleDraft.title,
-                                date: scheduleDraft.date,
-                                startTime: scheduleDraft.time,
-                                endTime: scheduleDraft.endTime,
-                                location: scheduleDraft.location,
-                                description: scheduleDraft.description,
-                                participants: scheduleDraft.participants,
-                              },
-                              actorName
-                            );
-                            if (!mr.ok) {
-                              setMessage(mr.error || 'Could not update meeting.', 'error');
-                              return;
-                            }
-                          }
-                          setActiveDrawer(null);
-                          setOpenSchedule(null);
-                          setRefreshTick((value) => value + 1);
-                          setMessage(`${openSchedule.kind === 'shoot' ? 'Shoot' : 'Meeting'} ${openSchedule.id === '__new__' ? 'created' : 'updated'}.`);
-                        } catch (error) {
-                          setMessage(error instanceof Error ? error.message : 'Could not update schedule item.', 'error');
-                        }
-                      }}
-                      className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-100"
-                    >
-                      {openSchedule.id === '__new__' ? `Create ${openSchedule.kind}` : `Save ${openSchedule.kind}`}
-                    </button>
-                  </div>
-                </div>
-              }
-            >
-              <div className="space-y-1">
-                <label className="block text-xs font-medium uppercase tracking-wide text-zinc-500">Event Type</label>
-                <select
-                  value={scheduleQuickType}
-                  onChange={(e) => {
-                    const next = e.target.value as ScheduleFormType;
-                    setScheduleQuickType(next);
-                    setOpenSchedule((current) => (current ? { ...current, kind: next } : current));
-                    setScheduleDraft((current) => {
-                      const start = current.time || (next === 'shoot' ? '08:00' : '10:00');
-                      return {
-                        ...current,
-                        time: start,
-                        endTime: ensureEndTimeFromStored(start, current.endTime, next),
-                      };
-                    });
-                  }}
-                  disabled={openSchedule.id !== '__new__'}
-                  className={`${appInputClass(isDark)} disabled:opacity-50`}
-                >
-                  <option value="shoot">Shoot</option>
-                  <option value="meeting">Meeting</option>
-                </select>
-              </div>
-              <input
-                value={scheduleDraft.title}
-                onChange={(e) => setScheduleDraft((current) => ({ ...current, title: e.target.value }))}
-                className={appInputClass(isDark)}
-                placeholder="Title"
-              />
-              <AdminCompactYmdCalendar
-                value={scheduleDraft.date}
-                onChange={(date) => setScheduleDraft((current) => ({ ...current, date }))}
-                isDark={isDark}
-              />
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
-                <div className="space-y-0.5 min-w-0">
-                  <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">Start</label>
-                  <input
-                    type="time"
-                    value={scheduleDraft.time}
-                    onChange={(e) => setScheduleDraft((current) => ({ ...current, time: e.target.value }))}
-                    style={dateTimeInput.style}
-                    className={`${appInputClass(isDark)} ${dateTimeInput.className} w-full`}
-                  />
-                </div>
-                <div className="space-y-0.5 min-w-0">
-                  <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-500">End</label>
-                  <input
-                    type="time"
-                    value={scheduleDraft.endTime}
-                    onChange={(e) => setScheduleDraft((current) => ({ ...current, endTime: e.target.value }))}
-                    style={dateTimeInput.style}
-                    className={`${appInputClass(isDark)} ${dateTimeInput.className} w-full`}
-                  />
-                </div>
-              </div>
-              <ScheduleLocationInput
-                enabled={Boolean(activeDrawer === 'schedule' && openSchedule)}
-                value={scheduleDraft.location}
-                onChange={(location) => setScheduleDraft((current) => ({ ...current, location }))}
-                className={appInputClass(isDark)}
-                placeholder="Location/Link"
-              />
-              <textarea value={scheduleDraft.description} onChange={(e) => setScheduleDraft((current) => ({ ...current, description: e.target.value }))} rows={3} className={appInputClass(isDark)} placeholder="Description/context" />
-              <div className="flex flex-wrap gap-2">
-                {assignableCrew.map((crew) => (
-                  <button
-                    key={crew.id}
-                    type="button"
-                    onClick={() => toggleParticipant(crew.id)}
-                    className={`rounded-full border px-2.5 py-1 text-xs ${scheduleDraft.participants.includes(crew.id) ? 'border-white bg-white text-black' : 'border-zinc-700 text-zinc-300'}`}
-                  >
-                    {crew.displayName}
-                  </button>
-                ))}
-              </div>
-            </AdminFormDrawer>
+              onSaved={() => setRefreshTick((value) => value + 1)}
+              onMessage={(text, tone) => setMessage(text, tone)}
+            />
           )}
         </div>
       ))}

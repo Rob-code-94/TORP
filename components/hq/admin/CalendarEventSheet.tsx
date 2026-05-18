@@ -1,8 +1,11 @@
-import React, { useEffect, useId, useState } from 'react';
+import React, { useEffect, useId, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import type { CalendarEventPayload } from '../../../types';
-import { createMeeting, createShoot } from '../../../data/hqPlannerCalendarOps';
+import { createMeeting, createShoot, updateMeeting, updateShoot } from '../../../data/hqPlannerCalendarOps';
 import { getProjectById } from '../../../data/hqOrgRead';
+import { projectAssignableCrew } from '../../../data/hqSchedulingGuards';
+import { getMeetingsSync, getShootsSync } from '../../../data/hqSyncDirectory';
+import { formatHm } from '../../../lib/timeFormat';
 import {
   buildGoogleCalendarTemplateUrl,
   buildIcsFileContent,
@@ -76,6 +79,10 @@ export interface CalendarEventSheetProps {
   projectOptions?: CalendarProjectOption[];
   /** App base for deep links in description */
   appOrigin?: string;
+  /** When set, sheet loads the shoot/meeting for full edit + save via update*. */
+  editing?: { kind: 'shoot' | 'meeting'; id: string; projectId: string };
+  /** After creating a schedule item, parent can open the full schedule drawer. */
+  onRequestEditDetails?: (args: { kind: 'shoot' | 'meeting'; id: string; projectId: string }) => void;
 }
 
 const CalendarEventSheet: React.FC<CalendarEventSheetProps> = ({
@@ -85,6 +92,8 @@ const CalendarEventSheet: React.FC<CalendarEventSheetProps> = ({
   initial,
   projectOptions = [],
   appOrigin = typeof window !== 'undefined' ? window.location.origin : '',
+  editing,
+  onRequestEditDetails,
 }) => {
   const { theme } = useAdminTheme();
   const { user } = useAuth();
@@ -104,8 +113,19 @@ const CalendarEventSheet: React.FC<CalendarEventSheetProps> = ({
   const [formError, setFormError] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
   const [saveKind, setSaveKind] = useState<'meeting' | 'shoot'>('meeting');
+  const [participants, setParticipants] = useState<string[]>([]);
+  const [pendingEdit, setPendingEdit] = useState<{ kind: 'shoot' | 'meeting'; id: string; projectId: string } | null>(
+    null,
+  );
 
-  const allowPicker = !projectContext && projectOptions.length > 0;
+  const isEditMode = Boolean(editing?.id);
+  const activeProjectId = editing?.projectId || projectContext?.id || selectedProjectId;
+  const assignableCrew = useMemo(
+    () => (activeProjectId ? projectAssignableCrew(activeProjectId) : []),
+    [activeProjectId],
+  );
+
+  const allowPicker = !projectContext && projectOptions.length > 0 && !isEditMode;
   const selectedProject = projectContext ?? projectOptions.find((p) => p.id === selectedProjectId);
   const canIncludeClient = Boolean(selectedProject?.contactEmail?.trim());
 
@@ -151,6 +171,39 @@ const CalendarEventSheet: React.FC<CalendarEventSheetProps> = ({
     if (!open) return;
     setFormError(null);
     setBanner(null);
+    setPendingEdit(null);
+    if (editing) {
+      const project = getProjectById(editing.projectId);
+      setSaveKind(editing.kind);
+      setSelectedProjectId(editing.projectId);
+      if (editing.kind === 'shoot') {
+        const shoot = getShootsSync().find((s) => s.id === editing.id);
+        if (shoot) {
+          setTitle(shoot.title);
+          setDateYmd(shoot.date);
+          setTimeHm(shoot.callTime);
+          setAllDay(false);
+          setLocation(shoot.location);
+          setDescription(shoot.description || shoot.gearSummary || '');
+          setParticipants(shoot.crewIds ?? []);
+        }
+      } else {
+        const meeting = getMeetingsSync().find((m) => m.id === editing.id);
+        if (meeting) {
+          setTitle(meeting.title);
+          setDateYmd(meeting.date);
+          setTimeHm(meeting.startTime);
+          setAllDay(false);
+          setLocation(meeting.location);
+          setDescription(meeting.description || '');
+          setParticipants(meeting.participantCrewIds ?? []);
+        }
+      }
+      if (projectContext) {
+        setIncludeClient(Boolean(projectContext.contactEmail));
+      }
+      return;
+    }
     setTitle(initial?.title ?? '');
     setDateYmd(initial?.dateYmd ?? defaultDateString());
     setTimeHm(initial?.timeHm ?? '10:00');
@@ -160,11 +213,24 @@ const CalendarEventSheet: React.FC<CalendarEventSheetProps> = ({
     if (projectContext) {
       setSelectedProjectId(projectContext.id);
       setIncludeClient(Boolean(projectContext.contactEmail));
+      const project = getProjectById(projectContext.id);
+      setParticipants(project?.ownerCrewId ? [project.ownerCrewId] : []);
     } else {
       setSelectedProjectId(initial?.projectId ?? projectOptions[0]?.id ?? '');
       setIncludeClient(false);
+      const pid = initial?.projectId ?? projectOptions[0]?.id ?? '';
+      const project = pid ? getProjectById(pid) : undefined;
+      setParticipants(project?.ownerCrewId ? [project.ownerCrewId] : []);
     }
-  }, [open, projectContext, initial, projectOptions]);
+  }, [open, projectContext, initial, projectOptions, editing]);
+
+  useEffect(() => {
+    if (!open || editing || projectContext) return;
+    const project = selectedProjectId ? getProjectById(selectedProjectId) : undefined;
+    if (project?.ownerCrewId && participants.length === 0) {
+      setParticipants([project.ownerCrewId]);
+    }
+  }, [open, editing, projectContext, selectedProjectId, participants.length]);
 
   useEffect(() => {
     if (!open) return;
@@ -229,10 +295,16 @@ const CalendarEventSheet: React.FC<CalendarEventSheetProps> = ({
     window.location.href = href;
   };
 
+  const toggleParticipant = (crewId: string) => {
+    setParticipants((current) =>
+      current.includes(crewId) ? current.filter((id) => id !== crewId) : [...current, crewId],
+    );
+  };
+
   const onSaveToProjectSchedule = async () => {
     const p = buildPayload();
     if (!p) return;
-    const projectId = projectContext?.id || selectedProjectId;
+    const projectId = editing?.projectId || projectContext?.id || selectedProjectId;
     if (!projectId) {
       setFormError('Select a project to save to the production schedule.');
       return;
@@ -244,10 +316,50 @@ const CalendarEventSheet: React.FC<CalendarEventSheetProps> = ({
     }
     setFormError(null);
     try {
+      if (isEditMode && editing) {
+        if (editing.kind === 'meeting') {
+          const startTime = p.allDay ? '10:00' : (timeHm || '10:00');
+          const endTime = defaultEndHmForSheet(startTime, 'meeting');
+          const mr = await updateMeeting(
+            editing.id,
+            {
+              title: p.title,
+              date: dateYmd,
+              startTime,
+              endTime,
+              location: p.location || 'TBD',
+              description: p.description,
+              participants,
+            },
+            actorName,
+          );
+          if (!mr.ok) throw new Error(mr.error || 'Could not update meeting.');
+        } else {
+          const callTime = p.allDay ? '09:00' : (timeHm || '09:00');
+          const endTime = defaultEndHmForSheet(callTime, 'shoot');
+          const sr = await updateShoot(
+            editing.id,
+            {
+              title: p.title,
+              date: dateYmd,
+              callTime,
+              endTime,
+              location: p.location || 'TBD',
+              description: p.description,
+              gearSummary: p.description || 'Details TBD',
+              crew: participants,
+            },
+            actorName,
+          );
+          if (!sr.ok) throw new Error(sr.error || 'Could not update shoot.');
+        }
+        setBanner('Schedule updated.');
+        return;
+      }
       if (saveKind === 'meeting') {
         const startTime = p.allDay ? '10:00' : (timeHm || '10:00');
         const endTime = defaultEndHmForSheet(startTime, 'meeting');
-        await createMeeting(
+        const meeting = await createMeeting(
           {
             projectId: project.id,
             projectTitle: project.title,
@@ -256,15 +368,17 @@ const CalendarEventSheet: React.FC<CalendarEventSheetProps> = ({
             startTime,
             endTime,
             location: p.location || 'TBD',
-            participants: [],
+            participants,
             description: p.description,
           },
-          actorName
+          actorName,
         );
+        setPendingEdit({ kind: 'meeting', id: meeting.id, projectId: project.id });
+        setBanner('Saved to the project schedule.');
       } else {
         const callTime = p.allDay ? '09:00' : (timeHm || '09:00');
         const endTime = defaultEndHmForSheet(callTime, 'shoot');
-        await createShoot(
+        const shoot = await createShoot(
           {
             projectId: project.id,
             projectTitle: project.title,
@@ -273,13 +387,15 @@ const CalendarEventSheet: React.FC<CalendarEventSheetProps> = ({
             callTime,
             endTime,
             location: p.location || 'TBD',
-            crew: [],
-            gearSummary: 'Details TBD',
+            crew: participants,
+            gearSummary: p.description || 'Details TBD',
+            description: p.description,
           },
-          actorName
+          actorName,
         );
+        setPendingEdit({ kind: 'shoot', id: shoot.id, projectId: project.id });
+        setBanner('Saved to the project schedule.');
       }
-      setBanner('Saved to the project schedule. Open the project to review or adjust crew.');
     } catch (e) {
       setFormError(e instanceof Error ? e.message : 'Could not save to the project schedule.');
     }
@@ -299,8 +415,14 @@ const CalendarEventSheet: React.FC<CalendarEventSheetProps> = ({
           }`}
         >
           <div className="min-w-0">
-            <h3 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-zinc-900'}`}>Add to calendar</h3>
-            <p className="text-xs text-zinc-500 mt-0.5">Create a Google Calendar draft, download .ics, or email a link</p>
+            <h3 className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+              {isEditMode ? 'Edit schedule' : 'Add to calendar'}
+            </h3>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              {isEditMode
+                ? 'Update production schedule details and crew'
+                : 'Create a Google Calendar draft, download .ics, or email a link'}
+            </p>
           </div>
           <button
             type="button"
@@ -368,9 +490,18 @@ const CalendarEventSheet: React.FC<CalendarEventSheetProps> = ({
               )}
             </div>
             <label className="flex items-center gap-2 text-xs text-zinc-300">
-              <input id={allDayId} type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} />
+              <input
+                id={allDayId}
+                type="checkbox"
+                checked={allDay}
+                onChange={(e) => setAllDay(e.target.checked)}
+                disabled={isEditMode}
+              />
               All day
             </label>
+            {!allDay && timeHm && (
+              <p className="text-[11px] text-zinc-500">{formatHm(timeHm)}</p>
+            )}
             <input
               value={location}
               onChange={(e) => setLocation(e.target.value)}
@@ -399,29 +530,67 @@ const CalendarEventSheet: React.FC<CalendarEventSheetProps> = ({
               </label>
             )}
 
+            {activeProjectId && assignableCrew.length > 0 && (
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-zinc-500 mb-1.5">Crew on this event</p>
+                <div className="flex flex-wrap gap-2">
+                  {assignableCrew.map((crew) => (
+                    <button
+                      key={crew.id}
+                      type="button"
+                      onClick={() => toggleParticipant(crew.id)}
+                      className={`rounded-full border px-2.5 py-1 text-xs ${
+                        participants.includes(crew.id)
+                          ? 'border-white bg-white text-black'
+                          : isDark
+                            ? 'border-zinc-700 text-zinc-300'
+                            : 'border-zinc-400 text-zinc-700'
+                      }`}
+                    >
+                      {crew.displayName}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="border border-zinc-800 rounded-md p-2.5 space-y-2">
               <p className="text-[11px] uppercase tracking-wide text-zinc-500">Save to project</p>
-              <div className="flex flex-wrap gap-2 text-xs text-zinc-300">
-                <label className="inline-flex items-center gap-1.5 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="saveKind"
-                    checked={saveKind === 'meeting'}
-                    onChange={() => setSaveKind('meeting')}
-                  />
-                  Meeting
-                </label>
-                <label className="inline-flex items-center gap-1.5 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="saveKind"
-                    checked={saveKind === 'shoot'}
-                    onChange={() => setSaveKind('shoot')}
-                  />
-                  Shoot day
-                </label>
-              </div>
+              {!isEditMode && (
+                <div className="flex flex-wrap gap-2 text-xs text-zinc-300">
+                  <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="saveKind"
+                      checked={saveKind === 'meeting'}
+                      onChange={() => setSaveKind('meeting')}
+                    />
+                    Meeting
+                  </label>
+                  <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="saveKind"
+                      checked={saveKind === 'shoot'}
+                      onChange={() => setSaveKind('shoot')}
+                    />
+                    Shoot day
+                  </label>
+                </div>
+              )}
             </div>
+            {pendingEdit && onRequestEditDetails && (
+              <button
+                type="button"
+                onClick={() => {
+                  onRequestEditDetails(pendingEdit);
+                  setPendingEdit(null);
+                }}
+                className="text-xs underline text-zinc-400"
+              >
+                Edit full schedule details
+              </button>
+            )}
           </div>
         </div>
 
@@ -435,7 +604,7 @@ const CalendarEventSheet: React.FC<CalendarEventSheetProps> = ({
             onClick={onSaveToProjectSchedule}
             className="w-full rounded-md border border-zinc-600 bg-zinc-100 text-zinc-900 px-3 py-2 text-xs font-semibold"
           >
-            Save to project schedule
+            {isEditMode ? 'Save schedule changes' : 'Save to project schedule'}
           </button>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <button

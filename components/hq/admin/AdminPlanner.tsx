@@ -23,11 +23,13 @@ import { useAdminTheme } from '../../../lib/adminTheme';
 import { appLinkMutedClass, appPanelClass } from '../../../lib/appThemeClasses';
 import { canEditPlannerItem } from '../../../lib/projectPermissions';
 import { columnLabel, formatAdminDate, typeLabel } from './adminFormat';
+import { formatHmRange } from '../../../lib/timeFormat';
 import CalendarEventSheet from './CalendarEventSheet';
 import type { CalendarProjectOption } from './CalendarEventSheet';
 import PlannerCalendar from './PlannerCalendar';
 import PlannerTaskTimeDrawer from './PlannerTaskTimeDrawer';
-import type { PlannerBoardColumn, PlannerItem, PlannerTaskStatus } from '../../../types';
+import type { AdminMeeting, AdminShoot, PlannerBoardColumn, PlannerItem, PlannerTaskStatus } from '../../../types';
+import ScheduleEventDrawer from './ScheduleEventDrawer';
 import { createDefaultStoragePolicy } from '../../../lib/storagePolicy';
 
 const COLUMNS: PlannerBoardColumn[] = ['queue', 'active', 'post', 'client_review', 'complete'];
@@ -59,6 +61,11 @@ const AdminPlanner: React.FC = () => {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [attachmentMessage, setAttachmentMessage] = useState<string | null>(null);
   const [scheduleTask, setScheduleTask] = useState<PlannerItem | null>(null);
+  const [scheduleEdit, setScheduleEdit] = useState<{
+    kind: 'shoot' | 'meeting';
+    id: string;
+    projectId: string;
+  } | null>(null);
   const [calendarContext, setCalendarContext] = useState<CalendarProjectOption | undefined>();
   const [calendarInitial, setCalendarInitial] = useState<{
     title?: string;
@@ -174,7 +181,7 @@ const AdminPlanner: React.FC = () => {
         setPlannerVersion((n) => n + 1);
         setAttachmentMessage(
           `Rescheduled "${task.title}" to ${
-            allDay ? 'all day' : `${next.startTime}${next.endTime ? '–' + next.endTime : ''}`
+            allDay ? 'all day' : formatHmRange(next.startTime, next.endTime) || '—'
           } on ${next.dueDate}.`
         );
       } else if (result.error) {
@@ -187,6 +194,20 @@ const AdminPlanner: React.FC = () => {
   const openScheduleDrawer = useCallback((task: PlannerItem) => {
     setScheduleTask(task);
   }, []);
+
+  const onEditShoot = useCallback((shoot: AdminShoot) => {
+    setScheduleEdit({ kind: 'shoot', id: shoot.id, projectId: shoot.projectId });
+  }, []);
+
+  const onEditMeeting = useCallback((meeting: AdminMeeting) => {
+    setScheduleEdit({ kind: 'meeting', id: meeting.id, projectId: meeting.projectId });
+  }, []);
+
+  const scheduleEditProject = scheduleEdit ? getProjectById(scheduleEdit.projectId) : undefined;
+  const scheduleEditShoot =
+    scheduleEdit?.kind === 'shoot' ? shootsCalendar.find((s) => s.id === scheduleEdit.id) : undefined;
+  const scheduleEditMeeting =
+    scheduleEdit?.kind === 'meeting' ? meetingsCalendar.find((m) => m.id === scheduleEdit.id) : undefined;
 
   const onAttachExisting = async (task: PlannerItem, assetId: string) => {
     const result = await attachAssetToPlannerItem(task.id, assetId, actorName);
@@ -586,6 +607,8 @@ const AdminPlanner: React.FC = () => {
             onOpenCalendarSheet={openCalendarForItem}
             onScheduleItem={openScheduleDrawer}
             onRescheduleItem={onRescheduleItem}
+            onEditShoot={onEditShoot}
+            onEditMeeting={onEditMeeting}
             initialMode={initialMode === 'month' || initialMode === 'week' || initialMode === 'day' ? initialMode : undefined}
             initialCursorYmd={initialDate || undefined}
           />
@@ -601,7 +624,28 @@ const AdminPlanner: React.FC = () => {
         projectContext={calendarContext}
         initial={calendarInitial}
         projectOptions={projectOptions}
+        onRequestEditDetails={(args) => {
+          setCalendarOpen(false);
+          setScheduleEdit(args);
+        }}
       />
+
+      {scheduleEdit && scheduleEditProject && (
+        <ScheduleEventDrawer
+          open
+          kind={scheduleEdit.kind}
+          entityId={scheduleEdit.id}
+          projectId={scheduleEditProject.id}
+          projectTitle={scheduleEditProject.title}
+          ownerCrewId={scheduleEditProject.ownerCrewId}
+          shoot={scheduleEditShoot ?? null}
+          meeting={scheduleEditMeeting ?? null}
+          actorName={actorName}
+          onClose={() => setScheduleEdit(null)}
+          onSaved={() => setPlannerVersion((n) => n + 1)}
+          onMessage={(text) => setAttachmentMessage(text)}
+        />
+      )}
 
       <PlannerTaskTimeDrawer
         open={Boolean(scheduleTask)}

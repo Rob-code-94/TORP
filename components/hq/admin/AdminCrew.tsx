@@ -12,6 +12,7 @@ import { sendCrewAuthPasswordReset, setCrewAuthTempPassword } from '../../../lib
 import AdminFormDrawer from './AdminFormDrawer';
 import type { CrewFeatureKey, CrewProfile } from '../../../types';
 import { UserRole } from '../../../types';
+import { CREW_CRAFT_ROLES, formatCrewCraftRole } from '../../../lib/crewCraftRoles';
 
 const WEEKDAY_OPTIONS = [
   { value: 0, label: 'Sun' },
@@ -403,12 +404,11 @@ const AdminCrew: React.FC = () => {
             }
           >
             <option value="all">All</option>
-            <option value="director">Director</option>
-            <option value="dp">DP</option>
-            <option value="editor">Editor</option>
-            <option value="producer">Producer</option>
-            <option value="audio">Audio</option>
-            <option value="other">Other</option>
+            {CREW_CRAFT_ROLES.map((r) => (
+              <option key={r.value} value={r.value}>
+                {r.label}
+              </option>
+            ))}
           </select>
         </label>
         <label className="text-xs text-zinc-500 flex flex-col gap-0.5 sm:min-w-[120px]">
@@ -488,7 +488,7 @@ const AdminCrew: React.FC = () => {
                     {c.displayName}
                   </button>
                 </td>
-                <td className="px-3 py-2.5 text-zinc-500">{c.role}</td>
+                <td className="px-3 py-2.5 text-zinc-500">{formatCrewCraftRole(c.role)}</td>
                 <td className="px-3 py-2.5 text-zinc-500 text-xs">{c.systemRole}</td>
                 <td className="px-3 py-2.5 text-right font-mono text-xs">{c.rateShootHour}</td>
                 <td className="px-3 py-2.5 text-right font-mono text-xs">{c.rateEditHour}</td>
@@ -553,12 +553,11 @@ const AdminCrew: React.FC = () => {
               disabled={crewReadOnly}
               className={`${appInputClass(isDark)} disabled:opacity-50`}
             >
-              <option value="director">Director</option>
-              <option value="dp">DP</option>
-              <option value="editor">Editor</option>
-              <option value="producer">Producer</option>
-              <option value="audio">Audio</option>
-              <option value="other">Other</option>
+              {CREW_CRAFT_ROLES.map((r) => (
+                <option key={r.value} value={r.value}>
+                  {r.label}
+                </option>
+              ))}
             </select>
           </div>
           <div>
