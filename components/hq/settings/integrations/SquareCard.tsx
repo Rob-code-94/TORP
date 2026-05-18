@@ -8,6 +8,7 @@ import {
 } from '../../../../lib/integrations/registry';
 import { squareApiJson } from '../../../../lib/square/browser-fetch';
 import { SQUARE_CONTRACTS_DASHBOARD_URL } from '../../../../lib/square/contracts';
+import { useAuth } from '../../../../lib/auth';
 import { UserRole } from '../../../../types';
 
 interface SquareCardProps {
@@ -26,6 +27,7 @@ type HealthPayload = {
 };
 
 const SquareCard: React.FC<SquareCardProps> = ({ isDark }) => {
+  const { user, loading: authLoading, refreshIdToken } = useAuth();
   const [health, setHealth] = useState<HealthPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<'health' | 'sync' | null>(null);
@@ -52,8 +54,14 @@ const SquareCard: React.FC<SquareCardProps> = ({ isDark }) => {
   }, []);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    if (authLoading) return;
+    if (user?.role !== UserRole.ADMIN) {
+      setLoading(false);
+      setFetchError('Square billing requires an admin account.');
+      return;
+    }
+    void refreshIdToken().then(() => refresh());
+  }, [authLoading, user?.role, refresh, refreshIdToken]);
 
   const onSyncLocation = async () => {
     setBusy('sync');
@@ -82,7 +90,7 @@ const SquareCard: React.FC<SquareCardProps> = ({ isDark }) => {
     setBusy(null);
   };
 
-  if (loading) return <IntegrationCardSkeleton isDark={isDark} />;
+  if (authLoading || loading) return <IntegrationCardSkeleton isDark={isDark} />;
 
   const status: IntegrationStatus = fetchError
     ? 'error'

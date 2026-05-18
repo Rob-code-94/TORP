@@ -57,10 +57,12 @@ export const ensureTenantClaim = onCall<Record<string, never>>(async (req: Calla
 
   const auth = getAuth();
   const userRecord = await auth.getUser(uid);
+  const serverRole =
+    typeof userRecord.customClaims?.role === 'string' ? userRecord.customClaims.role.trim() : '';
   const merged = {
     ...(userRecord.customClaims || {}),
     tenantId: existingTenant || DEFAULT_TENANT_ID,
-    role: existingRole || 'STAFF',
+    role: existingRole || serverRole || 'STAFF',
   };
   await auth.setCustomUserClaims(uid, merged);
 

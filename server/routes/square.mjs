@@ -1,7 +1,12 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { WebhooksHelper } from 'square';
 import { getAdminDb } from '../lib/firebase-admin.mjs';
-import { assertClientTenant, getTenantIdFromDecoded, requireAdminUser } from '../lib/require-admin.mjs';
+import {
+  assertClientTenant,
+  getTenantIdFromDecoded,
+  requireAdminUser,
+  respondAdminAuthFailure,
+} from '../lib/require-admin.mjs';
 import { getSquareClient } from '../lib/square/client.mjs';
 import { countSquareDirectoryCustomers } from '../lib/square/directory-stats.mjs';
 import {
@@ -67,7 +72,7 @@ async function loadClientForAdmin(db, clientId, tenantId) {
 
 export async function squareHealthHandler(req, res) {
   const auth = await requireAdminUser(req);
-  if (!auth) return res.status(401).json({ error: 'Unauthorized' });
+  if (respondAdminAuthFailure(res, auth)) return;
 
   const client = getSquareClient();
   if (!client) {
@@ -102,7 +107,7 @@ export async function squareHealthHandler(req, res) {
 
 export async function squareLinkByEmailHandler(req, res) {
   const auth = await requireAdminUser(req);
-  if (!auth) return res.status(401).json({ error: 'Unauthorized' });
+  if (respondAdminAuthFailure(res, auth)) return;
 
   const { clientId: rawClientId, squareCustomerId: pickId, searchEmail } = req.body ?? {};
   const clientId = typeof rawClientId === 'string' ? rawClientId.trim() : '';
@@ -203,7 +208,7 @@ export async function squareLinkByEmailHandler(req, res) {
 
 export async function squareSyncClientHandler(req, res) {
   const auth = await requireAdminUser(req);
-  if (!auth) return res.status(401).json({ error: 'Unauthorized' });
+  if (respondAdminAuthFailure(res, auth)) return;
 
   const clientId = typeof req.body?.clientId === 'string' ? req.body.clientId.trim() : '';
   if (!clientId) return res.status(400).json({ error: 'clientId required' });
@@ -246,7 +251,7 @@ export async function squareSyncClientHandler(req, res) {
 
 export async function squareSyncLocationHandler(_req, res) {
   const auth = await requireAdminUser(_req);
-  if (!auth) return res.status(401).json({ error: 'Unauthorized' });
+  if (respondAdminAuthFailure(res, auth)) return;
 
   const db = getAdminDb();
   if (!db) return res.status(503).json({ error: 'Firebase Admin not configured' });
@@ -305,7 +310,7 @@ export async function squareSyncLocationHandler(_req, res) {
 
 export async function squareActivityHandler(req, res) {
   const auth = await requireAdminUser(req);
-  if (!auth) return res.status(401).json({ error: 'Unauthorized' });
+  if (respondAdminAuthFailure(res, auth)) return;
 
   const clientId = typeof req.query.clientId === 'string' ? req.query.clientId.trim() : '';
   if (!clientId) return res.status(400).json({ error: 'clientId required' });

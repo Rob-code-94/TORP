@@ -39,10 +39,11 @@ export const ensureTenantClaim = onCall(async (req) => {
     }
     const auth = getAuth();
     const userRecord = await auth.getUser(uid);
+    const serverRole = typeof userRecord.customClaims?.role === 'string' ? userRecord.customClaims.role.trim() : '';
     const merged = {
         ...(userRecord.customClaims || {}),
         tenantId: existingTenant || DEFAULT_TENANT_ID,
-        role: existingRole || 'STAFF',
+        role: existingRole || serverRole || 'STAFF',
     };
     await auth.setCustomUserClaims(uid, merged);
     const db = getFirestore();
