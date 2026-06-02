@@ -8,13 +8,17 @@ import {
   replacePortfolioLandingOrder,
   savePortfolioLandingProject,
   seedPortfolioLandingFromConstants,
+  seedPortfolioLandingMarketingTwelve,
 } from '../../../../data/portfolioLandingRepository';
 import { useAdminTheme } from '../../../../lib/adminTheme';
 import { appPanelClass } from '../../../../lib/appThemeClasses';
 import { formatFirestoreListError } from '../../../../lib/formatFirestoreListError';
 import { getMarketingTenantIdForUser } from '../../../../lib/marketingTenant';
 import { useAuth } from '../../../../lib/auth';
-import { uploadPortfolioLandingImage } from '../../../../lib/portfolioLandingStorage';
+import {
+  uploadPortfolioLandingImage,
+  uploadPortfolioLandingVideo,
+} from '../../../../lib/portfolioLandingStorage';
 import type { GalleryAspect, ProjectCategory, VideoProject, VideoProjectCredit, VideoProjectGalleryItem } from '../../../../types';
 
 interface PortfolioLandingSectionProps {
@@ -54,12 +58,14 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
   const [items, setItems] = useState<VideoProject[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [uploadingKey, setUploadingKey] = useState<string | null>(null);
   const [uploadPct, setUploadPct] = useState(0);
   const [seeding, setSeeding] = useState(false);
   const thumbRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const heroRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const featuredVideoRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const galleryRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const refresh = useCallback(async () => {
@@ -172,8 +178,28 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
     }
     setSeeding(true);
     setError(null);
+    setWarning(null);
     try {
       await seedPortfolioLandingFromConstants(tenantId);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Import failed.');
+    } finally {
+      setSeeding(false);
+    }
+  };
+
+  const handleSeedMarketingTwelve = async () => {
+    if (!canEdit) return;
+    const ok = globalThis.confirm(
+      'Creates 12 marketing portfolio case studies (Media Assets map). Overwrites Firestore docs with matching portfolio-* ids. Continue?',
+    );
+    if (!ok) return;
+    setSeeding(true);
+    setError(null);
+    setWarning(null);
+    try {
+      await seedPortfolioLandingMarketingTwelve(tenantId);
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Import failed.');
@@ -185,7 +211,7 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
   const runUpload =
     (
       project: VideoProject,
-      field: 'thumbnail' | 'heroImage',
+      field: 'thumbnail' | 'heroImage' | 'featuredVideoUrl',
       index: number,
     ): React.ChangeEventHandler<HTMLInputElement> =>
     async (event) => {
@@ -196,13 +222,27 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
       setUploadingKey(key);
       setUploadPct(0);
       setError(null);
+      setWarning(null);
       try {
-        const up = await uploadPortfolioLandingImage({
-          assetId: `${project.id}-${field}`,
-          file,
-          onProgress: ({ percent }) => setUploadPct(percent),
-        });
-        const next = field === 'thumbnail' ? { thumbnail: up.downloadUrl } : { heroImage: up.downloadUrl };
+        const up =
+          field === 'featuredVideoUrl'
+            ? await uploadPortfolioLandingVideo({
+                assetId: `${project.id}-featured`,
+                file,
+                onProgress: ({ percent }) => setUploadPct(percent),
+              })
+            : await uploadPortfolioLandingImage({
+                assetId: `${project.id}-${field}`,
+                file,
+                onProgress: ({ percent }) => setUploadPct(percent),
+              });
+        if (up.warning) setWarning(up.warning);
+        const next =
+          field === 'thumbnail'
+            ? { thumbnail: up.downloadUrl }
+            : field === 'heroImage'
+              ? { heroImage: up.downloadUrl }
+              : { featuredVideoUrl: up.downloadUrl };
         const merged = { ...project, ...next };
         const saved = await savePortfolioLandingProject(tenantId, merged, index + 1);
         setItems((prev) => prev.map((p) => (p.id === project.id ? saved : p)));
@@ -223,15 +263,24 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
       setUploadingKey(key);
       setUploadPct(0);
       setError(null);
+      setWarning(null);
       try {
-        const up = await uploadPortfolioLandingImage({
-          assetId: `${project.id}-g${galleryIndex}`,
-          file,
-          onProgress: ({ percent }) => setUploadPct(percent),
-        });
+        const isVideo = (file.type || '').startsWith('video/');
+        const up = isVideo
+          ? await uploadPortfolioLandingVideo({
+              assetId: `${project.id}-g${galleryIndex}`,
+              file,
+              onProgress: ({ percent }) => setUploadPct(percent),
+            })
+          : await uploadPortfolioLandingImage({
+              assetId: `${project.id}-g${galleryIndex}`,
+              file,
+              onProgress: ({ percent }) => setUploadPct(percent),
+            });
+        if (up.warning) setWarning(up.warning);
         const gal = [...project.gallery];
-        const row = gal[galleryIndex] ?? { src: '', aspect: 'video' as const };
-        gal[galleryIndex] = { ...row, src: up.downloadUrl };
+        const row = gal[galleryIndex] ?? { src: '', aspect: 'video' as const, mediaType: 'video' as const };
+        gal[galleryIndex] = { ...row, src: up.downloadUrl, mediaType: isVideo ? 'video' : 'image' };
         const merged = { ...project, gallery: gal };
         const saved = await savePortfolioLandingProject(tenantId, merged, projectIndex + 1);
         setItems((prev) => prev.map((p) => (p.id === project.id ? saved : p)));
@@ -255,8 +304,8 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
         <div className="min-w-0">
           <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Landing portfolio</h3>
           <p className={`text-xs mt-1 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
-            Selected works and case study overlays on the public site. Images upload to <code className="text-[10px]">public/portfolio/</code>
-            .
+            Selected works and case study overlays on the public site. Posters and video reels upload to{' '}
+            <code className="text-[10px]">public/portfolio/</code> (MP4/MOV/WebM recommended for reels).
           </p>
         </div>
         <div className="flex flex-wrap gap-2 shrink-0">
@@ -272,10 +321,18 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
           <button
             type="button"
             disabled={!canEdit || seeding}
+            onClick={() => void handleSeedMarketingTwelve()}
+            className="rounded-md border border-white/30 bg-white/10 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-zinc-100 disabled:opacity-50"
+          >
+            {seeding ? <Loader2 size={12} className="inline animate-spin" /> : null} Seed 12 showcase
+          </button>
+          <button
+            type="button"
+            disabled={!canEdit || seeding}
             onClick={() => void handleSeed()}
             className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-zinc-100 disabled:opacity-50"
           >
-            {seeding ? <Loader2 size={12} className="inline animate-spin" /> : null} Import bundled defaults
+            Import bundled defaults
           </button>
           <button
             type="button"
@@ -290,6 +347,7 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
         </div>
       </div>
 
+      {warning ? <p className="mt-2 text-xs text-amber-300/90 break-words">{warning}</p> : null}
       {error && <p className="mt-2 text-xs text-rose-400 break-words">{error}</p>}
 
       {state === 'loading' ? (
@@ -527,7 +585,51 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
                     </div>
 
                     <div className="md:col-span-2 min-w-0 space-y-2">
-                      <p className={labelCls}>Hero image</p>
+                      <p className={labelCls}>Featured video (grid hover + hero)</p>
+                      <div className="flex flex-wrap items-center gap-2 min-w-0">
+                        <input
+                          ref={(el) => {
+                            featuredVideoRefs.current[`${project.id}-featured`] = el;
+                          }}
+                          type="file"
+                          accept="video/*"
+                          className="hidden"
+                          onChange={runUpload(project, 'featuredVideoUrl', index)}
+                          disabled={!canEdit || uploadingKey?.startsWith(project.id)}
+                        />
+                        <button
+                          type="button"
+                          disabled={!canEdit}
+                          onClick={() => featuredVideoRefs.current[`${project.id}-featured`]?.click()}
+                          className="rounded-md border border-zinc-700 px-2 py-1 text-[11px] text-zinc-200"
+                        >
+                          <Upload size={12} className="inline mr-1" />
+                          Upload video
+                          {uploadingKey === `${project.id}-featuredVideoUrl` ? ` ${uploadPct}%` : ''}
+                        </button>
+                        <input
+                          className={`${inputCls} flex-1 min-w-[12rem]`}
+                          value={project.featuredVideoUrl ?? ''}
+                          onChange={(e) => updateItem(project.id, { featuredVideoUrl: e.target.value || undefined })}
+                          disabled={!canEdit}
+                          placeholder="https://…mp4"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="md:col-span-2 min-w-0 space-y-2">
+                      <p className={labelCls}>Watch full film (Vimeo / YouTube)</p>
+                      <input
+                        className={inputCls}
+                        value={project.fullFilmUrl ?? ''}
+                        onChange={(e) => updateItem(project.id, { fullFilmUrl: e.target.value.trim() || undefined })}
+                        disabled={!canEdit}
+                        placeholder="https://vimeo.com/…"
+                      />
+                    </div>
+
+                    <div className="md:col-span-2 min-w-0 space-y-2">
+                      <p className={labelCls}>Hero poster</p>
                       <div className="flex flex-wrap items-center gap-2 min-w-0">
                         <input
                           ref={(el) => {
@@ -561,13 +663,16 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
 
                     <div className="md:col-span-2 min-w-0 space-y-2">
                       <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <p className={labelCls}>Gallery</p>
+                        <p className={labelCls}>Films (gallery)</p>
                         <button
                           type="button"
                           disabled={!canEdit}
                           onClick={() =>
                             updateItem(project.id, {
-                              gallery: [...project.gallery, { src: '', aspect: 'video', caption: '' }],
+                              gallery: [
+                                ...project.gallery,
+                                { src: '', aspect: 'video', caption: '', mediaType: 'video' },
+                              ],
                             })
                           }
                           className="text-[11px] text-zinc-400 hover:text-white"
@@ -577,7 +682,7 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
                       </div>
                       <div className="space-y-2 max-h-[240px] overflow-y-auto rounded-md border border-zinc-800 p-2 min-w-0">
                         {project.gallery.length === 0 ? (
-                          <p className="text-[11px] text-zinc-600">No stills — add rows or paste URLs.</p>
+                          <p className="text-[11px] text-zinc-600">No films — add rows or paste video URLs.</p>
                         ) : (
                           project.gallery.map((g, gi) => (
                             <div
@@ -591,7 +696,7 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
                                   galleryRefs.current[`${project.id}-${gi}`] = el;
                                 }}
                                 type="file"
-                                accept="image/*"
+                                accept="video/*,image/*"
                                 className="hidden"
                                 onChange={runGalleryUpload(project, gi, index)}
                               />
@@ -601,7 +706,7 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
                                 onClick={() => galleryRefs.current[`${project.id}-${gi}`]?.click()}
                                 className="shrink-0 rounded border border-zinc-700 px-2 py-1 text-[10px] text-zinc-300 self-start"
                               >
-                                Up
+                                Upload
                                 {uploadingKey === `${project.id}-g-${gi}` ? ` ${uploadPct}%` : ''}
                               </button>
                               <input
@@ -613,7 +718,7 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
                                   updateItem(project.id, { gallery: gal });
                                 }}
                                 disabled={!canEdit}
-                                placeholder="Image URL"
+                                placeholder="Video URL"
                               />
                               <select
                                 className={`${inputCls} sm:w-28 shrink-0`}

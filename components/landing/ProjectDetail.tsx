@@ -2,10 +2,12 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { GalleryAspect, VideoProject } from '../../types';
 import { WORK_CATEGORY_FILTERS } from '../../constants';
 import { savePortfolioLandingProject } from '../../data/portfolioLandingRepository';
-import { ArrowLeft, ArrowRight, ArrowUpRight, ImagePlus, Loader2, Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ArrowUpRight, ExternalLink, ImagePlus, Loader2, Pencil, Trash2 } from 'lucide-react';
 import { formatFirestoreListError } from '../../lib/formatFirestoreListError';
 import { isFirebaseConfigured } from '../../lib/firebase';
-import { uploadPortfolioLandingImage } from '../../lib/portfolioLandingStorage';
+import { galleryAspectClass, projectPosterUrl } from '../../lib/portfolioMedia';
+import { uploadPortfolioLandingImage, uploadPortfolioLandingVideo } from '../../lib/portfolioLandingStorage';
+import PortfolioMedia from './PortfolioMedia';
 
 type ProjectDetailProps = {
   project: VideoProject;
@@ -18,6 +20,7 @@ type ProjectDetailProps = {
   marketingTenantId?: string;
   portfolioPersistable?: boolean;
   portfolioProjectIndex?: number;
+  portfolioProjectCount?: number;
   onProjectSaved?: (project: VideoProject) => void;
 };
 
@@ -29,21 +32,6 @@ function cloneProject(p: VideoProject): VideoProject {
     gallery: p.gallery.map((g) => ({ ...g })),
     credits: p.credits.map((c) => ({ ...c })),
   };
-}
-
-function aspectClass(aspect: VideoProject['gallery'][0]['aspect']): string {
-  switch (aspect) {
-    case 'wide':
-      return 'aspect-[21/9]';
-    case 'video':
-      return 'aspect-video';
-    case 'portrait':
-      return 'aspect-[9/16]';
-    case 'square':
-      return 'aspect-square';
-    default:
-      return 'aspect-video';
-  }
 }
 
 function parseDeliverables(raw: string): string[] {
@@ -73,10 +61,12 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
   marketingTenantId = '',
   portfolioPersistable = false,
   portfolioProjectIndex = -1,
+  portfolioProjectCount = 0,
   onProjectSaved,
 }) => {
   const editing = Boolean(canEditMarketing && marketingEditMode);
-  const heroInputRef = useRef<HTMLInputElement>(null);
+  const heroPosterInputRef = useRef<HTMLInputElement>(null);
+  const heroVideoInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const galleryTargetIndexRef = useRef<number | null>(null);
 
@@ -85,8 +75,10 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
 
   const [draft, setDraft] = useState(() => cloneProject(project));
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailWarning, setDetailWarning] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [heroUploading, setHeroUploading] = useState(false);
+  const [heroPosterUploading, setHeroPosterUploading] = useState(false);
+  const [heroVideoUploading, setHeroVideoUploading] = useState(false);
   const [galleryUploadIdx, setGalleryUploadIdx] = useState<number | null>(null);
 
   const [deliverablesText, setDeliverablesText] = useState(project.deliverables.join(' · '));
@@ -97,6 +89,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
     setDeliverablesText(project.deliverables.join(' · '));
     setTagsText(project.tags.join(', '));
     setDetailError(null);
+    setDetailWarning(null);
     setBrokenGallery({});
     setHeroBroken(false);
   }, [project]);
@@ -142,12 +135,28 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
     window.scrollTo(0, 0);
   }, [project.slug]);
 
+  const sortOrderForSave =
+    portfolioProjectIndex >= 0 ? portfolioProjectIndex + 1 : Math.max(1, portfolioProjectCount + 1);
+
   const canSaveWrites =
     editing &&
-    portfolioPersistable &&
-    portfolioProjectIndex >= 0 &&
+    Boolean(marketingTenantId) &&
     Boolean(project.id) &&
-    !project.id.startsWith('draft-');
+    !project.id.startsWith('draft-') &&
+    Boolean(project.slug?.trim());
+
+  const saveDisabledReason = useMemo(() => {
+    if (!editing || saving || !dirty) return null;
+    if (!marketingTenantId) return 'Sign in with an admin account to save.';
+    if (project.id.startsWith('draft-')) {
+      return 'Publish this project from HQ → Org → Landing portfolio first.';
+    }
+    if (!project.slug?.trim()) return 'Project slug is required before saving.';
+    if (!portfolioPersistable) {
+      return 'Sample portfolio — Save will publish this project to Firestore.';
+    }
+    return null;
+  }, [dirty, editing, marketingTenantId, portfolioPersistable, project.id, project.slug, saving]);
 
   const onSave = async () => {
     setDetailError(null);
@@ -156,9 +165,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
       return;
     }
     if (!canSaveWrites) {
-      setDetailError(
-        'Cannot save yet: portfolio must load from Firestore first (HQ → Org → Landing portfolio), and this row must exist in that list.',
-      );
+      setDetailError(saveDisabledReason ?? 'Cannot save this project yet.');
       return;
     }
     if (!isFirebaseConfigured()) {
@@ -174,7 +181,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
 
     setSaving(true);
     try {
-      const saved = await savePortfolioLandingProject(marketingTenantId, payload, portfolioProjectIndex + 1);
+      const saved = await savePortfolioLandingProject(marketingTenantId, payload, sortOrderForSave);
       onProjectSaved?.(saved);
       setDraft(cloneProject(saved));
       setDeliverablesText(saved.deliverables.join(' · '));
@@ -193,23 +200,45 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
     setDetailError(null);
   };
 
-  const onHeroReplace: React.ChangeEventHandler<HTMLInputElement> = async (e) => {
+  const onHeroPosterReplace: React.ChangeEventHandler<HTMLInputElement> = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file || !editing) return;
     setHeroBroken(false);
-    setHeroUploading(true);
+    setHeroPosterUploading(true);
     setDetailError(null);
+    setDetailWarning(null);
     try {
       const r = await uploadPortfolioLandingImage({
-        assetId: `${project.id}-hero-${Date.now()}`,
+        assetId: `${project.id}-hero-poster-${Date.now()}`,
         file,
       });
-      setDraft((d) => ({ ...d, heroImage: r.downloadUrl }));
+      setDraft((d) => ({ ...d, heroImage: r.downloadUrl, thumbnail: d.thumbnail || r.downloadUrl }));
     } catch (err) {
       setDetailError(formatFirestoreListError(err, 'portfolio'));
     } finally {
-      setHeroUploading(false);
+      setHeroPosterUploading(false);
+    }
+  };
+
+  const onHeroVideoReplace: React.ChangeEventHandler<HTMLInputElement> = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !editing) return;
+    setHeroVideoUploading(true);
+    setDetailError(null);
+    setDetailWarning(null);
+    try {
+      const r = await uploadPortfolioLandingVideo({
+        assetId: `${project.id}-hero-video-${Date.now()}`,
+        file,
+      });
+      if (r.warning) setDetailWarning(r.warning);
+      setDraft((d) => ({ ...d, featuredVideoUrl: r.downloadUrl }));
+    } catch (err) {
+      setDetailError(formatFirestoreListError(err, 'portfolio'));
+    } finally {
+      setHeroVideoUploading(false);
     }
   };
 
@@ -220,15 +249,27 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
     if (!file || idx == null || !editing) return;
     setGalleryUploadIdx(idx);
     setDetailError(null);
+    setDetailWarning(null);
     try {
-      const r = await uploadPortfolioLandingImage({
-        assetId: `${project.id}-gallery-${idx}-${Date.now()}`,
-        file,
-      });
+      const isVideo = (file.type || '').startsWith('video/');
+      const r = isVideo
+        ? await uploadPortfolioLandingVideo({
+            assetId: `${project.id}-gallery-${idx}-${Date.now()}`,
+            file,
+          })
+        : await uploadPortfolioLandingImage({
+            assetId: `${project.id}-gallery-${idx}-${Date.now()}`,
+            file,
+          });
+      if (r.warning) setDetailWarning(r.warning);
       setDraft((d) => {
         const next = [...d.gallery];
         if (!next[idx]) return d;
-        next[idx] = { ...next[idx]!, src: r.downloadUrl };
+        next[idx] = {
+          ...next[idx]!,
+          src: r.downloadUrl,
+          mediaType: isVideo ? 'video' : 'image',
+        };
         return { ...d, gallery: next };
       });
       setBrokenGallery((prev) => ({ ...prev, [idx]: false }));
@@ -248,7 +289,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
   const addGalleryRow = () => {
     setDraft((d) => ({
       ...d,
-      gallery: [...d.gallery, { src: '', aspect: 'video', caption: '' }],
+      gallery: [...d.gallery, { src: '', aspect: 'video', caption: '', mediaType: 'video' }],
     }));
   };
 
@@ -275,8 +316,9 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
 
   return (
     <div className="min-w-0 fixed inset-0 z-[60] overflow-y-auto overflow-x-hidden bg-zinc-950 text-zinc-100">
-      <input ref={heroInputRef} type="file" accept="image/*" className="hidden" aria-hidden onChange={onHeroReplace} />
-      <input ref={galleryInputRef} type="file" accept="image/*" className="hidden" aria-hidden onChange={onGalleryFile} />
+      <input ref={heroPosterInputRef} type="file" accept="image/*" className="hidden" aria-hidden onChange={onHeroPosterReplace} />
+      <input ref={heroVideoInputRef} type="file" accept="video/*" className="hidden" aria-hidden onChange={onHeroVideoReplace} />
+      <input ref={galleryInputRef} type="file" accept="video/*,image/*" className="hidden" aria-hidden onChange={onGalleryFile} />
 
       <div className="sticky top-0 z-20 border-b border-zinc-900 bg-zinc-950/95 backdrop-blur-md">
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 px-4 py-4 md:px-8">
@@ -322,14 +364,25 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
                   type="button"
                   onClick={() => void onSave()}
                   disabled={!dirty || saving || !canSaveWrites}
+                  title={saveDisabledReason ?? (dirty ? 'Save changes' : 'No changes to save')}
                   className="min-h-[44px] rounded-md border border-white bg-white px-3 py-2 font-mono text-[10px] font-semibold uppercase tracking-wider text-black hover:bg-zinc-200 disabled:opacity-40"
                 >
-                  {saving ? 'Saving…' : 'Save'}
+                  {saving ? 'Saving…' : portfolioPersistable ? 'Save' : 'Save & publish'}
                 </button>
               </>
             ) : null}
           </div>
         </div>
+        {editing && saveDisabledReason && !detailError ? (
+          <div className="border-t border-zinc-900 px-4 py-2 md:px-8">
+            <p className="text-xs text-amber-200/90 break-words">{saveDisabledReason}</p>
+          </div>
+        ) : null}
+        {detailWarning ? (
+          <div className="border-t border-amber-900/50 bg-amber-950/25 px-4 py-2 md:px-8">
+            <p className="text-xs text-amber-200/90 break-words">{detailWarning}</p>
+          </div>
+        ) : null}
         {detailError ? (
           <div className="border-t border-rose-900/50 bg-rose-950/25 px-4 py-2 md:px-8">
             <p className="text-xs text-rose-300 break-words">{detailError}</p>
@@ -339,29 +392,46 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
 
       <div className="relative w-full overflow-hidden md:aspect-[21/9] aspect-video">
         {editing ? (
-          <button
-            type="button"
-            disabled={heroUploading}
-            onClick={() => heroInputRef.current?.click()}
-            className="absolute right-3 top-3 z-10 flex min-h-[40px] items-center gap-1 rounded-md border border-white/20 bg-black/70 px-2.5 py-1.5 text-[11px] font-mono uppercase tracking-wide text-white backdrop-blur-sm hover:bg-black/85 disabled:opacity-50"
-          >
-            {heroUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5" />}
-            {heroUploading ? 'Uploading…' : 'Replace hero'}
-          </button>
+          <div className="absolute right-3 top-3 z-10 flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              disabled={heroPosterUploading}
+              onClick={() => heroPosterInputRef.current?.click()}
+              className="flex min-h-[40px] items-center gap-1 rounded-md border border-white/20 bg-black/70 px-2.5 py-1.5 text-[11px] font-mono uppercase tracking-wide text-white backdrop-blur-sm hover:bg-black/85 disabled:opacity-50"
+            >
+              {heroPosterUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5" />}
+              {heroPosterUploading ? 'Uploading…' : 'Replace poster'}
+            </button>
+            <button
+              type="button"
+              disabled={heroVideoUploading}
+              onClick={() => heroVideoInputRef.current?.click()}
+              className="flex min-h-[40px] items-center gap-1 rounded-md border border-white/20 bg-black/70 px-2.5 py-1.5 text-[11px] font-mono uppercase tracking-wide text-white backdrop-blur-sm hover:bg-black/85 disabled:opacity-50"
+            >
+              {heroVideoUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5" />}
+              {heroVideoUploading ? 'Uploading…' : 'Replace video'}
+            </button>
+          </div>
         ) : null}
-        {heroBroken ? (
+        {heroBroken && !(editing ? draft.featuredVideoUrl : project.featuredVideoUrl) ? (
           <div className="flex h-full min-h-[40vh] w-full items-center justify-center bg-zinc-900 md:min-h-0">
             <h1 className="max-w-4xl px-4 text-center text-4xl font-bold text-white md:text-6xl">{editing ? draft.title : project.title}</h1>
           </div>
         ) : (
           <>
-            <img
-              src={editing ? draft.heroImage : project.heroImage}
-              alt=""
+            <PortfolioMedia
+              mode={(editing ? draft.featuredVideoUrl : project.featuredVideoUrl) ? 'preview' : 'poster'}
+              videoSrc={editing ? draft.featuredVideoUrl : project.featuredVideoUrl}
+              poster={projectPosterUrl(editing ? draft : project) || undefined}
+              aspectClassName="h-full min-h-[40vh] md:min-h-0"
               className="h-full w-full object-cover"
-              loading="eager"
-              decoding="async"
-              onError={() => setHeroBroken(true)}
+              isHovering={Boolean(editing ? draft.featuredVideoUrl : project.featuredVideoUrl)}
+              priority
+              onPosterError={() => {
+                if (!(editing ? draft.featuredVideoUrl : project.featuredVideoUrl)?.trim()) {
+                  setHeroBroken(true);
+                }
+              }}
             />
             <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/40 to-transparent" />
             <div className="absolute bottom-0 left-0 right-0 px-4 pb-10 pt-24 md:px-12">
@@ -504,29 +574,62 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
         </div>
 
         {editing ? (
-          <label className="mx-auto mt-12 block max-w-3xl">
-            <span className="sr-only">Logline</span>
-            <textarea
-              value={draft.logline}
-              onChange={(e) => setDraft((d) => ({ ...d, logline: e.target.value }))}
-              rows={5}
-              className="w-full min-w-0 rounded-lg border border-zinc-800 bg-zinc-900 p-4 text-base leading-relaxed text-zinc-200"
-            />
-          </label>
+          <div className="mx-auto mt-12 max-w-3xl space-y-4 min-w-0">
+            <label className="block min-w-0">
+              <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-600">Logline</span>
+              <textarea
+                value={draft.logline}
+                onChange={(e) => setDraft((d) => ({ ...d, logline: e.target.value }))}
+                rows={5}
+                className="mt-1 w-full min-w-0 rounded-lg border border-zinc-800 bg-zinc-900 p-4 text-base leading-relaxed text-zinc-200"
+              />
+            </label>
+            <label className="block min-w-0">
+              <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-600">
+                Watch full film (Vimeo / YouTube URL)
+              </span>
+              <input
+                value={draft.fullFilmUrl ?? ''}
+                onChange={(e) =>
+                  setDraft((d) => ({
+                    ...d,
+                    fullFilmUrl: e.target.value.trim() || undefined,
+                  }))
+                }
+                placeholder="https://vimeo.com/…"
+                className="mt-1 w-full min-w-0 rounded border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-200"
+              />
+            </label>
+          </div>
         ) : (
-          <p className="mx-auto mt-12 max-w-3xl text-lg leading-relaxed text-zinc-400">{project.logline}</p>
+          <>
+            <p className="mx-auto mt-12 max-w-3xl text-lg leading-relaxed text-zinc-400">{project.logline}</p>
+            {project.fullFilmUrl?.trim() ? (
+              <div className="mx-auto mt-8 flex max-w-3xl justify-center md:justify-start">
+                <a
+                  href={project.fullFilmUrl.trim()}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900/40 px-6 py-3 font-mono text-xs uppercase tracking-widest text-zinc-200 transition-colors hover:border-zinc-600 hover:text-white"
+                >
+                  Watch full film
+                  <ExternalLink className="h-4 w-4 shrink-0" aria-hidden />
+                </a>
+              </div>
+            ) : null}
+          </>
         )}
 
         <div className="mt-20 min-w-0">
           <div className="mb-8 flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-zinc-900 pb-4">
-            <h2 className="text-2xl font-bold text-white md:text-3xl">Stills</h2>
+            <h2 className="text-2xl font-bold text-white md:text-3xl">Films</h2>
             {editing ? (
               <button
                 type="button"
                 onClick={addGalleryRow}
                 className="min-h-[40px] rounded-md border border-zinc-700 px-3 py-2 font-mono text-[10px] uppercase tracking-wider text-zinc-300 hover:border-zinc-500"
               >
-                Add still
+                Add film
               </button>
             ) : null}
           </div>
@@ -535,7 +638,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
               if (!editing && !item.src.trim()) return null;
               return (
                 <div key={`${project.slug}-g-${i}`} className="break-inside-avoid">
-                  <div className={`relative w-full overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900 ${aspectClass(item.aspect)}`}>
+                  <div className={`relative w-full overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900 ${galleryAspectClass(item.aspect)}`}>
                     {editing ? (
                       <div className="absolute left-2 top-2 z-10 flex flex-wrap gap-1">
                         <button
@@ -555,7 +658,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
                           type="button"
                           onClick={() => removeGalleryRow(i)}
                           className="inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md border border-rose-900/60 bg-black/70 text-rose-300"
-                          aria-label="Remove still"
+                          aria-label="Remove film"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -564,10 +667,12 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
                     {brokenGallery[i] || !item.src.trim() ? (
                       <div className="flex h-full w-full items-center justify-center bg-zinc-900">
                         <span className="px-3 text-center font-mono text-xs text-zinc-600">
-                          {item.src.trim() ? 'Image unavailable' : 'No image — use Replace'}
+                          {item.src.trim()
+                            ? `${item.mediaType === 'image' ? 'Image' : 'Video'} unavailable`
+                            : 'No video — use Replace'}
                         </span>
                       </div>
-                    ) : (
+                    ) : item.mediaType === 'image' ? (
                       <img
                         src={item.src}
                         alt=""
@@ -575,6 +680,14 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
                         decoding="async"
                         className="h-full w-full object-cover"
                         onError={() => setBrokenGallery((prev) => ({ ...prev, [i]: true }))}
+                      />
+                    ) : (
+                      <PortfolioMedia
+                        mode="player"
+                        videoSrc={item.src}
+                        aspectClassName="h-full w-full"
+                        className="h-full w-full object-cover"
+                        onVideoError={() => setBrokenGallery((prev) => ({ ...prev, [i]: true }))}
                       />
                     )}
                   </div>

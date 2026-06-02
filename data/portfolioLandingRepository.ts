@@ -11,6 +11,7 @@ import {
 } from 'firebase/firestore';
 import type { ProjectCategory, VideoProject, VideoProjectCredit, VideoProjectGalleryItem } from '../types';
 import { PROJECTS as DEFAULT_PROJECTS } from '../constants';
+import { PORTFOLIO_MARKETING_TWELVE } from './portfolioMarketingSeed';
 import { getFirebaseFirestoreInstance, isFirebaseConfigured } from '../lib/firebase';
 
 const LOCAL_KEY = 'torp.portfolioLanding.v1';
@@ -39,6 +40,8 @@ export type PortfolioLandingFirestoreDoc = {
   tags: string[];
   aspectRatio: 'video' | 'portrait' | 'square';
   thumbnail: string;
+  featuredVideoUrl?: string;
+  fullFilmUrl?: string;
   heroImage: string;
   logline: string;
   role: string;
@@ -99,7 +102,15 @@ function normalizeGallery(value: unknown): VideoProjectGalleryItem[] {
       if (!src) return null;
       const aspect = typeof r.aspect === 'string' && ASPECTS.has(r.aspect) ? r.aspect : 'video';
       const caption = typeof r.caption === 'string' ? r.caption : undefined;
-      return { src, aspect: aspect as VideoProjectGalleryItem['aspect'], ...(caption ? { caption } : {}) };
+      const mediaTypeRaw = r.mediaType;
+      const mediaType =
+        mediaTypeRaw === 'image' || mediaTypeRaw === 'video' ? mediaTypeRaw : 'video';
+      return {
+        src,
+        aspect: aspect as VideoProjectGalleryItem['aspect'],
+        mediaType,
+        ...(caption ? { caption } : {}),
+      };
     })
     .filter((x): x is VideoProjectGalleryItem => x != null);
 }
@@ -142,6 +153,12 @@ export function firestoreDataToVideoProject(docId: string, data: Record<string, 
     tags: normalizeTags(data.tags),
     aspectRatio: normalizeAspectRatio(data.aspectRatio),
     thumbnail: typeof data.thumbnail === 'string' ? data.thumbnail : '',
+    ...(typeof data.featuredVideoUrl === 'string' && data.featuredVideoUrl.trim()
+      ? { featuredVideoUrl: data.featuredVideoUrl.trim() }
+      : {}),
+    ...(typeof data.fullFilmUrl === 'string' && data.fullFilmUrl.trim()
+      ? { fullFilmUrl: data.fullFilmUrl.trim() }
+      : {}),
     heroImage: typeof data.heroImage === 'string' ? data.heroImage : '',
     logline: typeof data.logline === 'string' ? data.logline : '',
     role: typeof data.role === 'string' ? data.role : '',
@@ -168,6 +185,8 @@ function projectToFirestorePayload(
     tags: project.tags,
     aspectRatio: project.aspectRatio,
     thumbnail: project.thumbnail.trim(),
+    ...(project.featuredVideoUrl?.trim() ? { featuredVideoUrl: project.featuredVideoUrl.trim() } : {}),
+    ...(project.fullFilmUrl?.trim() ? { fullFilmUrl: project.fullFilmUrl.trim() } : {}),
     heroImage: project.heroImage.trim(),
     logline: project.logline.trim(),
     role: project.role.trim(),
@@ -176,6 +195,7 @@ function projectToFirestorePayload(
     gallery: project.gallery.map((g) => ({
       src: g.src.trim(),
       aspect: g.aspect,
+      mediaType: g.mediaType === 'image' ? 'image' : 'video',
       ...(g.caption?.trim() ? { caption: g.caption.trim() } : {}),
     })),
     credits: project.credits
@@ -273,6 +293,14 @@ export async function replacePortfolioLandingOrder(
 export async function seedPortfolioLandingFromConstants(tenantId: string): Promise<void> {
   for (let i = 0; i < DEFAULT_PROJECTS.length; i += 1) {
     const p = DEFAULT_PROJECTS[i]!;
+    await savePortfolioLandingProject(tenantId, p, i + 1);
+  }
+}
+
+/** Marketing-only showcase: 12 case studies aligned to Media Assets (overwrites matching doc ids). */
+export async function seedPortfolioLandingMarketingTwelve(tenantId: string): Promise<void> {
+  for (let i = 0; i < PORTFOLIO_MARKETING_TWELVE.length; i += 1) {
+    const p = PORTFOLIO_MARKETING_TWELVE[i]!;
     await savePortfolioLandingProject(tenantId, p, i + 1);
   }
 }

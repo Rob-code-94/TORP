@@ -14,7 +14,7 @@ import { formatFirestoreListError } from '../../lib/formatFirestoreListError';
 import { isFirebaseConfigured } from '../../lib/firebase';
 import { canEditMarketingLanding } from '../../lib/landingMarketingEdit';
 import { getMarketingTenantId, getMarketingTenantIdForUser } from '../../lib/marketingTenant';
-import { uploadPortfolioLandingImage } from '../../lib/portfolioLandingStorage';
+import { uploadPortfolioLandingImage, uploadPortfolioLandingVideo } from '../../lib/portfolioLandingStorage';
 import type { VideoProject } from '../../types';
 import { useAuth } from '../../lib/auth';
 import { hqDestinationForUser, portalDestinationForUser } from '../../lib/authRedirect';
@@ -34,7 +34,9 @@ const Landing: React.FC = () => {
   const [portfolioProjects, setPortfolioProjects] = useState<VideoProject[]>(() => PROJECTS);
   const [marketingSiteEditMode, setMarketingSiteEditMode] = useState(false);
   const [gridEditError, setGridEditError] = useState<string | null>(null);
+  const [gridEditWarning, setGridEditWarning] = useState<string | null>(null);
   const [thumbnailUploadingId, setThumbnailUploadingId] = useState<string | null>(null);
+  const [previewVideoUploadingId, setPreviewVideoUploadingId] = useState<string | null>(null);
   /** True once Firestore/local list returned ≥1 row — avoids saving against constants fallback IDs */
   const [portfolioPersistable, setPortfolioPersistable] = useState(false);
 
@@ -116,41 +118,71 @@ const Landing: React.FC = () => {
     };
   }, []);
 
-  const handleReplaceLandingThumbnail = useCallback(
-    async (project: VideoProject, file: File) => {
+  const persistGridProject = useCallback(
+    async (project: VideoProject, patch: Partial<VideoProject>) => {
       setGridEditError(null);
+      setGridEditWarning(null);
       if (!isFirebaseConfigured()) {
         setGridEditError(formatFirestoreListError(new Error('Firebase is not configured.'), 'portfolio'));
-        return;
+        return null;
       }
-      if (!portfolioPersistable) {
-        setGridEditError(
-          'Portfolio is still using bundled sample projects or could not load from Firestore. Add or sync projects in HQ (Org → Landing portfolio), then reload this page.',
-        );
-        return;
-      }
-      const idx = portfolioProjects.findIndex((p) => p.id === project.id);
-      if (idx < 0) return;
       if (!project.id || project.id.startsWith('draft-')) {
         setGridEditError('This entry is not published to Firestore yet. Save it from HQ Org settings first.');
-        return;
+        return null;
       }
+      const idx = portfolioProjects.findIndex((p) => p.id === project.id || p.slug === project.slug);
+      const sortOrder = idx >= 0 ? idx + 1 : portfolioProjects.length + 1;
+      const merged: VideoProject = { ...project, ...patch };
+      const saved = await savePortfolioLandingProject(marketingWriteTenantId, merged, sortOrder);
+      setPortfolioPersistable(true);
+      setPortfolioProjects((prev) => {
+        const at = prev.findIndex((p) => p.id === saved.id || p.slug === saved.slug);
+        if (at >= 0) return prev.map((p, i) => (i === at ? saved : p));
+        return [...prev, saved];
+      });
+      return saved;
+    },
+    [marketingWriteTenantId, portfolioProjects],
+  );
+
+  const handleReplaceLandingThumbnail = useCallback(
+    async (project: VideoProject, file: File) => {
       setThumbnailUploadingId(project.id);
+      setGridEditWarning(null);
       try {
         const uploaded = await uploadPortfolioLandingImage({
           assetId: `${project.id}-landing-thumb-${Date.now()}`,
           file,
         });
-        const merged: VideoProject = { ...project, thumbnail: uploaded.downloadUrl };
-        const saved = await savePortfolioLandingProject(marketingWriteTenantId, merged, idx + 1);
-        setPortfolioProjects((prev) => prev.map((p) => (p.id === project.id ? saved : p)));
+        await persistGridProject(project, { thumbnail: uploaded.downloadUrl });
       } catch (e) {
         setGridEditError(formatFirestoreListError(e, 'portfolio'));
       } finally {
         setThumbnailUploadingId(null);
       }
     },
-    [marketingWriteTenantId, portfolioPersistable, portfolioProjects],
+    [persistGridProject],
+  );
+
+  const handleReplacePreviewVideo = useCallback(
+    async (project: VideoProject, file: File) => {
+      setPreviewVideoUploadingId(project.id);
+      setGridEditError(null);
+      setGridEditWarning(null);
+      try {
+        const uploaded = await uploadPortfolioLandingVideo({
+          assetId: `${project.id}-landing-preview-${Date.now()}`,
+          file,
+        });
+        if (uploaded.warning) setGridEditWarning(uploaded.warning);
+        await persistGridProject(project, { featuredVideoUrl: uploaded.downloadUrl });
+      } catch (e) {
+        setGridEditError(formatFirestoreListError(e, 'portfolio'));
+      } finally {
+        setPreviewVideoUploadingId(null);
+      }
+    },
+    [persistGridProject],
   );
 
   useEffect(() => {
@@ -185,12 +217,16 @@ const Landing: React.FC = () => {
           onToggleMarketingEditMode={() => setMarketingSiteEditMode((v) => !v)}
           marketingTenantId={marketingWriteTenantId}
           portfolioPersistable={portfolioPersistable}
-          portfolioProjectIndex={
-            portfolioProjects.findIndex((p) => p.slug === activeWork.slug)
-          }
-          onProjectSaved={(saved) =>
-            setPortfolioProjects((prev) => prev.map((p) => (p.id === saved.id ? saved : p)))
-          }
+          portfolioProjectIndex={portfolioProjects.findIndex((p) => p.slug === activeWork.slug)}
+          portfolioProjectCount={portfolioProjects.length}
+          onProjectSaved={(saved) => {
+            setPortfolioPersistable(true);
+            setPortfolioProjects((prev) => {
+              const at = prev.findIndex((p) => p.id === saved.id || p.slug === saved.slug);
+              if (at >= 0) return prev.map((p, i) => (i === at ? saved : p));
+              return [...prev, saved];
+            });
+          }}
         />
       )}
 
@@ -205,8 +241,11 @@ const Landing: React.FC = () => {
           marketingEditMode={marketingSiteEditMode}
           onToggleMarketingEditMode={() => setMarketingSiteEditMode((v) => !v)}
           onReplaceThumbnail={handleReplaceLandingThumbnail}
+          onReplacePreviewVideo={handleReplacePreviewVideo}
           thumbnailUploadingId={thumbnailUploadingId}
+          previewVideoUploadingId={previewVideoUploadingId}
           gridEditError={gridEditError}
+          gridEditWarning={gridEditWarning}
         />
 
         <section className="py-32 px-4 md:px-12 bg-zinc-950 border-t border-zinc-900">

@@ -17,10 +17,14 @@ export type ProjectCategory =
 
 export type GalleryAspect = 'video' | 'portrait' | 'square' | 'wide';
 
+export type PortfolioGalleryMediaType = 'video' | 'image';
+
 export interface VideoProjectGalleryItem {
   src: string;
   caption?: string;
   aspect: GalleryAspect;
+  /** Defaults to video for portfolio reels. */
+  mediaType?: PortfolioGalleryMediaType;
 }
 
 export interface VideoProjectCredit {
@@ -38,6 +42,10 @@ export interface VideoProject {
   tags: string[];
   aspectRatio: 'video' | 'portrait' | 'square';
   thumbnail: string;
+  /** Featured reel — used on grid hover preview and case-study hero. */
+  featuredVideoUrl?: string;
+  /** Optional Vimeo/YouTube link for full-length master (not hosted in Firebase). */
+  fullFilmUrl?: string;
   heroImage: string;
   logline: string;
   role: string;

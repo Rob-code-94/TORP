@@ -32,6 +32,69 @@ describe('firestoreDataToVideoProject', () => {
     expect(firestoreDataToVideoProject('id', { slug: 's', title: '' })).toBeNull();
   });
 
+  it('maps featured video and gallery mediaType', () => {
+    const vp = firestoreDataToVideoProject('doc2', {
+      slug: 'reel',
+      title: 'Reel',
+      client: 'Client',
+      year: '2024',
+      category: 'Brand',
+      tags: [],
+      aspectRatio: 'video',
+      thumbnail: 'https://example.com/t.jpg',
+      featuredVideoUrl: 'https://example.com/hero.mp4',
+      heroImage: 'https://example.com/h.jpg',
+      logline: '',
+      role: '',
+      deliverables: [],
+      gallery: [{ src: 'https://example.com/film.mp4', aspect: 'video', mediaType: 'video' }],
+      credits: [],
+    });
+    expect(vp!.featuredVideoUrl).toBe('https://example.com/hero.mp4');
+    expect(vp!.gallery[0]!.mediaType).toBe('video');
+  });
+
+  it('defaults gallery mediaType to video when omitted', () => {
+    const vp = firestoreDataToVideoProject('doc3', {
+      slug: 'reel-2',
+      title: 'Reel 2',
+      client: '',
+      year: '',
+      category: 'Spec',
+      tags: [],
+      aspectRatio: 'video',
+      thumbnail: '',
+      heroImage: '',
+      logline: '',
+      role: '',
+      deliverables: [],
+      gallery: [{ src: 'https://example.com/v.mp4', aspect: 'square' }],
+      credits: [],
+    });
+    expect(vp!.gallery[0]!.mediaType).toBe('video');
+  });
+
+  it('maps fullFilmUrl', () => {
+    const vp = firestoreDataToVideoProject('doc4', {
+      slug: 'gracelynn',
+      title: 'Gracelynn',
+      client: '',
+      year: '2024',
+      category: 'Documentary',
+      tags: [],
+      aspectRatio: 'portrait',
+      thumbnail: '',
+      heroImage: '',
+      fullFilmUrl: 'https://vimeo.com/123456',
+      logline: '',
+      role: '',
+      deliverables: [],
+      gallery: [],
+      credits: [],
+    });
+    expect(vp!.fullFilmUrl).toBe('https://vimeo.com/123456');
+  });
+
   it('sanitizes invalid category', () => {
     const vp = firestoreDataToVideoProject('d', {
       slug: 'x',

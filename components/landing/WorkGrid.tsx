@@ -1,7 +1,9 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { WORK_CATEGORY_FILTERS } from '../../constants';
-import { ArrowUpRight, ImagePlus, Loader2, Pencil, Play } from 'lucide-react';
+import { ArrowUpRight, Film, ImagePlus, Loader2, Pencil, Play } from 'lucide-react';
+import { cardAspectClass } from '../../lib/portfolioMedia';
 import type { ProjectCategory, VideoProject } from '../../types';
+import PortfolioMedia from './PortfolioMedia';
 
 type WorkGridProps = {
   projects: VideoProject[];
@@ -10,8 +12,11 @@ type WorkGridProps = {
   marketingEditMode?: boolean;
   onToggleMarketingEditMode?: () => void;
   onReplaceThumbnail?: (project: VideoProject, file: File) => Promise<void>;
+  onReplacePreviewVideo?: (project: VideoProject, file: File) => Promise<void>;
   thumbnailUploadingId?: string | null;
+  previewVideoUploadingId?: string | null;
   gridEditError?: string | null;
+  gridEditWarning?: string | null;
 };
 
 const WorkGrid: React.FC<WorkGridProps> = ({
@@ -21,11 +26,15 @@ const WorkGrid: React.FC<WorkGridProps> = ({
   marketingEditMode = false,
   onToggleMarketingEditMode,
   onReplaceThumbnail,
+  onReplacePreviewVideo,
   thumbnailUploadingId = null,
+  previewVideoUploadingId = null,
   gridEditError = null,
+  gridEditWarning = null,
 }) => {
   const [filter, setFilter] = useState<'All' | ProjectCategory>('All');
   const [brokenThumbs, setBrokenThumbs] = useState<Record<string, boolean>>({});
+  const [hoverPreviewId, setHoverPreviewId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     if (filter === 'All') return projects;
@@ -33,13 +42,18 @@ const WorkGrid: React.FC<WorkGridProps> = ({
   }, [filter, projects]);
 
   const count = projects.length;
-  const thumbInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const posterInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const videoInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
-  const openThumbPicker = (projectId: string) => {
-    thumbInputRefs.current[projectId]?.click();
+  const openPosterPicker = (projectId: string) => {
+    posterInputRefs.current[projectId]?.click();
   };
 
-  const onThumbChange =
+  const openVideoPicker = (projectId: string) => {
+    videoInputRefs.current[projectId]?.click();
+  };
+
+  const onPosterChange =
     (project: VideoProject): React.ChangeEventHandler<HTMLInputElement> =>
     async (e) => {
       const file = e.target.files?.[0];
@@ -48,8 +62,22 @@ const WorkGrid: React.FC<WorkGridProps> = ({
       await onReplaceThumbnail(project, file);
     };
 
+  const onVideoChange =
+    (project: VideoProject): React.ChangeEventHandler<HTMLInputElement> =>
+    async (e) => {
+      const file = e.target.files?.[0];
+      e.target.value = '';
+      if (!file || !onReplacePreviewVideo || !marketingEditMode) return;
+      await onReplacePreviewVideo(project, file);
+    };
+
   return (
     <section id="landing-selected-works" className="min-w-0 scroll-mt-20 px-4 py-24 bg-zinc-950 min-h-screen">
+      {gridEditWarning ? (
+        <div className="max-w-7xl mx-auto mb-4 rounded-lg border border-amber-900/60 bg-amber-950/30 px-3 py-2 min-w-0">
+          <p className="text-xs text-amber-200/90 break-words">{gridEditWarning}</p>
+        </div>
+      ) : null}
       {gridEditError ? (
         <div className="max-w-7xl mx-auto mb-4 rounded-lg border border-rose-900/60 bg-rose-950/30 px-3 py-2 min-w-0">
           <p className="text-xs text-rose-300 break-words">{gridEditError}</p>
@@ -107,108 +135,157 @@ const WorkGrid: React.FC<WorkGridProps> = ({
       </div>
 
       <div className="columns-1 md:columns-2 lg:columns-3 gap-8 space-y-8">
-        {filtered.map((project) => (
-          <div
-            key={project.id}
-            role="link"
-            tabIndex={0}
-            aria-label={`Open case study: ${project.title}`}
-            onClick={() => {
-              if (marketingEditMode) return;
-              onSelect(project.slug);
-            }}
-            onKeyDown={(e) => {
-              if (marketingEditMode) return;
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                onSelect(project.slug);
-              }
-            }}
-            className={`group break-inside-avoid relative block bg-zinc-900 overflow-hidden ${
-              marketingEditMode ? 'cursor-default' : 'cursor-pointer'
-            }`}
-          >
+        {filtered.map((project) => {
+          const isHovering = hoverPreviewId === project.id;
+          return (
             <div
-              className={`relative w-full ${
-                project.aspectRatio === 'portrait'
-                  ? 'aspect-[9/16]'
-                  : project.aspectRatio === 'square'
-                    ? 'aspect-square'
-                    : 'aspect-video'
+              key={project.id}
+              role="link"
+              tabIndex={0}
+              aria-label={`Open case study: ${project.title}`}
+              onClick={() => {
+                if (marketingEditMode) return;
+                onSelect(project.slug);
+              }}
+              onKeyDown={(e) => {
+                if (marketingEditMode) return;
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onSelect(project.slug);
+                }
+              }}
+              onMouseEnter={() => {
+                if (!marketingEditMode && project.featuredVideoUrl) {
+                  setHoverPreviewId(project.id);
+                }
+              }}
+              onMouseLeave={() => {
+                if (hoverPreviewId === project.id) setHoverPreviewId(null);
+              }}
+              className={`group break-inside-avoid relative block bg-zinc-900 overflow-hidden ${
+                marketingEditMode ? 'cursor-default' : 'cursor-pointer'
               }`}
             >
-              {canEditMarketing && marketingEditMode && onReplaceThumbnail ? (
-                <>
-                  <input
-                    ref={(el) => {
-                      thumbInputRefs.current[project.id] = el;
+              <div className={`relative w-full ${cardAspectClass(project.aspectRatio)}`}>
+                {canEditMarketing && marketingEditMode && (onReplaceThumbnail || onReplacePreviewVideo) ? (
+                  <>
+                    {onReplaceThumbnail ? (
+                      <input
+                        ref={(el) => {
+                          posterInputRefs.current[project.id] = el;
+                        }}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        aria-hidden
+                        onChange={onPosterChange(project)}
+                      />
+                    ) : null}
+                    {onReplacePreviewVideo ? (
+                      <input
+                        ref={(el) => {
+                          videoInputRefs.current[project.id] = el;
+                        }}
+                        type="file"
+                        accept="video/*"
+                        className="hidden"
+                        aria-hidden
+                        onChange={onVideoChange(project)}
+                      />
+                    ) : null}
+                    <div className="absolute left-2 top-2 z-10 flex flex-col gap-1">
+                      {onReplaceThumbnail ? (
+                        <button
+                          type="button"
+                          disabled={thumbnailUploadingId === project.id}
+                          onClick={(evt) => {
+                            evt.preventDefault();
+                            evt.stopPropagation();
+                            openPosterPicker(project.id);
+                          }}
+                          className="flex min-h-[36px] shrink-0 items-center gap-1 rounded-md border border-white/20 bg-black/70 px-2 py-1 text-[10px] font-mono uppercase tracking-wide text-white backdrop-blur-sm hover:bg-black/85 disabled:opacity-50"
+                        >
+                          {thumbnailUploadingId === project.id ? (
+                            <Loader2 className="h-3 w-3 shrink-0 animate-spin" aria-hidden />
+                          ) : (
+                            <ImagePlus className="h-3 w-3 shrink-0" aria-hidden />
+                          )}
+                          <span className="truncate">
+                            {thumbnailUploadingId === project.id ? 'Poster…' : 'Poster'}
+                          </span>
+                        </button>
+                      ) : null}
+                      {onReplacePreviewVideo ? (
+                        <button
+                          type="button"
+                          disabled={previewVideoUploadingId === project.id}
+                          onClick={(evt) => {
+                            evt.preventDefault();
+                            evt.stopPropagation();
+                            openVideoPicker(project.id);
+                          }}
+                          className="flex min-h-[36px] shrink-0 items-center gap-1 rounded-md border border-white/20 bg-black/70 px-2 py-1 text-[10px] font-mono uppercase tracking-wide text-white backdrop-blur-sm hover:bg-black/85 disabled:opacity-50"
+                        >
+                          {previewVideoUploadingId === project.id ? (
+                            <Loader2 className="h-3 w-3 shrink-0 animate-spin" aria-hidden />
+                          ) : (
+                            <Film className="h-3 w-3 shrink-0" aria-hidden />
+                          )}
+                          <span className="truncate">
+                            {previewVideoUploadingId === project.id ? 'Video…' : 'Preview'}
+                          </span>
+                        </button>
+                      ) : null}
+                    </div>
+                  </>
+                ) : null}
+                {brokenThumbs[project.id] && !project.featuredVideoUrl?.trim() ? (
+                  <div className="absolute inset-0 flex items-center justify-center bg-zinc-900">
+                    <span className="pointer-events-none px-4 text-center text-lg font-bold text-white">{project.title}</span>
+                  </div>
+                ) : (
+                  <PortfolioMedia
+                    mode="preview"
+                    poster={project.thumbnail?.trim() ? project.thumbnail : undefined}
+                    videoSrc={project.featuredVideoUrl}
+                    alt=""
+                    aspectClassName="h-full w-full"
+                    isHovering={isHovering}
+                    onPosterError={() => {
+                      if (!project.featuredVideoUrl?.trim()) {
+                        setBrokenThumbs((prev) => ({ ...prev, [project.id]: true }));
+                      }
                     }}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    aria-hidden
-                    onChange={onThumbChange(project)}
                   />
-                  <button
-                    type="button"
-                    disabled={thumbnailUploadingId === project.id}
-                    onClick={(evt) => {
-                      evt.preventDefault();
-                      evt.stopPropagation();
-                      openThumbPicker(project.id);
-                    }}
-                    className="absolute left-2 top-2 z-10 flex min-h-[40px] shrink-0 items-center gap-1 rounded-md border border-white/20 bg-black/70 px-2.5 py-1.5 text-[11px] font-mono uppercase tracking-wide text-white backdrop-blur-sm hover:bg-black/85 disabled:opacity-50"
-                  >
-                    {thumbnailUploadingId === project.id ? (
-                      <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden />
-                    ) : (
-                      <ImagePlus className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                    )}
-                    <span className="truncate">{thumbnailUploadingId === project.id ? 'Uploading…' : 'Replace'}</span>
-                  </button>
-                </>
-              ) : null}
-              {brokenThumbs[project.id] ? (
-                <div className="absolute inset-0 flex items-center justify-center bg-zinc-900">
-                  <span className="pointer-events-none px-4 text-center text-lg font-bold text-white">{project.title}</span>
-                </div>
-              ) : (
-                <img
-                  src={project.thumbnail}
-                  alt=""
-                  loading="lazy"
-                  decoding="async"
-                  onError={() => setBrokenThumbs((prev) => ({ ...prev, [project.id]: true }))}
-                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 opacity-80 group-hover:opacity-100"
-                />
-              )}
+                )}
 
-              <div
-                className={`absolute inset-0 flex items-center justify-center gap-4 transition-opacity duration-300 bg-black/20 backdrop-blur-[2px] ${
-                  marketingEditMode ? 'opacity-0 pointer-events-none' : 'opacity-0 group-hover:opacity-100'
-                }`}
-              >
-                <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center shadow-lg transform scale-90 group-hover:scale-100 transition-transform">
-                  <Play className="w-6 h-6 text-black fill-current ml-1" />
+                <div
+                  className={`absolute inset-0 flex items-center justify-center gap-4 transition-opacity duration-300 bg-black/20 backdrop-blur-[2px] ${
+                    marketingEditMode ? 'opacity-0 pointer-events-none' : 'opacity-0 group-hover:opacity-100'
+                  }`}
+                >
+                  <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center shadow-lg transform scale-90 group-hover:scale-100 transition-transform">
+                    <Play className="w-6 h-6 text-black fill-current ml-1" />
+                  </div>
+                  <span className="font-mono text-xs uppercase tracking-widest text-white drop-shadow-md">View case →</span>
                 </div>
-                <span className="font-mono text-xs uppercase tracking-widest text-white drop-shadow-md">View case →</span>
+              </div>
+
+              <div className="pt-4 pb-2 flex justify-between items-start">
+                <div>
+                  <h3 className="text-xl font-bold text-white group-hover:text-zinc-300 transition-colors">{project.title}</h3>
+                  <p className="text-zinc-500 text-sm mt-1">
+                    {project.client} &mdash; {project.tags.join(', ')}
+                  </p>
+                </div>
+                <div className="flex flex-col items-end">
+                  <span className="text-xs font-mono text-zinc-600 border border-zinc-800 px-2 py-0.5 rounded-full">{project.year}</span>
+                  <ArrowUpRight className="w-4 h-4 text-zinc-600 mt-2 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
               </div>
             </div>
-
-            <div className="pt-4 pb-2 flex justify-between items-start">
-              <div>
-                <h3 className="text-xl font-bold text-white group-hover:text-zinc-300 transition-colors">{project.title}</h3>
-                <p className="text-zinc-500 text-sm mt-1">
-                  {project.client} &mdash; {project.tags.join(', ')}
-                </p>
-              </div>
-              <div className="flex flex-col items-end">
-                <span className="text-xs font-mono text-zinc-600 border border-zinc-800 px-2 py-0.5 rounded-full">{project.year}</span>
-                <ArrowUpRight className="w-4 h-4 text-zinc-600 mt-2 opacity-0 group-hover:opacity-100 transition-opacity" />
-              </div>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </section>
   );
