@@ -615,6 +615,51 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
                           placeholder="https://…mp4"
                         />
                       </div>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end min-w-0">
+                        <label className="min-w-0 sm:w-28">
+                          <span className={labelCls}>Start (sec)</span>
+                          <input
+                            type="number"
+                            min={0}
+                            step={0.1}
+                            className={inputCls}
+                            value={project.featuredVideoStartSeconds ?? ''}
+                            onChange={(e) => {
+                              const raw = e.target.value.trim();
+                              updateItem(project.id, {
+                                featuredVideoStartSeconds: raw
+                                  ? Math.max(0, Number(raw) || 0)
+                                  : undefined,
+                              });
+                            }}
+                            disabled={!canEdit}
+                            placeholder="0"
+                          />
+                        </label>
+                        <label className="min-w-0 sm:w-32">
+                          <span className={labelCls}>Loop end (sec)</span>
+                          <input
+                            type="number"
+                            min={0}
+                            step={0.1}
+                            className={inputCls}
+                            value={project.featuredVideoEndSeconds ?? ''}
+                            onChange={(e) => {
+                              const raw = e.target.value.trim();
+                              updateItem(project.id, {
+                                featuredVideoEndSeconds: raw
+                                  ? Math.max(0, Number(raw) || 0)
+                                  : undefined,
+                              });
+                            }}
+                            disabled={!canEdit}
+                            placeholder="optional"
+                          />
+                        </label>
+                        <p className="text-[10px] text-zinc-500 sm:pb-2 sm:flex-1 min-w-0">
+                          Grid hover and hero loop this segment. Leave loop end empty to play from start to end of file.
+                        </p>
+                      </div>
                     </div>
 
                     <div className="md:col-span-2 min-w-0 space-y-2">

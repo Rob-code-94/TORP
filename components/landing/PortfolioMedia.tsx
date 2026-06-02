@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { normalizeFeaturedVideoSegment } from '../../lib/portfolioMedia';
 
 export type PortfolioMediaMode = 'poster' | 'preview' | 'player';
 
@@ -6,6 +7,8 @@ type PortfolioMediaProps = {
   mode: PortfolioMediaMode;
   poster?: string;
   videoSrc?: string;
+  startSeconds?: number;
+  endSeconds?: number;
   alt?: string;
   className?: string;
   aspectClassName?: string;
@@ -17,10 +20,20 @@ type PortfolioMediaProps = {
   onVideoError?: () => void;
 };
 
+function seekVideoTo(el: HTMLVideoElement, seconds: number) {
+  try {
+    el.currentTime = seconds;
+  } catch {
+    /* seek unsupported */
+  }
+}
+
 const PortfolioMedia: React.FC<PortfolioMediaProps> = ({
   mode,
   poster,
   videoSrc,
+  startSeconds: startSecondsProp,
+  endSeconds: endSecondsProp,
   alt = '',
   className = 'h-full w-full object-cover',
   aspectClassName,
@@ -32,9 +45,15 @@ const PortfolioMedia: React.FC<PortfolioMediaProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const [reducedMotion, setReducedMotion] = useState(false);
 
+  const { startSeconds: segmentStart, endSeconds: segmentEnd } = useMemo(
+    () => normalizeFeaturedVideoSegment(startSecondsProp, endSecondsProp),
+    [startSecondsProp, endSecondsProp],
+  );
+
   const hasPoster = Boolean(poster?.trim());
   const hasVideo = Boolean(videoSrc?.trim());
   const videoFrameFallback = mode === 'preview' && hasVideo && !hasPoster;
+  const useNativeLoop = segmentStart === 0 && segmentEnd == null;
 
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -47,33 +66,59 @@ const PortfolioMedia: React.FC<PortfolioMediaProps> = ({
   const playPreview =
     hasVideo && !reducedMotion && (mode === 'player' || (mode === 'preview' && isHovering));
 
-  const showPausedFrame =
-    videoFrameFallback && !playPreview && !reducedMotion;
+  const showPausedFrame = videoFrameFallback && !playPreview && !reducedMotion;
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el || !hasVideo || mode === 'player') return;
+
+    const onTimeUpdate = () => {
+      if (segmentEnd != null && el.currentTime >= segmentEnd - 0.05) {
+        seekVideoTo(el, segmentStart);
+      }
+    };
+
+    const onEnded = () => {
+      if (segmentEnd != null || segmentStart === 0) return;
+      seekVideoTo(el, segmentStart);
+      void el.play().catch(() => {
+        /* autoplay blocked */
+      });
+    };
+
+    if (segmentEnd != null) {
+      el.addEventListener('timeupdate', onTimeUpdate);
+    }
+    if (segmentStart > 0 && segmentEnd == null) {
+      el.addEventListener('ended', onEnded);
+    }
+
+    return () => {
+      el.removeEventListener('timeupdate', onTimeUpdate);
+      el.removeEventListener('ended', onEnded);
+    };
+  }, [hasVideo, mode, segmentEnd, segmentStart]);
 
   useEffect(() => {
     const el = videoRef.current;
     if (!el || !hasVideo) return;
 
     if (playPreview) {
+      seekVideoTo(el, segmentStart);
       void el.play().catch(() => {
         /* autoplay blocked */
       });
       return () => {
         el.pause();
-        if (videoFrameFallback) {
-          el.currentTime = 0;
-        }
+        seekVideoTo(el, segmentStart);
       };
     }
 
     if (showPausedFrame || (videoFrameFallback && reducedMotion)) {
       el.pause();
       const holdFrame = () => {
-        if (el.currentTime > 0.05) return;
-        try {
-          el.currentTime = 0.1;
-        } catch {
-          /* seek unsupported */
+        if (Math.abs(el.currentTime - segmentStart) > 0.05) {
+          seekVideoTo(el, segmentStart);
         }
       };
       if (el.readyState >= 1) holdFrame();
@@ -81,7 +126,7 @@ const PortfolioMedia: React.FC<PortfolioMediaProps> = ({
     }
 
     return undefined;
-  }, [playPreview, showPausedFrame, hasVideo, videoFrameFallback, reducedMotion, videoSrc]);
+  }, [playPreview, showPausedFrame, hasVideo, videoFrameFallback, reducedMotion, videoSrc, segmentStart]);
 
   const wrapperClass = aspectClassName
     ? `relative w-full overflow-hidden ${aspectClassName}`
@@ -136,7 +181,7 @@ const PortfolioMedia: React.FC<PortfolioMediaProps> = ({
           src={videoSrc}
           poster={hasPoster ? poster : undefined}
           muted
-          loop
+          loop={useNativeLoop}
           playsInline
           preload={priority || videoFrameFallback ? 'auto' : 'metadata'}
           className={`${videoClass} transition-opacity duration-300`}

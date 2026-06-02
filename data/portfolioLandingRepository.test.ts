@@ -74,6 +74,52 @@ describe('firestoreDataToVideoProject', () => {
     expect(vp!.gallery[0]!.mediaType).toBe('video');
   });
 
+  it('maps featured video segment start and end', () => {
+    const vp = firestoreDataToVideoProject('doc-seg', {
+      slug: 'segment-reel',
+      title: 'Segment',
+      client: '',
+      year: '',
+      category: 'Brand',
+      tags: [],
+      aspectRatio: 'video',
+      thumbnail: '',
+      heroImage: '',
+      featuredVideoStartSeconds: 5,
+      featuredVideoEndSeconds: 25,
+      logline: '',
+      role: '',
+      deliverables: [],
+      gallery: [],
+      credits: [],
+    });
+    expect(vp!.featuredVideoStartSeconds).toBe(5);
+    expect(vp!.featuredVideoEndSeconds).toBe(25);
+  });
+
+  it('drops invalid featured video end when not greater than start', () => {
+    const vp = firestoreDataToVideoProject('doc-seg-bad', {
+      slug: 'segment-reel-bad',
+      title: 'Segment Bad',
+      client: '',
+      year: '',
+      category: 'Brand',
+      tags: [],
+      aspectRatio: 'video',
+      thumbnail: '',
+      heroImage: '',
+      featuredVideoStartSeconds: 10,
+      featuredVideoEndSeconds: 8,
+      logline: '',
+      role: '',
+      deliverables: [],
+      gallery: [],
+      credits: [],
+    });
+    expect(vp!.featuredVideoStartSeconds).toBe(10);
+    expect(vp!.featuredVideoEndSeconds).toBeUndefined();
+  });
+
   it('maps fullFilmUrl', () => {
     const vp = firestoreDataToVideoProject('doc4', {
       slug: 'gracelynn',

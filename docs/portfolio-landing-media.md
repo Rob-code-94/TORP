@@ -18,8 +18,13 @@ Files over 500 MB are rejected in the browser. Compress with ffmpeg or host the 
 | Card poster | `thumbnail` | JPEG, PNG, WebP, GIF — **optional**; without it, grid shows a clear paused frame from the featured video until hover (then it plays) |
 | Hero poster | `heroImage` | Same — optional when featured video is set |
 | Featured reel | `featuredVideoUrl` | MP4, MOV, WebM (H.264 recommended) — grid hover + case-study hero |
+| Featured loop | `featuredVideoStartSeconds`, `featuredVideoEndSeconds` | Optional segment (e.g. start `5`, end `25`) loops that range on grid hover and hero; omit end to loop from start to EOF |
 | Films | `gallery[].src` | Video URL (`mediaType: video`) |
 | Full master | `fullFilmUrl` | External Vimeo/YouTube only |
+
+### Featured reel segment
+
+Set **Start (sec)** and optional **Loop end (sec)** on the featured video in HQ or inline edit (`/?marketingEdit=1`). Grid hover and the case-study hero seek to the start frame at rest, then loop the segment (start → end). Leave loop end empty to play from start through the end of the file and repeat. Start `0` with no end matches full-file loop behavior.
 
 ## Admin workflow
 

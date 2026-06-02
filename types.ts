@@ -44,6 +44,10 @@ export interface VideoProject {
   thumbnail: string;
   /** Featured reel — used on grid hover preview and case-study hero. */
   featuredVideoUrl?: string;
+  /** Seconds into featuredVideoUrl where preview/hero playback begins. Default 0. */
+  featuredVideoStartSeconds?: number;
+  /** Optional loop end (seconds). When set, playback loops start→end. */
+  featuredVideoEndSeconds?: number;
   /** Optional Vimeo/YouTube link for full-length master (not hosted in Firebase). */
   fullFilmUrl?: string;
   heroImage: string;

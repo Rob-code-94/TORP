@@ -115,6 +115,22 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
     };
   }, [draft, deliverablesText, tagsText]);
 
+  const displayProject = editing ? draft : project;
+
+  const visibleGallery = useMemo(
+    () => displayProject.gallery.filter((g) => g.src.trim()),
+    [displayProject.gallery],
+  );
+
+  const visibleCredits = useMemo(
+    () => displayProject.credits.filter((c) => c.label.trim() && c.value.trim()),
+    [displayProject.credits],
+  );
+
+  const showFilmsSection = editing || visibleGallery.length > 0;
+  const showCreditsSection = editing || visibleCredits.length > 0;
+  const showLoglineBlock = editing || Boolean(displayProject.logline.trim());
+
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -390,7 +406,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
         ) : null}
       </div>
 
-      <div className="relative w-full overflow-hidden md:aspect-[21/9] aspect-video">
+      <div className="relative w-full overflow-hidden min-h-[58vh] sm:min-h-[65vh] md:min-h-[calc(100svh-3.5rem)] md:max-h-[920px]">
         {editing ? (
           <div className="absolute right-3 top-3 z-10 flex flex-wrap justify-end gap-2">
             <button
@@ -414,37 +430,41 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
           </div>
         ) : null}
         {heroBroken && !(editing ? draft.featuredVideoUrl : project.featuredVideoUrl) ? (
-          <div className="flex h-full min-h-[40vh] w-full items-center justify-center bg-zinc-900 md:min-h-0">
-            <h1 className="max-w-4xl px-4 text-center text-4xl font-bold text-white md:text-6xl">{editing ? draft.title : project.title}</h1>
+          <div className="flex h-full min-h-[58vh] w-full items-center justify-center bg-zinc-900 sm:min-h-[65vh] md:min-h-0">
+            <h1 className="max-w-4xl px-4 text-center text-3xl font-bold text-white md:text-5xl lg:text-6xl">{editing ? draft.title : project.title}</h1>
           </div>
         ) : (
           <>
-            <PortfolioMedia
-              mode={(editing ? draft.featuredVideoUrl : project.featuredVideoUrl) ? 'preview' : 'poster'}
-              videoSrc={editing ? draft.featuredVideoUrl : project.featuredVideoUrl}
-              poster={projectPosterUrl(editing ? draft : project) || undefined}
-              aspectClassName="h-full min-h-[40vh] md:min-h-0"
-              className="h-full w-full object-cover"
-              isHovering={Boolean(editing ? draft.featuredVideoUrl : project.featuredVideoUrl)}
-              priority
-              onPosterError={() => {
-                if (!(editing ? draft.featuredVideoUrl : project.featuredVideoUrl)?.trim()) {
-                  setHeroBroken(true);
-                }
-              }}
-            />
+            <div className="absolute inset-0 overflow-hidden">
+              <PortfolioMedia
+                mode={(editing ? draft.featuredVideoUrl : project.featuredVideoUrl) ? 'preview' : 'poster'}
+                videoSrc={editing ? draft.featuredVideoUrl : project.featuredVideoUrl}
+                startSeconds={(editing ? draft : project).featuredVideoStartSeconds}
+                endSeconds={(editing ? draft : project).featuredVideoEndSeconds}
+                poster={projectPosterUrl(editing ? draft : project) || undefined}
+                aspectClassName="h-full w-full"
+                className="h-full w-full object-cover"
+                isHovering={Boolean(editing ? draft.featuredVideoUrl : project.featuredVideoUrl)}
+                priority
+                onPosterError={() => {
+                  if (!(editing ? draft.featuredVideoUrl : project.featuredVideoUrl)?.trim()) {
+                    setHeroBroken(true);
+                  }
+                }}
+              />
+            </div>
             <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/40 to-transparent" />
-            <div className="absolute bottom-0 left-0 right-0 px-4 pb-10 pt-24 md:px-12">
+            <div className="absolute bottom-0 left-0 right-0 px-4 pb-6 pt-16 md:px-12 md:pb-8 md:pt-20">
               {editing ? (
                 <input
                   value={draft.title}
                   onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
-                  className="w-full min-w-0 bg-transparent text-4xl font-bold tracking-tight text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-white/30 md:text-6xl lg:text-7xl"
+                  className="w-full min-w-0 bg-transparent text-3xl font-bold tracking-tight text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-white/30 md:text-5xl lg:text-6xl"
                   placeholder="Title"
                   aria-label="Project title"
                 />
               ) : (
-                <h1 className="text-4xl font-bold tracking-tight text-white md:text-6xl lg:text-7xl">{project.title}</h1>
+                <h1 className="text-3xl font-bold tracking-tight text-white md:text-5xl lg:text-6xl">{project.title}</h1>
               )}
             </div>
           </>
@@ -544,6 +564,42 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
                   className="mt-1 w-full min-w-0 rounded border border-zinc-800 bg-zinc-900 px-2 py-2 text-sm normal-case tracking-normal text-zinc-200"
                 />
               </label>
+              <label className="block min-w-0">
+                <span className="text-zinc-600">Featured start (sec)</span>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.1}
+                  value={draft.featuredVideoStartSeconds ?? ''}
+                  onChange={(e) => {
+                    const raw = e.target.value.trim();
+                    setDraft((d) => ({
+                      ...d,
+                      featuredVideoStartSeconds: raw ? Math.max(0, Number(raw) || 0) : undefined,
+                    }));
+                  }}
+                  placeholder="0"
+                  className="mt-1 w-full min-w-0 rounded border border-zinc-800 bg-zinc-900 px-2 py-2 text-sm normal-case tracking-normal text-zinc-200"
+                />
+              </label>
+              <label className="block min-w-0">
+                <span className="text-zinc-600">Featured loop end (sec)</span>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.1}
+                  value={draft.featuredVideoEndSeconds ?? ''}
+                  onChange={(e) => {
+                    const raw = e.target.value.trim();
+                    setDraft((d) => ({
+                      ...d,
+                      featuredVideoEndSeconds: raw ? Math.max(0, Number(raw) || 0) : undefined,
+                    }));
+                  }}
+                  placeholder="optional"
+                  className="mt-1 w-full min-w-0 rounded border border-zinc-800 bg-zinc-900 px-2 py-2 text-sm normal-case tracking-normal text-zinc-200"
+                />
+              </label>
             </>
           ) : (
             <>
@@ -573,53 +629,68 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
           )}
         </div>
 
-        {editing ? (
-          <div className="mx-auto mt-12 max-w-3xl space-y-4 min-w-0">
-            <label className="block min-w-0">
-              <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-600">Logline</span>
-              <textarea
-                value={draft.logline}
-                onChange={(e) => setDraft((d) => ({ ...d, logline: e.target.value }))}
-                rows={5}
-                className="mt-1 w-full min-w-0 rounded-lg border border-zinc-800 bg-zinc-900 p-4 text-base leading-relaxed text-zinc-200"
-              />
-            </label>
-            <label className="block min-w-0">
-              <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-600">
-                Watch full film (Vimeo / YouTube URL)
-              </span>
-              <input
-                value={draft.fullFilmUrl ?? ''}
-                onChange={(e) =>
-                  setDraft((d) => ({
-                    ...d,
-                    fullFilmUrl: e.target.value.trim() || undefined,
-                  }))
-                }
-                placeholder="https://vimeo.com/…"
-                className="mt-1 w-full min-w-0 rounded border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-200"
-              />
-            </label>
+        {showLoglineBlock ? (
+          editing ? (
+            <div className="mx-auto mt-12 max-w-3xl space-y-4 min-w-0">
+              <label className="block min-w-0">
+                <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-600">Logline</span>
+                <textarea
+                  value={draft.logline}
+                  onChange={(e) => setDraft((d) => ({ ...d, logline: e.target.value }))}
+                  rows={5}
+                  className="mt-1 w-full min-w-0 rounded-lg border border-zinc-800 bg-zinc-900 p-4 text-base leading-relaxed text-zinc-200"
+                />
+              </label>
+              <label className="block min-w-0">
+                <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-600">
+                  Watch full film (Vimeo / YouTube URL)
+                </span>
+                <input
+                  value={draft.fullFilmUrl ?? ''}
+                  onChange={(e) =>
+                    setDraft((d) => ({
+                      ...d,
+                      fullFilmUrl: e.target.value.trim() || undefined,
+                    }))
+                  }
+                  placeholder="https://vimeo.com/…"
+                  className="mt-1 w-full min-w-0 rounded border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-200"
+                />
+              </label>
+            </div>
+          ) : (
+            <>
+              <p className="mx-auto mt-12 max-w-3xl text-lg leading-relaxed text-zinc-400">{project.logline}</p>
+              {project.fullFilmUrl?.trim() ? (
+                <div className="mx-auto mt-8 flex max-w-3xl justify-center md:justify-start">
+                  <a
+                    href={project.fullFilmUrl.trim()}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900/40 px-6 py-3 font-mono text-xs uppercase tracking-widest text-zinc-200 transition-colors hover:border-zinc-600 hover:text-white"
+                  >
+                    Watch full film
+                    <ExternalLink className="h-4 w-4 shrink-0" aria-hidden />
+                  </a>
+                </div>
+              ) : null}
+            </>
+          )
+        ) : !editing && project.fullFilmUrl?.trim() ? (
+          <div className="mx-auto mt-12 flex max-w-3xl justify-center md:justify-start">
+            <a
+              href={project.fullFilmUrl.trim()}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900/40 px-6 py-3 font-mono text-xs uppercase tracking-widest text-zinc-200 transition-colors hover:border-zinc-600 hover:text-white"
+            >
+              Watch full film
+              <ExternalLink className="h-4 w-4 shrink-0" aria-hidden />
+            </a>
           </div>
-        ) : (
-          <>
-            <p className="mx-auto mt-12 max-w-3xl text-lg leading-relaxed text-zinc-400">{project.logline}</p>
-            {project.fullFilmUrl?.trim() ? (
-              <div className="mx-auto mt-8 flex max-w-3xl justify-center md:justify-start">
-                <a
-                  href={project.fullFilmUrl.trim()}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900/40 px-6 py-3 font-mono text-xs uppercase tracking-widest text-zinc-200 transition-colors hover:border-zinc-600 hover:text-white"
-                >
-                  Watch full film
-                  <ExternalLink className="h-4 w-4 shrink-0" aria-hidden />
-                </a>
-              </div>
-            ) : null}
-          </>
-        )}
+        ) : null}
 
+        {showFilmsSection ? (
         <div className="mt-20 min-w-0">
           <div className="mb-8 flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-zinc-900 pb-4">
             <h2 className="text-2xl font-bold text-white md:text-3xl">Films</h2>
@@ -731,7 +802,9 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
             })}
           </div>
         </div>
+        ) : null}
 
+        {showCreditsSection ? (
         <div className="mt-24 min-w-0 rounded-2xl border border-zinc-800 bg-zinc-900/30 p-8 md:p-12">
           <div className="mb-8 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-2xl font-bold text-white md:text-3xl">Credits</h2>
@@ -796,6 +869,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
             )}
           </div>
         </div>
+        ) : null}
 
         {nextProject && (
           <button

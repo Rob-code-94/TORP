@@ -13,6 +13,9 @@ import type { ProjectCategory, VideoProject, VideoProjectCredit, VideoProjectGal
 import { PROJECTS as DEFAULT_PROJECTS } from '../constants';
 import { PORTFOLIO_MARKETING_TWELVE } from './portfolioMarketingSeed';
 import { getFirebaseFirestoreInstance, isFirebaseConfigured } from '../lib/firebase';
+import {
+  featuredVideoSegmentPayloadFields,
+} from '../lib/portfolioMedia';
 
 const LOCAL_KEY = 'torp.portfolioLanding.v1';
 const COLLECTION = 'portfolioProjects';
@@ -41,6 +44,8 @@ export type PortfolioLandingFirestoreDoc = {
   aspectRatio: 'video' | 'portrait' | 'square';
   thumbnail: string;
   featuredVideoUrl?: string;
+  featuredVideoStartSeconds?: number;
+  featuredVideoEndSeconds?: number;
   fullFilmUrl?: string;
   heroImage: string;
   logline: string;
@@ -156,6 +161,12 @@ export function firestoreDataToVideoProject(docId: string, data: Record<string, 
     ...(typeof data.featuredVideoUrl === 'string' && data.featuredVideoUrl.trim()
       ? { featuredVideoUrl: data.featuredVideoUrl.trim() }
       : {}),
+    ...featuredVideoSegmentPayloadFields({
+      featuredVideoStartSeconds:
+        typeof data.featuredVideoStartSeconds === 'number' ? data.featuredVideoStartSeconds : undefined,
+      featuredVideoEndSeconds:
+        typeof data.featuredVideoEndSeconds === 'number' ? data.featuredVideoEndSeconds : undefined,
+    } as VideoProject),
     ...(typeof data.fullFilmUrl === 'string' && data.fullFilmUrl.trim()
       ? { fullFilmUrl: data.fullFilmUrl.trim() }
       : {}),
@@ -186,6 +197,7 @@ function projectToFirestorePayload(
     aspectRatio: project.aspectRatio,
     thumbnail: project.thumbnail.trim(),
     ...(project.featuredVideoUrl?.trim() ? { featuredVideoUrl: project.featuredVideoUrl.trim() } : {}),
+    ...featuredVideoSegmentPayloadFields(project),
     ...(project.fullFilmUrl?.trim() ? { fullFilmUrl: project.fullFilmUrl.trim() } : {}),
     heroImage: project.heroImage.trim(),
     logline: project.logline.trim(),
