@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { WORK_CATEGORY_FILTERS } from '../../constants';
 import { ArrowUpRight, Film, ImagePlus, Loader2, Pencil, Play } from 'lucide-react';
-import { cardAspectClass, projectPosterUrl } from '../../lib/portfolioMedia';
+import { cardAspectClass, projectPosterUrl, railMediaAspectClass } from '../../lib/portfolioMedia';
 import type { ProjectCategory, VideoProject } from '../../types';
 import HorizontalMediaRail from './HorizontalMediaRail';
 import PortfolioMedia from './PortfolioMedia';
@@ -73,17 +73,181 @@ const WorkGrid: React.FC<WorkGridProps> = ({
     };
 
   const renderProjectCard = (project: VideoProject, layout: 'rail' | 'masonry') => {
+    const isRail = layout === 'rail';
+    const isPortraitRail = isRail && project.aspectRatio === 'portrait';
     const isHovering = hoverPreviewId === project.id;
     const poster = projectPosterUrl(project) || undefined;
-    const cardShellClass =
-      layout === 'rail'
-        ? 'snap-start shrink-0 w-[82vw] max-w-[340px]'
-        : 'break-inside-avoid';
+    const mediaAspect = isRail
+      ? railMediaAspectClass(project.aspectRatio)
+      : cardAspectClass(project.aspectRatio);
+    const cardShellClass = isRail
+      ? 'flex flex-col snap-start shrink-0 w-[82vw] max-w-[340px]'
+      : 'break-inside-avoid';
+
+    const mediaBlock = (
+      <div className={`relative w-full shrink-0 ${mediaAspect}`}>
+        {canEditMarketing && marketingEditMode && (onReplaceThumbnail || onReplacePreviewVideo) ? (
+          <>
+            {onReplaceThumbnail ? (
+              <input
+                ref={(el) => {
+                  posterInputRefs.current[project.id] = el;
+                }}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                aria-hidden
+                onChange={onPosterChange(project)}
+              />
+            ) : null}
+            {onReplacePreviewVideo ? (
+              <input
+                ref={(el) => {
+                  videoInputRefs.current[project.id] = el;
+                }}
+                type="file"
+                accept="video/*"
+                className="hidden"
+                aria-hidden
+                onChange={onVideoChange(project)}
+              />
+            ) : null}
+            <div className="absolute left-2 top-2 z-10 flex flex-col gap-1">
+              {onReplaceThumbnail ? (
+                <button
+                  type="button"
+                  disabled={thumbnailUploadingId === project.id}
+                  onClick={(evt) => {
+                    evt.preventDefault();
+                    evt.stopPropagation();
+                    openPosterPicker(project.id);
+                  }}
+                  className="flex min-h-[36px] shrink-0 items-center gap-1 rounded-md border border-white/20 bg-black/70 px-2 py-1 text-[10px] font-mono uppercase tracking-wide text-white backdrop-blur-sm hover:bg-black/85 disabled:opacity-50"
+                >
+                  {thumbnailUploadingId === project.id ? (
+                    <Loader2 className="h-3 w-3 shrink-0 animate-spin" aria-hidden />
+                  ) : (
+                    <ImagePlus className="h-3 w-3 shrink-0" aria-hidden />
+                  )}
+                  <span className="truncate">
+                    {thumbnailUploadingId === project.id ? 'Poster…' : 'Poster'}
+                  </span>
+                </button>
+              ) : null}
+              {onReplacePreviewVideo ? (
+                <button
+                  type="button"
+                  disabled={previewVideoUploadingId === project.id}
+                  onClick={(evt) => {
+                    evt.preventDefault();
+                    evt.stopPropagation();
+                    openVideoPicker(project.id);
+                  }}
+                  className="flex min-h-[36px] shrink-0 items-center gap-1 rounded-md border border-white/20 bg-black/70 px-2 py-1 text-[10px] font-mono uppercase tracking-wide text-white backdrop-blur-sm hover:bg-black/85 disabled:opacity-50"
+                >
+                  {previewVideoUploadingId === project.id ? (
+                    <Loader2 className="h-3 w-3 shrink-0 animate-spin" aria-hidden />
+                  ) : (
+                    <Film className="h-3 w-3 shrink-0" aria-hidden />
+                  )}
+                  <span className="truncate">
+                    {previewVideoUploadingId === project.id ? 'Video…' : 'Preview'}
+                  </span>
+                </button>
+              ) : null}
+            </div>
+          </>
+        ) : null}
+        {brokenThumbs[project.id] && !project.featuredVideoUrl?.trim() ? (
+          <div className="absolute inset-0 flex items-center justify-center bg-zinc-900">
+            <span className="pointer-events-none px-4 text-center text-lg font-bold text-white">
+              {project.title}
+            </span>
+          </div>
+        ) : (
+          <PortfolioMedia
+            mode="preview"
+            poster={poster}
+            videoSrc={project.featuredVideoUrl}
+            startSeconds={project.featuredVideoStartSeconds}
+            endSeconds={project.featuredVideoEndSeconds}
+            alt=""
+            aspectClassName="h-full w-full"
+            isHovering={isHovering}
+            onPosterError={() => {
+              if (!project.featuredVideoUrl?.trim()) {
+                setBrokenThumbs((prev) => ({ ...prev, [project.id]: true }));
+              }
+            }}
+          />
+        )}
+
+        {isRail && !isPortraitRail ? (
+          <span className="pointer-events-none absolute bottom-2 right-2 z-10 rounded-full border border-zinc-800 bg-black/70 px-2 py-0.5 font-mono text-[10px] text-zinc-300">
+            {project.year}
+          </span>
+        ) : null}
+
+        <div
+          className={`absolute inset-0 flex items-center justify-center gap-4 bg-black/20 backdrop-blur-[2px] transition-opacity duration-300 ${
+            marketingEditMode
+              ? 'pointer-events-none opacity-0'
+              : 'opacity-0 md:group-hover:opacity-100'
+          }`}
+        >
+          <div className="flex h-16 w-16 scale-90 transform items-center justify-center rounded-full bg-white shadow-lg transition-transform md:group-hover:scale-100">
+            <Play className="ml-1 h-6 w-6 fill-current text-black" />
+          </div>
+          <span className="hidden font-mono text-xs uppercase tracking-widest text-white drop-shadow-md sm:inline">
+            View case →
+          </span>
+        </div>
+      </div>
+    );
+
+    const railMeta = (
+      <div className="min-w-0 px-3 py-2.5">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h3 className="truncate text-base font-bold text-white transition-colors group-hover:text-zinc-300">
+              {project.title}
+            </h3>
+            <p className="mt-1 line-clamp-2 text-sm text-zinc-500">
+              {project.client} &mdash; {project.tags.join(', ')}
+            </p>
+          </div>
+          {isPortraitRail ? (
+            <span className="shrink-0 rounded-full border border-zinc-800 px-2 py-0.5 font-mono text-[10px] text-zinc-600">
+              {project.year}
+            </span>
+          ) : null}
+        </div>
+      </div>
+    );
+
+    const masonryMeta = (
+      <div className="flex items-start justify-between px-3 pb-3 pt-3">
+        <div className="min-w-0 pr-2">
+          <h3 className="truncate text-lg font-bold text-white transition-colors group-hover:text-zinc-300">
+            {project.title}
+          </h3>
+          <p className="mt-1 line-clamp-2 text-sm text-zinc-500">
+            {project.client} &mdash; {project.tags.join(', ')}
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-col items-end">
+          <span className="rounded-full border border-zinc-800 px-2 py-0.5 font-mono text-xs text-zinc-600">
+            {project.year}
+          </span>
+          <ArrowUpRight className="mt-2 h-4 w-4 text-zinc-600 opacity-0 transition-opacity group-hover:opacity-100" />
+        </div>
+      </div>
+    );
 
     return (
       <article
         key={project.id}
-        data-rail-card={layout === 'rail' ? true : undefined}
+        data-rail-card={isRail ? true : undefined}
         role="link"
         tabIndex={0}
         aria-label={`Open case study: ${project.title}`}
@@ -106,145 +270,18 @@ const WorkGrid: React.FC<WorkGridProps> = ({
         onMouseLeave={() => {
           if (hoverPreviewId === project.id) setHoverPreviewId(null);
         }}
-        className={`group relative block overflow-hidden border border-zinc-800 bg-zinc-900 ${cardShellClass} ${
+        className={`group relative overflow-hidden border border-zinc-800 bg-zinc-900 ${cardShellClass} ${
           marketingEditMode ? 'cursor-default' : 'cursor-pointer'
         }`}
       >
-        <div className={`relative w-full ${cardAspectClass(project.aspectRatio)}`}>
-          {canEditMarketing && marketingEditMode && (onReplaceThumbnail || onReplacePreviewVideo) ? (
-            <>
-              {onReplaceThumbnail ? (
-                <input
-                  ref={(el) => {
-                    posterInputRefs.current[project.id] = el;
-                  }}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  aria-hidden
-                  onChange={onPosterChange(project)}
-                />
-              ) : null}
-              {onReplacePreviewVideo ? (
-                <input
-                  ref={(el) => {
-                    videoInputRefs.current[project.id] = el;
-                  }}
-                  type="file"
-                  accept="video/*"
-                  className="hidden"
-                  aria-hidden
-                  onChange={onVideoChange(project)}
-                />
-              ) : null}
-              <div className="absolute left-2 top-2 z-10 flex flex-col gap-1">
-                {onReplaceThumbnail ? (
-                  <button
-                    type="button"
-                    disabled={thumbnailUploadingId === project.id}
-                    onClick={(evt) => {
-                      evt.preventDefault();
-                      evt.stopPropagation();
-                      openPosterPicker(project.id);
-                    }}
-                    className="flex min-h-[36px] shrink-0 items-center gap-1 rounded-md border border-white/20 bg-black/70 px-2 py-1 text-[10px] font-mono uppercase tracking-wide text-white backdrop-blur-sm hover:bg-black/85 disabled:opacity-50"
-                  >
-                    {thumbnailUploadingId === project.id ? (
-                      <Loader2 className="h-3 w-3 shrink-0 animate-spin" aria-hidden />
-                    ) : (
-                      <ImagePlus className="h-3 w-3 shrink-0" aria-hidden />
-                    )}
-                    <span className="truncate">
-                      {thumbnailUploadingId === project.id ? 'Poster…' : 'Poster'}
-                    </span>
-                  </button>
-                ) : null}
-                {onReplacePreviewVideo ? (
-                  <button
-                    type="button"
-                    disabled={previewVideoUploadingId === project.id}
-                    onClick={(evt) => {
-                      evt.preventDefault();
-                      evt.stopPropagation();
-                      openVideoPicker(project.id);
-                    }}
-                    className="flex min-h-[36px] shrink-0 items-center gap-1 rounded-md border border-white/20 bg-black/70 px-2 py-1 text-[10px] font-mono uppercase tracking-wide text-white backdrop-blur-sm hover:bg-black/85 disabled:opacity-50"
-                  >
-                    {previewVideoUploadingId === project.id ? (
-                      <Loader2 className="h-3 w-3 shrink-0 animate-spin" aria-hidden />
-                    ) : (
-                      <Film className="h-3 w-3 shrink-0" aria-hidden />
-                    )}
-                    <span className="truncate">
-                      {previewVideoUploadingId === project.id ? 'Video…' : 'Preview'}
-                    </span>
-                  </button>
-                ) : null}
-              </div>
-            </>
-          ) : null}
-          {brokenThumbs[project.id] && !project.featuredVideoUrl?.trim() ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-zinc-900">
-              <span className="pointer-events-none px-4 text-center text-lg font-bold text-white">
-                {project.title}
-              </span>
-            </div>
-          ) : (
-            <PortfolioMedia
-              mode="preview"
-              poster={poster}
-              videoSrc={project.featuredVideoUrl}
-              startSeconds={project.featuredVideoStartSeconds}
-              endSeconds={project.featuredVideoEndSeconds}
-              alt=""
-              aspectClassName="h-full w-full"
-              isHovering={isHovering}
-              onPosterError={() => {
-                if (!project.featuredVideoUrl?.trim()) {
-                  setBrokenThumbs((prev) => ({ ...prev, [project.id]: true }));
-                }
-              }}
-            />
-          )}
-
-          <div
-            className={`absolute inset-0 flex items-center justify-center gap-4 bg-black/20 backdrop-blur-[2px] transition-opacity duration-300 ${
-              marketingEditMode
-                ? 'pointer-events-none opacity-0'
-                : 'opacity-0 md:group-hover:opacity-100'
-            }`}
-          >
-            <div className="flex h-16 w-16 scale-90 transform items-center justify-center rounded-full bg-white shadow-lg transition-transform md:group-hover:scale-100">
-              <Play className="ml-1 h-6 w-6 fill-current text-black" />
-            </div>
-            <span className="hidden font-mono text-xs uppercase tracking-widest text-white drop-shadow-md sm:inline">
-              View case →
-            </span>
-          </div>
-        </div>
-
-        <div className="flex items-start justify-between px-3 pb-3 pt-3">
-          <div className="min-w-0 pr-2">
-            <h3 className="truncate text-lg font-bold text-white transition-colors group-hover:text-zinc-300">
-              {project.title}
-            </h3>
-            <p className="mt-1 line-clamp-2 text-sm text-zinc-500">
-              {project.client} &mdash; {project.tags.join(', ')}
-            </p>
-          </div>
-          <div className="flex shrink-0 flex-col items-end">
-            <span className="rounded-full border border-zinc-800 px-2 py-0.5 font-mono text-xs text-zinc-600">
-              {project.year}
-            </span>
-            <ArrowUpRight className="mt-2 h-4 w-4 text-zinc-600 opacity-0 transition-opacity group-hover:opacity-100" />
-          </div>
-        </div>
+        {mediaBlock}
+        {isRail ? railMeta : masonryMeta}
       </article>
     );
   };
 
   return (
-    <section id="landing-selected-works" className="min-h-screen min-w-0 scroll-mt-20 bg-zinc-950 px-4 py-24">
+    <section id="landing-selected-works" className="min-h-0 min-w-0 scroll-mt-20 bg-zinc-950 px-4 py-24 md:min-h-screen">
       {gridEditWarning ? (
         <div className="mx-auto mb-4 min-w-0 max-w-7xl rounded-lg border border-amber-900/60 bg-amber-950/30 px-3 py-2">
           <p className="break-words text-xs text-amber-200/90">{gridEditWarning}</p>

@@ -35,8 +35,27 @@ export function cardAspectClass(aspect: VideoProject['aspectRatio']): string {
       return 'aspect-[9/16]';
     case 'square':
       return 'aspect-square';
-    default:
+    case 'video':
       return 'aspect-video';
+    default: {
+      const _exhaustive: never = aspect;
+      return _exhaustive;
+    }
+  }
+}
+
+/** Mobile rail: compact 16:9 for landscape/square; full vertical stack for portrait. */
+export function railMediaAspectClass(aspect: VideoProject['aspectRatio']): string {
+  switch (aspect) {
+    case 'portrait':
+      return 'aspect-[9/16]';
+    case 'square':
+    case 'video':
+      return 'aspect-video';
+    default: {
+      const _exhaustive: never = aspect;
+      return _exhaustive;
+    }
   }
 }
 

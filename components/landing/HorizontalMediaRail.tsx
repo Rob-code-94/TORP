@@ -68,7 +68,7 @@ const HorizontalMediaRail: React.FC<HorizontalMediaRailProps> = ({
           type="button"
           aria-label="Previous item"
           onClick={() => scrollByCard(-1)}
-          className="absolute left-1 top-1/2 z-20 flex h-11 w-11 min-h-[44px] min-w-[44px] -translate-y-1/2 items-center justify-center rounded-full border border-zinc-700 bg-zinc-950/90 text-white backdrop-blur-sm transition-colors hover:border-zinc-500"
+          className="absolute left-1 top-24 z-20 flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full border border-zinc-700 bg-zinc-950/90 text-white backdrop-blur-sm transition-colors hover:border-zinc-500"
         >
           <ChevronLeft className="h-5 w-5" aria-hidden />
         </button>
@@ -79,7 +79,7 @@ const HorizontalMediaRail: React.FC<HorizontalMediaRailProps> = ({
           type="button"
           aria-label="Next item"
           onClick={() => scrollByCard(1)}
-          className="absolute right-1 top-1/2 z-20 flex h-11 w-11 min-h-[44px] min-w-[44px] -translate-y-1/2 items-center justify-center rounded-full border border-zinc-700 bg-zinc-950/90 text-white backdrop-blur-sm transition-colors hover:border-zinc-500"
+          className="absolute right-1 top-24 z-20 flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full border border-zinc-700 bg-zinc-950/90 text-white backdrop-blur-sm transition-colors hover:border-zinc-500"
         >
           <ChevronRight className="h-5 w-5" aria-hidden />
         </button>
@@ -94,7 +94,7 @@ const HorizontalMediaRail: React.FC<HorizontalMediaRailProps> = ({
         }`}
         style={{ scrollPaddingInline: '1rem' }}
       >
-        <div className="flex w-max min-w-0 gap-4 px-4">{children}</div>
+        <div className="flex w-max min-w-0 items-start gap-4 px-4">{children}</div>
       </div>
     </div>
   );
