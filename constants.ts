@@ -1,7 +1,7 @@
 import { VideoProject, Invoice, Shoot, ProjectCategory } from './types';
 
-export const HERO_VIDEO_FALLBACK =
-  'https://images.unsplash.com/photo-1535016120720-40c6874c3b1c?q=80&w=2664&auto=format&fit=crop';
+/** Self-hosted hero background — avoids external CDN failures on mobile Safari. */
+export const HERO_VIDEO_FALLBACK = '/brand/hero-poster.jpg';
 
 /** Card thumbnails — Retina-friendly */
 const thumb = (path: string) =>

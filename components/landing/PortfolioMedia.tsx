@@ -28,6 +28,17 @@ function seekVideoTo(el: HTMLVideoElement, seconds: number) {
   }
 }
 
+function MediaLoadingPlaceholder({ label = 'One moment' }: { label?: string }) {
+  return (
+    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-zinc-900 animate-pulse">
+      <div className="h-px w-12 bg-zinc-700" aria-hidden />
+      <span className="px-3 text-center font-mono text-[10px] uppercase tracking-widest text-zinc-600">
+        {label}
+      </span>
+    </div>
+  );
+}
+
 const PortfolioMedia: React.FC<PortfolioMediaProps> = ({
   mode,
   poster,
@@ -44,6 +55,9 @@ const PortfolioMedia: React.FC<PortfolioMediaProps> = ({
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [reducedMotion, setReducedMotion] = useState(false);
+  const [finePointer, setFinePointer] = useState(true);
+  const [posterLoaded, setPosterLoaded] = useState(false);
+  const [posterFailed, setPosterFailed] = useState(false);
 
   const { startSeconds: segmentStart, endSeconds: segmentEnd } = useMemo(
     () => normalizeFeaturedVideoSegment(startSecondsProp, endSecondsProp),
@@ -52,8 +66,14 @@ const PortfolioMedia: React.FC<PortfolioMediaProps> = ({
 
   const hasPoster = Boolean(poster?.trim());
   const hasVideo = Boolean(videoSrc?.trim());
-  const videoFrameFallback = mode === 'preview' && hasVideo && !hasPoster;
+  const videoFrameFallback =
+    finePointer && mode === 'preview' && hasVideo && !hasPoster && !posterFailed;
   const useNativeLoop = segmentStart === 0 && segmentEnd == null;
+
+  useEffect(() => {
+    setPosterLoaded(false);
+    setPosterFailed(false);
+  }, [poster]);
 
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -63,10 +83,35 @@ const PortfolioMedia: React.FC<PortfolioMediaProps> = ({
     return () => mq.removeEventListener('change', update);
   }, []);
 
+  useEffect(() => {
+    const mq = window.matchMedia('(hover: hover) and (pointer: fine)');
+    const update = () => setFinePointer(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+
   const playPreview =
-    hasVideo && !reducedMotion && (mode === 'player' || (mode === 'preview' && isHovering));
+    hasVideo &&
+    finePointer &&
+    !reducedMotion &&
+    (mode === 'player' || (mode === 'preview' && isHovering));
 
   const showPausedFrame = videoFrameFallback && !playPreview && !reducedMotion;
+
+  const showMobileDeferredPlaceholder =
+    !finePointer &&
+    mode === 'preview' &&
+    hasVideo &&
+    (!hasPoster || posterFailed);
+
+  const videoPreload = useMemo(() => {
+    if (mode === 'player') return 'metadata';
+    if (priority) return 'metadata';
+    if (!finePointer) return 'none';
+    if (videoFrameFallback) return 'auto';
+    return 'metadata';
+  }, [finePointer, mode, priority, videoFrameFallback]);
 
   useEffect(() => {
     const el = videoRef.current;
@@ -101,7 +146,7 @@ const PortfolioMedia: React.FC<PortfolioMediaProps> = ({
 
   useEffect(() => {
     const el = videoRef.current;
-    if (!el || !hasVideo) return;
+    if (!el || !hasVideo || showMobileDeferredPlaceholder) return;
 
     if (playPreview) {
       seekVideoTo(el, segmentStart);
@@ -126,7 +171,16 @@ const PortfolioMedia: React.FC<PortfolioMediaProps> = ({
     }
 
     return undefined;
-  }, [playPreview, showPausedFrame, hasVideo, videoFrameFallback, reducedMotion, videoSrc, segmentStart]);
+  }, [
+    playPreview,
+    showPausedFrame,
+    hasVideo,
+    videoFrameFallback,
+    reducedMotion,
+    videoSrc,
+    segmentStart,
+    showMobileDeferredPlaceholder,
+  ]);
 
   const wrapperClass = aspectClassName
     ? `relative w-full overflow-hidden ${aspectClassName}`
@@ -161,21 +215,34 @@ const PortfolioMedia: React.FC<PortfolioMediaProps> = ({
 
   return (
     <div className={wrapperClass}>
-      {hasPoster ? (
-        <img
-          src={poster}
-          alt={alt}
-          loading={priority ? 'eager' : 'lazy'}
-          decoding="async"
-          className={`${className} ${playPreview ? 'opacity-0' : 'opacity-100'} transition-opacity duration-300`}
-          onError={onPosterError}
-        />
+      {showMobileDeferredPlaceholder ? (
+        <MediaLoadingPlaceholder label="Loading reel…" />
+      ) : hasPoster ? (
+        <>
+          {!posterLoaded && !posterFailed ? (
+            <MediaLoadingPlaceholder />
+          ) : null}
+          <img
+            src={poster}
+            alt={alt}
+            loading={priority ? 'eager' : 'lazy'}
+            decoding="async"
+            className={`${className} ${playPreview ? 'opacity-0' : posterLoaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-300`}
+            onLoad={() => setPosterLoaded(true)}
+            onError={() => {
+              setPosterFailed(true);
+              onPosterError?.();
+            }}
+          />
+        </>
       ) : !hasVideo ? (
         <div className="absolute inset-0 flex items-center justify-center bg-zinc-900">
           <span className="px-3 text-center font-mono text-xs text-zinc-600">No media</span>
         </div>
-      ) : null}
-      {hasVideo ? (
+      ) : videoFrameFallback ? null : (
+        <MediaLoadingPlaceholder label="Loading reel…" />
+      )}
+      {hasVideo && !showMobileDeferredPlaceholder ? (
         <video
           ref={videoRef}
           src={videoSrc}
@@ -183,7 +250,7 @@ const PortfolioMedia: React.FC<PortfolioMediaProps> = ({
           muted
           loop={useNativeLoop}
           playsInline
-          preload={priority || videoFrameFallback ? 'auto' : 'metadata'}
+          preload={videoPreload}
           className={`${videoClass} transition-opacity duration-300`}
           onError={onVideoError}
         />

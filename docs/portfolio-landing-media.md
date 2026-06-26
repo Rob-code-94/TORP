@@ -8,7 +8,7 @@ HQ and the public site always read/write the **same marketing tenant** — not t
 
 | HQ field | Shows on public site |
 |----------|----------------------|
-| **Thumbnail** | Selected Works grid (at rest) + Next project card |
+| **Thumbnail** | Selected Works grid (at rest) + Next project card — **required for fast mobile load** |
 | **Featured video** | Selected Works hover preview + case-study hero |
 | **Hero poster** | Case-study hero fallback (when no featured video frame) |
 | **Films (gallery)** | Case-study Films section only — never the grid |
