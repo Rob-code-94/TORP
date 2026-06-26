@@ -10,6 +10,14 @@ export function getMarketingTenantId(): string {
   return MARKETING_TENANT_FALLBACK;
 }
 
+/**
+ * Firestore subtree for landing portfolio + showcase reel.
+ * Always the public marketing tenant — not the signed-in HQ JWT tenant.
+ */
+export function getPortfolioMarketingTenantId(): string {
+  return getMarketingTenantId();
+}
+
 /** HQ Org Settings: prefer signed-in tenant; otherwise same subtree as anonymous landing. */
 export function getMarketingTenantIdForUser(userTenantId: string | undefined): string {
   return userTenantId && userTenantId.length > 0 ? userTenantId : getMarketingTenantId();

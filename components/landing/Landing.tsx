@@ -13,7 +13,7 @@ import { listShowcaseAssets, type ShowcaseAsset } from '../../data/showcaseRepos
 import { formatFirestoreListError } from '../../lib/formatFirestoreListError';
 import { isFirebaseConfigured } from '../../lib/firebase';
 import { canEditMarketingLanding } from '../../lib/landingMarketingEdit';
-import { getMarketingTenantId, getMarketingTenantIdForUser } from '../../lib/marketingTenant';
+import { getPortfolioMarketingTenantId } from '../../lib/marketingTenant';
 import { uploadPortfolioLandingImage, uploadPortfolioLandingVideo } from '../../lib/portfolioLandingStorage';
 import type { VideoProject } from '../../types';
 import { useAuth } from '../../lib/auth';
@@ -41,7 +41,7 @@ const Landing: React.FC = () => {
   const [portfolioPersistable, setPortfolioPersistable] = useState(false);
 
   const canEditMarketing = canEditMarketingLanding(user, loading);
-  const marketingWriteTenantId = getMarketingTenantIdForUser(user?.tenantId);
+  const marketingWriteTenantId = getPortfolioMarketingTenantId();
 
   useEffect(() => {
     if (!canEditMarketing) setMarketingSiteEditMode(false);
@@ -103,7 +103,7 @@ const Landing: React.FC = () => {
 
   useEffect(() => {
     let mounted = true;
-    void listPortfolioLandingProjects(getMarketingTenantId())
+    void listPortfolioLandingProjects(getPortfolioMarketingTenantId())
       .then((rows) => {
         if (!mounted) return;
         setPortfolioPersistable(rows.length > 0);
@@ -187,7 +187,7 @@ const Landing: React.FC = () => {
 
   useEffect(() => {
     let mounted = true;
-    void listShowcaseAssets(getMarketingTenantId())
+    void listShowcaseAssets(getPortfolioMarketingTenantId())
       .then((rows) => {
         if (!mounted) return;
         setShowcaseItems(rows.filter((row) => row.visible));

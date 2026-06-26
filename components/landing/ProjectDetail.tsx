@@ -5,7 +5,7 @@ import { savePortfolioLandingProject } from '../../data/portfolioLandingReposito
 import { ArrowLeft, ArrowRight, ArrowUpRight, ExternalLink, ImagePlus, Loader2, Pencil, Trash2 } from 'lucide-react';
 import { formatFirestoreListError } from '../../lib/formatFirestoreListError';
 import { isFirebaseConfigured } from '../../lib/firebase';
-import { galleryAspectClass, projectPosterUrl } from '../../lib/portfolioMedia';
+import { CARD_ASPECT_OPTIONS, galleryAspectClass, projectPosterUrl } from '../../lib/portfolioMedia';
 import { uploadPortfolioLandingImage, uploadPortfolioLandingVideo } from '../../lib/portfolioLandingStorage';
 import PortfolioMedia from './PortfolioMedia';
 
@@ -39,7 +39,6 @@ function parseDeliverables(raw: string): string[] {
 }
 
 const GALLERY_ASPECTS: GalleryAspect[] = ['wide', 'video', 'portrait', 'square'];
-const CARD_ASPECTS = ['video', 'portrait', 'square'] as const;
 
 function stableJson(p: VideoProject): string {
   return JSON.stringify({
@@ -549,12 +548,15 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
                   }
                   className="mt-1 w-full min-w-0 rounded border border-zinc-800 bg-zinc-900 px-2 py-2 text-sm normal-case tracking-normal text-zinc-200"
                 >
-                  {CARD_ASPECTS.map((a) => (
-                    <option key={a} value={a}>
-                      {a}
+                  {CARD_ASPECT_OPTIONS.map((a) => (
+                    <option key={a.value} value={a.value}>
+                      {a.label}
                     </option>
                   ))}
                 </select>
+                <span className="mt-1 block text-[10px] normal-case tracking-normal text-zinc-600">
+                  Controls Selected Works card shape on the public site.
+                </span>
               </label>
               <label className="block min-w-0 md:col-span-2">
                 <span className="text-zinc-600">Tags (comma separated)</span>
@@ -877,9 +879,24 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
             onClick={() => onNext(nextProject.slug)}
             className="group mt-16 flex w-full min-w-0 flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/40 text-left transition-colors hover:border-zinc-600 md:flex-row"
           >
-            <div className="relative aspect-video w-full min-w-0 md:w-1/2">
-              <img src={nextProject.thumbnail} alt="" className="h-full w-full object-cover opacity-90 transition-opacity group-hover:opacity-100" loading="lazy" />
-              <div className="absolute inset-0 bg-black/30" />
+            <div className="relative aspect-video w-full min-w-0 overflow-hidden md:w-1/2">
+              {projectPosterUrl(nextProject) || nextProject.featuredVideoUrl?.trim() ? (
+                <PortfolioMedia
+                  mode={nextProject.featuredVideoUrl?.trim() ? 'preview' : 'poster'}
+                  poster={projectPosterUrl(nextProject) || undefined}
+                  videoSrc={nextProject.featuredVideoUrl}
+                  startSeconds={nextProject.featuredVideoStartSeconds}
+                  endSeconds={nextProject.featuredVideoEndSeconds}
+                  aspectClassName="h-full w-full"
+                  className="h-full w-full object-cover opacity-90 transition-opacity group-hover:opacity-100"
+                  isHovering={false}
+                />
+              ) : (
+                <div className="flex h-full min-h-[12rem] items-center justify-center bg-zinc-900">
+                  <span className="font-mono text-xs text-zinc-600">No preview</span>
+                </div>
+              )}
+              <div className="pointer-events-none absolute inset-0 bg-black/30" />
             </div>
             <div className="flex min-w-0 flex-1 flex-col justify-center px-8 py-10">
               <span className="font-mono text-xs uppercase tracking-widest text-zinc-500">Next project</span>

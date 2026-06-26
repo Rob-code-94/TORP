@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { firestoreDataToVideoProject } from './portfolioLandingRepository';
+import {
+  firestoreDataToVideoProject,
+  mergePortfolioMediaFromAlternateTenant,
+} from './portfolioLandingRepository';
 
 describe('firestoreDataToVideoProject', () => {
   it('maps valid document data', () => {
@@ -160,5 +163,12 @@ describe('firestoreDataToVideoProject', () => {
     });
     expect(vp!.category).toBe('Spec');
     expect(vp!.aspectRatio).toBe('video');
+  });
+});
+
+describe('mergePortfolioMediaFromAlternateTenant', () => {
+  it('skips when alternate tenant matches marketing tenant', async () => {
+    const { mergedCount } = await mergePortfolioMediaFromAlternateTenant('torp-default', 'torp-default');
+    expect(mergedCount).toBe(0);
   });
 });

@@ -5,6 +5,7 @@ import { WORK_CATEGORY_FILTERS } from '../../../../constants';
 import {
   deletePortfolioLandingProject,
   listPortfolioLandingProjects,
+  mergePortfolioMediaFromAlternateTenant,
   replacePortfolioLandingOrder,
   savePortfolioLandingProject,
   seedPortfolioLandingFromConstants,
@@ -13,7 +14,8 @@ import {
 import { useAdminTheme } from '../../../../lib/adminTheme';
 import { appPanelClass } from '../../../../lib/appThemeClasses';
 import { formatFirestoreListError } from '../../../../lib/formatFirestoreListError';
-import { getMarketingTenantIdForUser } from '../../../../lib/marketingTenant';
+import { getPortfolioMarketingTenantId } from '../../../../lib/marketingTenant';
+import { CARD_ASPECT_OPTIONS } from '../../../../lib/portfolioMedia';
 import { useAuth } from '../../../../lib/auth';
 import {
   uploadPortfolioLandingImage,
@@ -37,8 +39,11 @@ interface PortfolioLandingSectionProps {
 
 const CATEGORY_OPTIONS = WORK_CATEGORY_FILTERS.filter((c): c is ProjectCategory => c !== 'All');
 
-const ASPECT_GRID: VideoProject['aspectRatio'][] = ['video', 'portrait', 'square'];
 const ASPECT_GALLERY: GalleryAspect[] = ['video', 'portrait', 'square', 'wide'];
+
+const THUMBNAIL_SHOWS_ON = 'Selected Works grid + Next project card';
+const FEATURED_VIDEO_SHOWS_ON = 'Selected Works hover + case-study hero';
+const FILMS_GALLERY_SHOWS_ON = 'Case-study Films section only';
 
 function emptyProject(): VideoProject {
   return {
@@ -78,7 +83,8 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
   const { theme } = useAdminTheme();
   const { user } = useAuth();
   const isDark = theme === 'dark';
-  const tenantId = getMarketingTenantIdForUser(user?.tenantId);
+  const tenantId = getPortfolioMarketingTenantId();
+  const alternateTenantId = user?.tenantId?.trim() || '';
   const [items, setItems] = useState<VideoProject[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
@@ -99,6 +105,14 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
     setState('loading');
     setError(null);
     try {
+      if (alternateTenantId && alternateTenantId !== tenantId) {
+        const { mergedCount } = await mergePortfolioMediaFromAlternateTenant(tenantId, alternateTenantId);
+        if (mergedCount > 0) {
+          setWarning(
+            `Restored media for ${mergedCount} project(s) from a previous save location. Reload the public site to see updates.`,
+          );
+        }
+      }
       const rows = await listPortfolioLandingProjects(tenantId);
       setItems(rows);
       setState('ready');
@@ -106,7 +120,7 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
       setState('error');
       setError(formatFirestoreListError(err, 'portfolio'));
     }
-  }, [tenantId]);
+  }, [tenantId, alternateTenantId]);
 
   useEffect(() => {
     return () => {
@@ -674,12 +688,15 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
                         }
                         disabled={!canEdit}
                       >
-                        {ASPECT_GRID.map((a) => (
-                          <option key={a} value={a}>
-                            {a}
+                        {CARD_ASPECT_OPTIONS.map((a) => (
+                          <option key={a.value} value={a.value}>
+                            {a.label}
                           </option>
                         ))}
                       </select>
+                      <p className="mt-1 text-[10px] text-zinc-500">
+                        Controls Selected Works card shape on the public site.
+                      </p>
                     </div>
                     <div className="md:col-span-2 min-w-0">
                       <label className={labelCls}>Tags (comma-separated)</label>
@@ -739,6 +756,9 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
 
                     <div className="md:col-span-2 min-w-0 space-y-2">
                       <p className={labelCls}>Thumbnail</p>
+                      <p className="text-[10px] text-zinc-500 break-words">
+                        Shows on: {THUMBNAIL_SHOWS_ON}
+                      </p>
                       <p className="text-[10px] text-zinc-500 break-words">{PORTFOLIO_IMAGE_HINT}</p>
                       <div className="flex flex-wrap items-center gap-2 min-w-0">
                         <input
@@ -777,6 +797,9 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
 
                     <div className="md:col-span-2 min-w-0 space-y-2">
                       <p className={labelCls}>Featured video (grid hover + hero)</p>
+                      <p className="text-[10px] text-zinc-500 break-words">
+                        Shows on: {FEATURED_VIDEO_SHOWS_ON}
+                      </p>
                       <p className="text-[10px] text-zinc-500 break-words">{PORTFOLIO_VIDEO_HINT}</p>
                       <div className="flex flex-wrap items-center gap-2 min-w-0">
                         <input
@@ -911,6 +934,9 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
                     <div className="md:col-span-2 min-w-0 space-y-2">
                       <div className="flex items-center justify-between gap-2 flex-wrap">
                         <p className={labelCls}>Films (gallery)</p>
+                        <p className="text-[10px] text-zinc-500 break-words">
+                          Shows on: {FILMS_GALLERY_SHOWS_ON}
+                        </p>
                         <button
                           type="button"
                           disabled={!canEdit}

@@ -1,5 +1,19 @@
 import type { GalleryAspect, VideoProject } from '../types';
 
+export const CARD_ASPECT_OPTIONS: ReadonlyArray<{
+  value: VideoProject['aspectRatio'];
+  label: string;
+}> = [
+  { value: 'video', label: 'Horizontal (16:9)' },
+  { value: 'portrait', label: 'Vertical (9:16)' },
+  { value: 'square', label: 'Square (1:1)' },
+];
+
+export function cardAspectLabel(aspect: VideoProject['aspectRatio']): string {
+  const match = CARD_ASPECT_OPTIONS.find((o) => o.value === aspect);
+  return match?.label ?? aspect;
+}
+
 export function galleryAspectClass(aspect: GalleryAspect): string {
   switch (aspect) {
     case 'wide':

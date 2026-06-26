@@ -2,10 +2,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Film, Loader2, Plus, Trash2, Upload } from 'lucide-react';
 import { useAdminTheme } from '../../../../lib/adminTheme';
 import { appPanelClass } from '../../../../lib/appThemeClasses';
-import { useAuth } from '../../../../lib/auth';
 import { deleteShowcaseAsset, listShowcaseAssets, saveShowcaseAsset, type ShowcaseAsset } from '../../../../data/showcaseRepository';
 import { formatFirestoreListError } from '../../../../lib/formatFirestoreListError';
-import { getMarketingTenantIdForUser } from '../../../../lib/marketingTenant';
+import { getPortfolioMarketingTenantId } from '../../../../lib/marketingTenant';
 import { deleteShowcaseAsset as deleteShowcaseObject, uploadShowcaseAsset } from '../../../../lib/showcaseStorage';
 
 interface ShowcaseLibrarySectionProps {
@@ -14,9 +13,8 @@ interface ShowcaseLibrarySectionProps {
 
 const ShowcaseLibrarySection: React.FC<ShowcaseLibrarySectionProps> = ({ canEdit }) => {
   const { theme } = useAdminTheme();
-  const { user } = useAuth();
   const isDark = theme === 'dark';
-  const tenantId = getMarketingTenantIdForUser(user?.tenantId);
+  const tenantId = getPortfolioMarketingTenantId();
   const [items, setItems] = useState<ShowcaseAsset[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);

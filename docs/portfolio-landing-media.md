@@ -1,6 +1,18 @@
 # Landing portfolio media
 
-Public **marketing** portfolio (Selected Works + case studies) is separate from HQ operational projects. Metadata lives in Firestore `portfolioProjects`; files live in Firebase Storage under `public/portfolio/{assetId}/`.
+Public **marketing** portfolio (Selected Works + case studies) is separate from HQ operational projects. Metadata lives in Firestore `tenants/{marketingTenantId}/portfolioProjects` (default `torp-default`, override with `VITE_MARKETING_TENANT_ID`); files live in Firebase Storage under `public/portfolio/{assetId}/`.
+
+HQ and the public site always read/write the **same marketing tenant** — not the signed-in JWT tenant. On first load after this fix, HQ may auto-merge media that was previously saved under your JWT tenant into the marketing tenant (matching slugs).
+
+## Where each field appears
+
+| HQ field | Shows on public site |
+|----------|----------------------|
+| **Thumbnail** | Selected Works grid (at rest) + Next project card |
+| **Featured video** | Selected Works hover preview + case-study hero |
+| **Hero poster** | Case-study hero fallback (when no featured video frame) |
+| **Films (gallery)** | Case-study Films section only — never the grid |
+| **Card aspect** | Selected Works card shape: Horizontal (16:9), Vertical (9:16), or Square (1:1) |
 
 ## Size policy
 
@@ -17,14 +29,14 @@ Files over 500 MB are rejected in the browser. Compress with ffmpeg or host the 
 
 ## Formats
 
-| Asset | Field | Format |
-|-------|--------|--------|
-| Card poster | `thumbnail` | JPEG, PNG, WebP, GIF — **optional**; without it, grid shows a clear paused frame from the featured video until hover (then it plays) |
-| Hero poster | `heroImage` | Same — optional when featured video is set |
-| Featured reel | `featuredVideoUrl` | MP4, MOV, WebM (H.264 recommended) — grid hover + case-study hero |
-| Featured loop | `featuredVideoStartSeconds`, `featuredVideoEndSeconds` | Optional segment (e.g. start `5`, end `25`) loops that range on grid hover and hero; omit end to loop from start to EOF |
-| Films | `gallery[].src` | Video URL (`mediaType: video`) |
-| Full master | `fullFilmUrl` | External Vimeo/YouTube only |
+| Asset | Field | Format | Shows on |
+|-------|--------|--------|----------|
+| Card poster | `thumbnail` | JPEG, PNG, WebP, GIF — **optional**; without it, grid shows a clear paused frame from the featured video until hover (then it plays) | Selected Works grid + Next project |
+| Hero poster | `heroImage` | Same — optional when featured video is set | Case-study hero fallback |
+| Featured reel | `featuredVideoUrl` | MP4, MOV, WebM (H.264 recommended) — grid hover + case-study hero | Selected Works hover + case-study hero |
+| Featured loop | `featuredVideoStartSeconds`, `featuredVideoEndSeconds` | Optional segment (e.g. start `5`, end `25`) loops that range on grid hover and hero; omit end to loop from start to EOF | Grid + hero playback only |
+| Films | `gallery[].src` | Video URL (`mediaType: video`) | Case-study Films only |
+| Full master | `fullFilmUrl` | External Vimeo/YouTube only | Watch full film link |
 
 ### Featured reel segment
 

@@ -316,3 +316,68 @@ export async function seedPortfolioLandingMarketingTwelve(tenantId: string): Pro
     await savePortfolioLandingProject(tenantId, p, i + 1);
   }
 }
+
+function portfolioMediaNeedsMerge(target: VideoProject, source: VideoProject): boolean {
+  if (!target.thumbnail?.trim() && source.thumbnail?.trim()) return true;
+  if (!target.heroImage?.trim() && source.heroImage?.trim()) return true;
+  if (!target.featuredVideoUrl?.trim() && source.featuredVideoUrl?.trim()) return true;
+  if (!target.fullFilmUrl?.trim() && source.fullFilmUrl?.trim()) return true;
+  const targetGallery = target.gallery.filter((g) => g.src.trim());
+  const sourceGallery = source.gallery.filter((g) => g.src.trim());
+  if (targetGallery.length === 0 && sourceGallery.length > 0) return true;
+  return false;
+}
+
+function mergePortfolioMediaFields(target: VideoProject, source: VideoProject): VideoProject {
+  const merged: VideoProject = { ...target };
+  if (!target.thumbnail?.trim() && source.thumbnail?.trim()) merged.thumbnail = source.thumbnail.trim();
+  if (!target.heroImage?.trim() && source.heroImage?.trim()) merged.heroImage = source.heroImage.trim();
+  if (!target.featuredVideoUrl?.trim() && source.featuredVideoUrl?.trim()) {
+    merged.featuredVideoUrl = source.featuredVideoUrl.trim();
+    if (source.featuredVideoStartSeconds != null) {
+      merged.featuredVideoStartSeconds = source.featuredVideoStartSeconds;
+    }
+    if (source.featuredVideoEndSeconds != null) {
+      merged.featuredVideoEndSeconds = source.featuredVideoEndSeconds;
+    }
+  }
+  if (!target.fullFilmUrl?.trim() && source.fullFilmUrl?.trim()) {
+    merged.fullFilmUrl = source.fullFilmUrl.trim();
+  }
+  const targetGallery = target.gallery.filter((g) => g.src.trim());
+  const sourceGallery = source.gallery.filter((g) => g.src.trim());
+  if (targetGallery.length === 0 && sourceGallery.length > 0) {
+    merged.gallery = sourceGallery.map((g) => ({ ...g }));
+  }
+  return merged;
+}
+
+/**
+ * One-time backfill: copy missing media fields from an alternate tenant path
+ * (e.g. when HQ previously wrote to JWT tenant instead of marketing tenant).
+ */
+export async function mergePortfolioMediaFromAlternateTenant(
+  marketingTenantId: string,
+  alternateTenantId: string,
+): Promise<{ mergedCount: number }> {
+  if (!alternateTenantId.trim() || alternateTenantId === marketingTenantId) {
+    return { mergedCount: 0 };
+  }
+  const [marketing, alternate] = await Promise.all([
+    listPortfolioLandingProjects(marketingTenantId),
+    listPortfolioLandingProjects(alternateTenantId),
+  ]);
+  if (alternate.length === 0 || marketing.length === 0) return { mergedCount: 0 };
+
+  const alternateBySlug = new Map(alternate.map((p) => [p.slug, p]));
+  let mergedCount = 0;
+  for (let i = 0; i < marketing.length; i += 1) {
+    const target = marketing[i]!;
+    const source = alternateBySlug.get(target.slug);
+    if (!source || !portfolioMediaNeedsMerge(target, source)) continue;
+    const next = mergePortfolioMediaFields(target, source);
+    await savePortfolioLandingProject(marketingTenantId, next, i + 1);
+    mergedCount += 1;
+  }
+  return { mergedCount };
+}
