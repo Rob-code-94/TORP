@@ -9,6 +9,10 @@ Public **marketing** portfolio (Selected Works + case studies) is separate from 
 | Images (poster) | 80 MB | — |
 | Video (featured, Films) | **500 MB** | **200 MB** (upload succeeds; UI shows amber hint) |
 
+- **Soft warn (200 MB):** Upload continues. HQ shows an amber message recommending a shorter H.264 export for grid/hero playback.
+- **Hard max (500 MB):** Browser rejects the file before upload starts. Compress with ffmpeg or host the full master on Vimeo/YouTube and use **Watch full film** (`fullFilmUrl`).
+- **Start / Loop end (sec):** Controls which segment loops on the public site only. It does **not** reduce upload size — the full file is still stored and transferred.
+
 Files over 500 MB are rejected in the browser. Compress with ffmpeg or host the full master on Vimeo/YouTube and use **Watch full film** (`fullFilmUrl`).
 
 ## Formats
@@ -30,12 +34,19 @@ Set **Start (sec)** and optional **Loop end (sec)** on the featured video in HQ 
 
 1. **HQ → Settings → Org → Landing portfolio** → **Seed 12 showcase** (creates marketing case studies; not tied to HQ projects).
 2. Per row: upload **Thumbnail**, **Hero poster**, **Featured video**, optional **Films**, optional **Watch full film** URL → **Save**.
-3. Reload `/` — grid loads from Firestore.
-4. Optional inline edit: `/?marketingEdit=1#landing-selected-works` → **Poster** / **Preview** per card.
+3. Stay on the page until the upload progress bar reaches 100% and shows success — large files (400 MB+) can take many minutes.
+4. Reload `/` — grid loads from Firestore.
+5. Optional inline edit: `/?marketingEdit=1#landing-selected-works` → **Poster** / **Preview** per card.
 
 ## Media Assets → portfolio slug map
 
-Local folder: `/Users/cherobinson/T.O.R.P/Media Assets`
+Primary source folder (ArmorATD volume):
+
+`/Volumes/ArmorATD/T.O.R.P/Media Assets Original`
+
+Legacy path (also valid for local exports):
+
+`/Users/cherobinson/T.O.R.P/Media Assets`
 
 | Source file | Slug |
 |-------------|------|
@@ -54,8 +65,17 @@ Local folder: `/Users/cherobinson/T.O.R.P/Media Assets`
 
 ## ffmpeg batch export
 
+Use the repo script for one file:
+
 ```bash
-SRC="/Users/cherobinson/T.O.R.P/Media Assets"
+chmod +x scripts/export-portfolio-hero.sh
+./scripts/export-portfolio-hero.sh "/Volumes/ArmorATD/T.O.R.P/Media Assets Original/Fihp.Co.Run.Kollin.01.mov" fihp-co-run-kollin
+```
+
+Or batch manually:
+
+```bash
+SRC="/Volumes/ArmorATD/T.O.R.P/Media Assets Original"
 OUT="$HOME/Desktop/torp-portfolio-exports"
 mkdir -p "$OUT"
 

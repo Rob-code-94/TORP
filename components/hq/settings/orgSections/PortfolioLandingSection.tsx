@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronDown, ChevronUp, ExternalLink, Loader2, Plus, Trash2, Upload } from 'lucide-react';
+import { ChevronDown, ChevronUp, ExternalLink, Loader2, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
 import { WORK_CATEGORY_FILTERS } from '../../../../constants';
 import {
   deletePortfolioLandingProject,
@@ -18,7 +18,17 @@ import { useAuth } from '../../../../lib/auth';
 import {
   uploadPortfolioLandingImage,
   uploadPortfolioLandingVideo,
+  type PortfolioLandingUploadProgress,
 } from '../../../../lib/portfolioLandingStorage';
+import PortfolioUploadProgress, {
+  PORTFOLIO_GALLERY_ACCEPT,
+  PORTFOLIO_GALLERY_HINT,
+  PORTFOLIO_IMAGE_ACCEPT,
+  PORTFOLIO_IMAGE_HINT,
+  PORTFOLIO_VIDEO_ACCEPT,
+  PORTFOLIO_VIDEO_HINT,
+  type PortfolioUploadFeedback,
+} from '../PortfolioUploadProgress';
 import type { GalleryAspect, ProjectCategory, VideoProject, VideoProjectCredit, VideoProjectGalleryItem } from '../../../../types';
 
 interface PortfolioLandingSectionProps {
@@ -50,6 +60,20 @@ function emptyProject(): VideoProject {
   };
 }
 
+function cloneVideoProject(project: VideoProject): VideoProject {
+  return {
+    ...project,
+    tags: [...project.tags],
+    deliverables: [...project.deliverables],
+    gallery: project.gallery.map((item) => ({ ...item })),
+    credits: project.credits.map((credit) => ({ ...credit })),
+  };
+}
+
+function hasFeaturedVideo(project: VideoProject): boolean {
+  return Boolean(project.featuredVideoUrl?.trim());
+}
+
 const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEdit }) => {
   const { theme } = useAdminTheme();
   const { user } = useAuth();
@@ -61,7 +85,10 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
   const [warning, setWarning] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [uploadingKey, setUploadingKey] = useState<string | null>(null);
-  const [uploadPct, setUploadPct] = useState(0);
+  const [uploadFeedback, setUploadFeedback] = useState<Record<string, PortfolioUploadFeedback>>({});
+  const uploadClearTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const editSnapshotRef = useRef<VideoProject | null>(null);
   const [seeding, setSeeding] = useState(false);
   const thumbRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const heroRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -82,6 +109,43 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
   }, [tenantId]);
 
   useEffect(() => {
+    return () => {
+      Object.values(uploadClearTimers.current).forEach(clearTimeout);
+    };
+  }, []);
+
+  useEffect(() => {
+    const uploading = Object.values(uploadFeedback).some((f) => f.status === 'uploading');
+    if (!uploading) return;
+    const handler = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [uploadFeedback]);
+
+  const setFieldUploadFeedback = (key: string, feedback: PortfolioUploadFeedback | null) => {
+    setUploadFeedback((prev) => {
+      const next = { ...prev };
+      if (feedback) next[key] = feedback;
+      else delete next[key];
+      return next;
+    });
+  };
+
+  const scheduleUploadFeedbackClear = (key: string, delayMs = 6000) => {
+    if (uploadClearTimers.current[key]) clearTimeout(uploadClearTimers.current[key]);
+    uploadClearTimers.current[key] = setTimeout(() => {
+      setFieldUploadFeedback(key, null);
+      delete uploadClearTimers.current[key];
+    }, delayMs);
+  };
+
+  const onUploadProgress = (key: string, label: string) => (progress: PortfolioLandingUploadProgress) => {
+    setFieldUploadFeedback(key, { status: 'uploading', progress, label });
+  };
+
+  useEffect(() => {
     void refresh();
   }, [refresh]);
 
@@ -97,6 +161,30 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
 
   const updateItem = (id: string, patch: Partial<VideoProject>) => {
     setItems((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+  };
+
+  const cancelEdit = (projectId: string) => {
+    const snap = editSnapshotRef.current;
+    if (snap?.id === projectId) {
+      setItems((prev) => prev.map((p) => (p.id === projectId ? snap : p)));
+    }
+    editSnapshotRef.current = null;
+    setEditingProjectId((current) => (current === projectId ? null : current));
+  };
+
+  const beginEdit = (project: VideoProject) => {
+    if (editingProjectId && editingProjectId !== project.id) {
+      cancelEdit(editingProjectId);
+    }
+    editSnapshotRef.current = cloneVideoProject(project);
+    setEditingProjectId(project.id);
+    setError(null);
+    setWarning(null);
+  };
+
+  const finishEdit = () => {
+    editSnapshotRef.current = null;
+    setEditingProjectId(null);
   };
 
   const move = async (index: number, dir: -1 | 1) => {
@@ -141,6 +229,7 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
     try {
       const saved = await savePortfolioLandingProject(tenantId, { ...project, slug: project.slug.trim() }, index + 1);
       setItems((prev) => prev.map((p, i) => (i === index ? saved : p)));
+      finishEdit();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed.');
     } finally {
@@ -155,6 +244,7 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
     setError(null);
     try {
       await deletePortfolioLandingProject(tenantId, project.id);
+      if (editingProjectId === project.id) finishEdit();
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Delete failed.');
@@ -165,7 +255,9 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
 
   const handleAdd = () => {
     if (!canEdit) return;
-    setItems((prev) => [...prev, emptyProject()]);
+    const created = emptyProject();
+    setItems((prev) => [...prev, created]);
+    beginEdit(created);
   };
 
   const handleSeed = async () => {
@@ -217,24 +309,30 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
     async (event) => {
       const file = event.target.files?.[0];
       event.target.value = '';
-      if (!file || !canEdit) return;
+      if (!file || !canEdit || editingProjectId !== project.id) return;
       const key = `${project.id}-${field}`;
+      const label =
+        field === 'thumbnail' ? 'Thumbnail' : field === 'heroImage' ? 'Hero poster' : 'Featured video';
       setUploadingKey(key);
-      setUploadPct(0);
       setError(null);
       setWarning(null);
+      setFieldUploadFeedback(key, {
+        status: 'uploading',
+        progress: { percent: 0, bytesTransferred: 0, totalBytes: file.size },
+        label,
+      });
       try {
         const up =
           field === 'featuredVideoUrl'
             ? await uploadPortfolioLandingVideo({
                 assetId: `${project.id}-featured`,
                 file,
-                onProgress: ({ percent }) => setUploadPct(percent),
+                onProgress: onUploadProgress(key, label),
               })
             : await uploadPortfolioLandingImage({
                 assetId: `${project.id}-${field}`,
                 file,
-                onProgress: ({ percent }) => setUploadPct(percent),
+                onProgress: onUploadProgress(key, label),
               });
         if (up.warning) setWarning(up.warning);
         const next =
@@ -246,11 +344,28 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
         const merged = { ...project, ...next };
         const saved = await savePortfolioLandingProject(tenantId, merged, index + 1);
         setItems((prev) => prev.map((p) => (p.id === project.id ? saved : p)));
+        if (editingProjectId === project.id) {
+          editSnapshotRef.current = cloneVideoProject(saved);
+        }
+        setFieldUploadFeedback(key, {
+          status: 'success',
+          progress: { percent: 100, bytesTransferred: file.size, totalBytes: file.size },
+          label,
+          message: `Upload complete — saved to ${label}. URL updated below.`,
+        });
+        scheduleUploadFeedbackClear(key);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Upload failed.');
+        const message = err instanceof Error ? err.message : 'Upload failed.';
+        setError(message);
+        setFieldUploadFeedback(key, {
+          status: 'error',
+          progress: null,
+          label,
+          message,
+        });
+        scheduleUploadFeedbackClear(key, 12000);
       } finally {
         setUploadingKey(null);
-        setUploadPct(0);
       }
     };
 
@@ -258,24 +373,29 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
     async (event) => {
       const file = event.target.files?.[0];
       event.target.value = '';
-      if (!file || !canEdit) return;
+      if (!file || !canEdit || editingProjectId !== project.id) return;
       const key = `${project.id}-g-${galleryIndex}`;
+      const label = `Film row ${galleryIndex + 1}`;
       setUploadingKey(key);
-      setUploadPct(0);
       setError(null);
       setWarning(null);
+      setFieldUploadFeedback(key, {
+        status: 'uploading',
+        progress: { percent: 0, bytesTransferred: 0, totalBytes: file.size },
+        label,
+      });
       try {
         const isVideo = (file.type || '').startsWith('video/');
         const up = isVideo
           ? await uploadPortfolioLandingVideo({
               assetId: `${project.id}-g${galleryIndex}`,
               file,
-              onProgress: ({ percent }) => setUploadPct(percent),
+              onProgress: onUploadProgress(key, label),
             })
           : await uploadPortfolioLandingImage({
               assetId: `${project.id}-g${galleryIndex}`,
               file,
-              onProgress: ({ percent }) => setUploadPct(percent),
+              onProgress: onUploadProgress(key, label),
             });
         if (up.warning) setWarning(up.warning);
         const gal = [...project.gallery];
@@ -284,11 +404,28 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
         const merged = { ...project, gallery: gal };
         const saved = await savePortfolioLandingProject(tenantId, merged, projectIndex + 1);
         setItems((prev) => prev.map((p) => (p.id === project.id ? saved : p)));
+        if (editingProjectId === project.id) {
+          editSnapshotRef.current = cloneVideoProject(saved);
+        }
+        setFieldUploadFeedback(key, {
+          status: 'success',
+          progress: { percent: 100, bytesTransferred: file.size, totalBytes: file.size },
+          label,
+          message: `Upload complete — saved to ${label}. URL updated below.`,
+        });
+        scheduleUploadFeedbackClear(key);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Upload failed.');
+        const message = err instanceof Error ? err.message : 'Upload failed.';
+        setError(message);
+        setFieldUploadFeedback(key, {
+          status: 'error',
+          progress: null,
+          label,
+          message,
+        });
+        scheduleUploadFeedbackClear(key, 12000);
       } finally {
         setUploadingKey(null);
-        setUploadPct(0);
       }
     };
 
@@ -358,11 +495,19 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
         <ul className="mt-4 space-y-3 min-w-0">
           {items.map((project, index) => {
             const slugDup = project.slug.trim() && (slugCounts.get(project.slug.trim().toLowerCase()) ?? 0) > 1;
+            const isEditing = editingProjectId === project.id;
+            const videoReady = hasFeaturedVideo(project);
             return (
               <li
                 key={project.id}
                 className={`rounded-lg border min-w-0 overflow-hidden ${
-                  isDark ? 'border-zinc-800 bg-zinc-900/40' : 'border-zinc-200 bg-zinc-50/80'
+                  isEditing
+                    ? isDark
+                      ? 'border-white/25 bg-zinc-900/50 ring-1 ring-white/10'
+                      : 'border-zinc-400 bg-white ring-1 ring-zinc-300'
+                    : isDark
+                      ? 'border-zinc-800 bg-zinc-900/40'
+                      : 'border-zinc-200 bg-zinc-50/80'
                 }`}
               >
                 <div
@@ -371,9 +516,25 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
                   }`}
                 >
                   <div className="min-w-0">
-                    <p className={`text-sm font-semibold truncate ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
-                      {project.title || '(untitled)'}
-                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className={`text-sm font-semibold truncate ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}>
+                        {project.title || '(untitled)'}
+                      </p>
+                      <span
+                        className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-mono uppercase tracking-wide ${
+                          videoReady
+                            ? 'border-emerald-800/60 bg-emerald-950/40 text-emerald-300'
+                            : 'border-amber-800/60 bg-amber-950/40 text-amber-300'
+                        }`}
+                      >
+                        {videoReady ? 'Video ready' : 'Needs video'}
+                      </span>
+                      {isEditing ? (
+                        <span className="shrink-0 text-[10px] font-mono uppercase tracking-wide text-zinc-400">
+                          Editing
+                        </span>
+                      ) : null}
+                    </div>
                     <p className="text-[11px] text-zinc-500 truncate">
                       {project.slug || 'no slug'} · order {index + 1}
                       {slugDup ? <span className="text-rose-400 ml-2">Duplicate slug</span> : null}
@@ -382,7 +543,7 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
                   <div className="flex flex-wrap gap-1 shrink-0">
                     <button
                       type="button"
-                      disabled={!canEdit || index === 0 || savingId === '_reorder'}
+                      disabled={!canEdit || index === 0 || savingId === '_reorder' || isEditing}
                       onClick={() => void move(index, -1)}
                       className="rounded-md border border-zinc-700 px-2 py-1 text-[11px] text-zinc-200 disabled:opacity-40"
                       aria-label="Move up"
@@ -391,38 +552,63 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
                     </button>
                     <button
                       type="button"
-                      disabled={!canEdit || index >= items.length - 1 || savingId === '_reorder'}
+                      disabled={!canEdit || index >= items.length - 1 || savingId === '_reorder' || isEditing}
                       onClick={() => void move(index, 1)}
                       className="rounded-md border border-zinc-700 px-2 py-1 text-[11px] text-zinc-200 disabled:opacity-40"
                       aria-label="Move down"
                     >
                       <ChevronDown size={14} />
                     </button>
-                    <button
-                      type="button"
-                      disabled={!canEdit || savingId === project.id}
-                      onClick={() => void handleSave(project, index)}
-                      className="rounded-md border border-zinc-700 px-2 py-1 text-[11px] text-zinc-200 disabled:opacity-50"
-                    >
-                      {savingId === project.id ? <Loader2 size={12} className="inline animate-spin" /> : null} Save
-                    </button>
-                    <button
-                      type="button"
-                      disabled={!canEdit || savingId === project.id}
-                      onClick={() => void handleDelete(project)}
-                      className="rounded-md border border-red-900/60 px-2 py-1 text-[11px] text-red-300 disabled:opacity-50"
-                    >
-                      <Trash2 size={12} className="inline" />
-                    </button>
+                    {canEdit && !isEditing ? (
+                      <button
+                        type="button"
+                        onClick={() => beginEdit(project)}
+                        className="rounded-md border border-zinc-700 px-2 py-1 text-[11px] text-zinc-200 hover:border-zinc-500"
+                        aria-label={`Edit ${project.title || project.slug || 'project'}`}
+                      >
+                        <Pencil size={12} className="inline mr-1" />
+                        Edit
+                      </button>
+                    ) : null}
+                    {canEdit && isEditing ? (
+                      <>
+                        <button
+                          type="button"
+                          disabled={savingId === project.id}
+                          onClick={() => void handleSave(project, index)}
+                          className="rounded-md border border-zinc-700 px-2 py-1 text-[11px] text-zinc-200 disabled:opacity-50"
+                        >
+                          {savingId === project.id ? <Loader2 size={12} className="inline animate-spin" /> : null} Save
+                        </button>
+                        <button
+                          type="button"
+                          disabled={savingId === project.id}
+                          onClick={() => cancelEdit(project.id)}
+                          className="rounded-md border border-zinc-700 px-2 py-1 text-[11px] text-zinc-400 disabled:opacity-50"
+                          aria-label="Cancel edit"
+                        >
+                          <X size={12} className="inline" />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={savingId === project.id}
+                          onClick={() => void handleDelete(project)}
+                          className="rounded-md border border-red-900/60 px-2 py-1 text-[11px] text-red-300 disabled:opacity-50"
+                          aria-label={`Delete ${project.title || project.slug || 'project'}`}
+                        >
+                          <Trash2 size={12} className="inline" />
+                        </button>
+                      </>
+                    ) : null}
                   </div>
                 </div>
 
-                <details className="group px-3 py-3 min-w-0">
-                  <summary className={`cursor-pointer text-[11px] font-mono uppercase tracking-wider list-none flex items-center gap-1 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>
-                    <ChevronDown size={14} className="group-open:rotate-180 transition-transform shrink-0" />
+                {isEditing ? (
+                <div className="px-3 py-3 min-w-0">
+                  <p className={`text-[11px] font-mono uppercase tracking-wider mb-3 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>
                     Fields & uploads
-                  </summary>
-                  <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 min-w-0">
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 min-w-0">
                     <div className="min-w-0">
                       <label className={labelCls}>Slug (URL)</label>
                       <input
@@ -553,26 +739,30 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
 
                     <div className="md:col-span-2 min-w-0 space-y-2">
                       <p className={labelCls}>Thumbnail</p>
+                      <p className="text-[10px] text-zinc-500 break-words">{PORTFOLIO_IMAGE_HINT}</p>
                       <div className="flex flex-wrap items-center gap-2 min-w-0">
                         <input
                           ref={(el) => {
                             thumbRefs.current[`${project.id}-thumb`] = el;
                           }}
                           type="file"
-                          accept="image/*"
+                          accept={PORTFOLIO_IMAGE_ACCEPT}
                           className="hidden"
                           onChange={runUpload(project, 'thumbnail', index)}
                           disabled={!canEdit || uploadingKey?.startsWith(project.id)}
                         />
                         <button
                           type="button"
-                          disabled={!canEdit}
+                          disabled={!canEdit || uploadingKey === `${project.id}-thumbnail`}
                           onClick={() => thumbRefs.current[`${project.id}-thumb`]?.click()}
-                          className="rounded-md border border-zinc-700 px-2 py-1 text-[11px] text-zinc-200"
+                          className="rounded-md border border-zinc-700 px-2 py-1 text-[11px] text-zinc-200 disabled:opacity-50"
                         >
-                          <Upload size={12} className="inline mr-1" />
+                          {uploadingKey === `${project.id}-thumbnail` ? (
+                            <Loader2 size={12} className="inline mr-1 animate-spin" />
+                          ) : (
+                            <Upload size={12} className="inline mr-1" />
+                          )}
                           Upload
-                          {uploadingKey === `${project.id}-thumbnail` ? ` ${uploadPct}%` : ''}
                         </button>
                         <input
                           className={`${inputCls} flex-1 min-w-[12rem]`}
@@ -582,30 +772,35 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
                           placeholder="https://…"
                         />
                       </div>
+                      <PortfolioUploadProgress feedback={uploadFeedback[`${project.id}-thumbnail`]} />
                     </div>
 
                     <div className="md:col-span-2 min-w-0 space-y-2">
                       <p className={labelCls}>Featured video (grid hover + hero)</p>
+                      <p className="text-[10px] text-zinc-500 break-words">{PORTFOLIO_VIDEO_HINT}</p>
                       <div className="flex flex-wrap items-center gap-2 min-w-0">
                         <input
                           ref={(el) => {
                             featuredVideoRefs.current[`${project.id}-featured`] = el;
                           }}
                           type="file"
-                          accept="video/*"
+                          accept={PORTFOLIO_VIDEO_ACCEPT}
                           className="hidden"
                           onChange={runUpload(project, 'featuredVideoUrl', index)}
                           disabled={!canEdit || uploadingKey?.startsWith(project.id)}
                         />
                         <button
                           type="button"
-                          disabled={!canEdit}
+                          disabled={!canEdit || uploadingKey === `${project.id}-featuredVideoUrl`}
                           onClick={() => featuredVideoRefs.current[`${project.id}-featured`]?.click()}
-                          className="rounded-md border border-zinc-700 px-2 py-1 text-[11px] text-zinc-200"
+                          className="rounded-md border border-zinc-700 px-2 py-1 text-[11px] text-zinc-200 disabled:opacity-50"
                         >
-                          <Upload size={12} className="inline mr-1" />
+                          {uploadingKey === `${project.id}-featuredVideoUrl` ? (
+                            <Loader2 size={12} className="inline mr-1 animate-spin" />
+                          ) : (
+                            <Upload size={12} className="inline mr-1" />
+                          )}
                           Upload video
-                          {uploadingKey === `${project.id}-featuredVideoUrl` ? ` ${uploadPct}%` : ''}
                         </button>
                         <input
                           className={`${inputCls} flex-1 min-w-[12rem]`}
@@ -658,8 +853,10 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
                         </label>
                         <p className="text-[10px] text-zinc-500 sm:pb-2 sm:flex-1 min-w-0">
                           Grid hover and hero loop this segment. Leave loop end empty to play from start to end of file.
+                          Segment fields do not reduce upload size — export a short clip for large masters.
                         </p>
                       </div>
+                      <PortfolioUploadProgress feedback={uploadFeedback[`${project.id}-featuredVideoUrl`]} />
                     </div>
 
                     <div className="md:col-span-2 min-w-0 space-y-2">
@@ -675,26 +872,30 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
 
                     <div className="md:col-span-2 min-w-0 space-y-2">
                       <p className={labelCls}>Hero poster</p>
+                      <p className="text-[10px] text-zinc-500 break-words">{PORTFOLIO_IMAGE_HINT}</p>
                       <div className="flex flex-wrap items-center gap-2 min-w-0">
                         <input
                           ref={(el) => {
                             heroRefs.current[`${project.id}-hero`] = el;
                           }}
                           type="file"
-                          accept="image/*"
+                          accept={PORTFOLIO_IMAGE_ACCEPT}
                           className="hidden"
                           onChange={runUpload(project, 'heroImage', index)}
                           disabled={!canEdit || uploadingKey?.startsWith(project.id)}
                         />
                         <button
                           type="button"
-                          disabled={!canEdit}
+                          disabled={!canEdit || uploadingKey === `${project.id}-heroImage`}
                           onClick={() => heroRefs.current[`${project.id}-hero`]?.click()}
-                          className="rounded-md border border-zinc-700 px-2 py-1 text-[11px] text-zinc-200"
+                          className="rounded-md border border-zinc-700 px-2 py-1 text-[11px] text-zinc-200 disabled:opacity-50"
                         >
-                          <Upload size={12} className="inline mr-1" />
+                          {uploadingKey === `${project.id}-heroImage` ? (
+                            <Loader2 size={12} className="inline mr-1 animate-spin" />
+                          ) : (
+                            <Upload size={12} className="inline mr-1" />
+                          )}
                           Upload
-                          {uploadingKey === `${project.id}-heroImage` ? ` ${uploadPct}%` : ''}
                         </button>
                         <input
                           className={`${inputCls} flex-1 min-w-[12rem]`}
@@ -704,6 +905,7 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
                           placeholder="https://…"
                         />
                       </div>
+                      <PortfolioUploadProgress feedback={uploadFeedback[`${project.id}-heroImage`]} />
                     </div>
 
                     <div className="md:col-span-2 min-w-0 space-y-2">
@@ -725,6 +927,7 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
                           + Row
                         </button>
                       </div>
+                      <p className="text-[10px] text-zinc-500 break-words">{PORTFOLIO_GALLERY_HINT}</p>
                       <div className="space-y-2 max-h-[240px] overflow-y-auto rounded-md border border-zinc-800 p-2 min-w-0">
                         {project.gallery.length === 0 ? (
                           <p className="text-[11px] text-zinc-600">No films — add rows or paste video URLs.</p>
@@ -741,18 +944,21 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
                                   galleryRefs.current[`${project.id}-${gi}`] = el;
                                 }}
                                 type="file"
-                                accept="video/*,image/*"
+                                accept={PORTFOLIO_GALLERY_ACCEPT}
                                 className="hidden"
                                 onChange={runGalleryUpload(project, gi, index)}
+                                disabled={!canEdit || uploadingKey?.startsWith(project.id)}
                               />
                               <button
                                 type="button"
-                                disabled={!canEdit}
+                                disabled={!canEdit || uploadingKey === `${project.id}-g-${gi}`}
                                 onClick={() => galleryRefs.current[`${project.id}-${gi}`]?.click()}
-                                className="shrink-0 rounded border border-zinc-700 px-2 py-1 text-[10px] text-zinc-300 self-start"
+                                className="shrink-0 rounded border border-zinc-700 px-2 py-1 text-[10px] text-zinc-300 self-start disabled:opacity-50"
                               >
+                                {uploadingKey === `${project.id}-g-${gi}` ? (
+                                  <Loader2 size={10} className="inline mr-0.5 animate-spin" />
+                                ) : null}
                                 Upload
-                                {uploadingKey === `${project.id}-g-${gi}` ? ` ${uploadPct}%` : ''}
                               </button>
                               <input
                                 className={`${inputCls} sm:flex-1 min-w-0`}
@@ -803,6 +1009,9 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
                               >
                                 Remove
                               </button>
+                              <div className="w-full min-w-0 basis-full">
+                                <PortfolioUploadProgress feedback={uploadFeedback[`${project.id}-g-${gi}`]} />
+                              </div>
                             </div>
                           ))
                         )}
@@ -866,7 +1075,8 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
                       </div>
                     </div>
                   </div>
-                </details>
+                </div>
+                ) : null}
               </li>
             );
           })}
