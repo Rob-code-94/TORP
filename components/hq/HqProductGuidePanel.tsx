@@ -92,9 +92,7 @@ const HqProductGuidePanel: React.FC<HqProductGuidePanelProps> = ({
           <div className="min-w-0">
             <h2
               id={labelId}
-              className={`font-[Bebas_Neue,Phosphate,Impact,sans-serif] text-xl tracking-wide uppercase ${
-                isDark ? 'text-white' : 'text-zinc-950'
-              }`}
+              className={`text-xl font-semibold tracking-tight ${isDark ? 'text-white' : 'text-zinc-950'}`}
             >
               Product guide
             </h2>
@@ -162,9 +160,7 @@ const HqProductGuidePanel: React.FC<HqProductGuidePanelProps> = ({
                 ].join(' ')}
               >
                 <h3
-                  className={`font-[Bebas_Neue,Phosphate,Impact,sans-serif] text-sm tracking-wide uppercase ${
-                    isDark ? 'text-zinc-100' : 'text-zinc-900'
-                  }`}
+                  className={`text-sm font-semibold ${isDark ? 'text-zinc-100' : 'text-zinc-900'}`}
                 >
                   {s.title}
                 </h3>

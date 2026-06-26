@@ -26,17 +26,16 @@ interface CrewLookup {
 async function uidForCrewIds(crewIds: string[]): Promise<CrewLookup[]> {
   if (crewIds.length === 0) return [];
   const db = getFirestore();
+  const unique = [...new Set(crewIds.filter(Boolean))];
   const results: CrewLookup[] = [];
-  // Firestore `in` queries cap at 30 elements; chunk defensively.
-  for (let i = 0; i < crewIds.length; i += 10) {
-    const chunk = crewIds.slice(i, i + 10);
-    const snap = await db.collection('crew').where('id', 'in', chunk).get().catch(() => null);
-    if (!snap) continue;
-    for (const doc of snap.docs) {
-      const d = doc.data() as { id?: string; uid?: string };
-      results.push({ uid: d.uid ?? null, crewId: d.id ?? doc.id });
-    }
-  }
+  await Promise.all(
+    unique.map(async (crewId) => {
+      const doc = await db.collection('crew').doc(crewId).get().catch(() => null);
+      if (!doc?.exists) return;
+      const d = doc.data() as { uid?: string };
+      results.push({ uid: d.uid ?? null, crewId: doc.id });
+    })
+  );
   return results;
 }
 

@@ -23,6 +23,7 @@ export const AdminThemeProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, theme);
+    document.documentElement.classList.toggle('dark', theme === 'dark');
   }, [theme]);
 
   const value = useMemo<AdminThemeContextValue>(

@@ -7,18 +7,15 @@ async function uidForCrewIds(crewIds) {
     if (crewIds.length === 0)
         return [];
     const db = getFirestore();
+    const unique = [...new Set(crewIds.filter(Boolean))];
     const results = [];
-    // Firestore `in` queries cap at 30 elements; chunk defensively.
-    for (let i = 0; i < crewIds.length; i += 10) {
-        const chunk = crewIds.slice(i, i + 10);
-        const snap = await db.collection('crew').where('id', 'in', chunk).get().catch(() => null);
-        if (!snap)
-            continue;
-        for (const doc of snap.docs) {
-            const d = doc.data();
-            results.push({ uid: d.uid ?? null, crewId: d.id ?? doc.id });
-        }
-    }
+    await Promise.all(unique.map(async (crewId) => {
+        const doc = await db.collection('crew').doc(crewId).get().catch(() => null);
+        if (!doc?.exists)
+            return;
+        const d = doc.data();
+        results.push({ uid: d.uid ?? null, crewId: doc.id });
+    }));
     return results;
 }
 function envFromRuntime() {
@@ -88,6 +85,36 @@ function plannerPayload(id, data) {
     const due = data.dueDate;
     if (!due)
         return null;
+    const startTime = data.startTime;
+    const endTime = data.endTime;
+    const allDay = Boolean(data.allDay);
+    const isTimed = !allDay && Boolean(startTime);
+    const description = [data.projectTitle, data.type]
+        .filter(Boolean)
+        .join(' · ');
+    if (isTimed && startTime) {
+        const startIso = isoFromYmdHm(due, startTime);
+        let endIso;
+        if (endTime) {
+            const e = new Date(startIso);
+            const [eh, em] = endTime.split(':').map((s) => Number.parseInt(s, 10));
+            e.setUTCHours(eh || 0, em || 0, 0, 0);
+            endIso = e.toISOString();
+        }
+        else {
+            const e = new Date(startIso);
+            e.setUTCMinutes(e.getUTCMinutes() + 30);
+            endIso = e.toISOString();
+        }
+        return {
+            title: data.title ?? 'Task',
+            startIso,
+            endIso,
+            allDay: false,
+            description,
+            torpEntityKey: `planner:${id}`,
+        };
+    }
     const startIso = isoFromYmdHm(due, '00:00');
     const end = new Date(startIso);
     end.setUTCDate(end.getUTCDate() + 1);
@@ -96,9 +123,7 @@ function plannerPayload(id, data) {
         startIso,
         endIso: end.toISOString(),
         allDay: true,
-        description: [data.projectTitle, data.type]
-            .filter(Boolean)
-            .join(' · '),
+        description,
         torpEntityKey: `planner:${id}`,
     };
 }

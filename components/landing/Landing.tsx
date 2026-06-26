@@ -205,7 +205,7 @@ const Landing: React.FC = () => {
   const clientPortalPath = !loading && user ? portalDestinationForUser(user) : '/portal/login';
 
   return (
-    <div className="min-h-screen min-w-0 overflow-x-hidden bg-zinc-950 text-zinc-100 selection:bg-white selection:text-black">
+    <div data-surface="marketing" className="torp-marketing min-h-screen min-w-0 overflow-x-hidden bg-zinc-950 text-zinc-100 selection:bg-white selection:text-black">
       {activeWork && (
         <ProjectDetail
           project={activeWork}

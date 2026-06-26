@@ -1,8 +1,8 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Plug, User, Bell, Shield, Building2 } from 'lucide-react';
-import { appPanelClass } from '../../../lib/appThemeClasses';
-import { useAdminTheme } from '../../../lib/adminTheme';
+import { appHeadingClass, appMutedTextClass, appPanelClass } from '../../../lib/appThemeClasses';
+import { cn } from '@/lib/utils';
 
 export interface SettingsTab {
   id: string;
@@ -14,11 +14,8 @@ export interface SettingsTab {
 }
 
 interface SettingsShellProps {
-  /** Title rendered above the content area (mobile + desktop). */
   title: string;
-  /** Subtitle / description shown under the title. */
   subtitle?: string;
-  /** Variant decides which set of tabs is rendered (admin includes Org). */
   variant: 'admin' | 'staff';
   children: React.ReactNode;
 }
@@ -75,54 +72,40 @@ function isTabActive(pathname: string, tab: SettingsTab): boolean {
 }
 
 const SettingsShell: React.FC<SettingsShellProps> = ({ title, subtitle, variant, children }) => {
-  const { theme } = useAdminTheme();
-  const isDark = theme === 'dark';
   const { pathname } = useLocation();
   const tabs = tabsForVariant(variant);
 
   return (
     <div className="min-w-0 max-w-5xl space-y-4" data-tour="settings-shell">
       <header className="space-y-1 min-w-0" data-tour="settings-header">
-        <p className={`text-xs font-mono uppercase ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>
-          Settings
-        </p>
-        <h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-zinc-900'}`}>{title}</h2>
-        {subtitle && (
-          <p className={`text-sm ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`}>{subtitle}</p>
-        )}
+        <p className={cn('text-xs font-medium', appMutedTextClass())}>Settings</p>
+        <h2 className={appHeadingClass(undefined, 'h2')}>{title}</h2>
+        {subtitle && <p className={cn('text-sm', appMutedTextClass())}>{subtitle}</p>}
       </header>
 
-      <nav
-        data-tour="settings-tabs"
-        className={`md:hidden -mx-1 px-1 overflow-x-auto`}
-        aria-label="Settings sections"
-      >
+      <nav data-tour="settings-tabs" className="md:hidden -mx-1 px-1 overflow-x-auto" aria-label="Settings sections">
         <ul className="flex gap-2 min-w-max pb-1">
           {tabs.map((tab) => {
             const active = isTabActive(pathname, tab);
             const disabled = !tab.available;
-            const base =
-              'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold whitespace-nowrap';
-            const cls = disabled
-              ? isDark
-                ? `${base} border-zinc-800 text-zinc-600 cursor-not-allowed`
-                : `${base} border-zinc-200 text-zinc-400 cursor-not-allowed`
-              : active
-                ? isDark
-                  ? `${base} border-zinc-200 bg-white text-zinc-900`
-                  : `${base} border-zinc-900 bg-zinc-900 text-white`
-                : isDark
-                  ? `${base} border-zinc-700 text-zinc-300 hover:border-zinc-500`
-                  : `${base} border-zinc-300 text-zinc-700 hover:border-zinc-500`;
             return (
               <li key={tab.id} className="shrink-0">
                 {disabled ? (
-                  <span className={cls} aria-disabled="true" title={tab.badge || 'Unavailable'}>
+                  <span className="inline-flex items-center gap-2 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground cursor-not-allowed whitespace-nowrap">
                     {tab.icon}
                     {tab.label}
                   </span>
                 ) : (
-                  <Link to={tab.to} className={cls} aria-current={active ? 'page' : undefined}>
+                  <Link
+                    to={tab.to}
+                    className={cn(
+                      'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors',
+                      active
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-border text-foreground hover:bg-accent'
+                    )}
+                    aria-current={active ? 'page' : undefined}
+                  >
                     {tab.icon}
                     {tab.label}
                   </Link>
@@ -134,48 +117,29 @@ const SettingsShell: React.FC<SettingsShellProps> = ({ title, subtitle, variant,
       </nav>
 
       <div className="grid grid-cols-1 md:grid-cols-[12rem_1fr] gap-4 min-w-0">
-        <aside className={`hidden md:block min-w-0`} aria-label="Settings sections" data-tour="settings-tabs">
-          <ul className={`rounded-xl p-1 space-y-0.5 ${appPanelClass(isDark)}`}>
+        <aside className="hidden md:block min-w-0" aria-label="Settings sections" data-tour="settings-tabs">
+          <ul className={cn('rounded-xl p-1 space-y-0.5', appPanelClass())}>
             {tabs.map((tab) => {
               const active = isTabActive(pathname, tab);
               const disabled = !tab.available;
-              const base =
-                'flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm transition-colors min-w-0';
-              const cls = disabled
-                ? isDark
-                  ? `${base} text-zinc-600 cursor-not-allowed`
-                  : `${base} text-zinc-400 cursor-not-allowed`
-                : active
-                  ? isDark
-                    ? `${base} bg-zinc-800 text-white`
-                    : `${base} bg-zinc-100 text-zinc-900`
-                  : isDark
-                    ? `${base} text-zinc-300 hover:bg-zinc-800/60`
-                    : `${base} text-zinc-700 hover:bg-zinc-100`;
               return (
                 <li key={tab.id}>
                   {disabled ? (
-                    <span className={cls} aria-disabled="true">
-                      <span className="inline-flex items-center gap-2 min-w-0">
-                        {tab.icon}
-                        <span className="truncate">{tab.label}</span>
-                      </span>
-                      {tab.badge && (
-                        <span
-                          className={`text-[10px] uppercase tracking-wide shrink-0 ${
-                            isDark ? 'text-zinc-600' : 'text-zinc-400'
-                          }`}
-                        >
-                          {tab.badge}
-                        </span>
-                      )}
+                    <span className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground cursor-not-allowed">
+                      {tab.icon}
+                      <span className="truncate">{tab.label}</span>
                     </span>
                   ) : (
-                    <Link to={tab.to} className={cls} aria-current={active ? 'page' : undefined}>
-                      <span className="inline-flex items-center gap-2 min-w-0">
-                        {tab.icon}
-                        <span className="truncate">{tab.label}</span>
-                      </span>
+                    <Link
+                      to={tab.to}
+                      className={cn(
+                        'flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors min-w-0',
+                        active ? 'bg-accent text-accent-foreground font-medium' : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground'
+                      )}
+                      aria-current={active ? 'page' : undefined}
+                    >
+                      {tab.icon}
+                      <span className="truncate">{tab.label}</span>
                     </Link>
                   )}
                 </li>
@@ -183,8 +147,9 @@ const SettingsShell: React.FC<SettingsShellProps> = ({ title, subtitle, variant,
             })}
           </ul>
         </aside>
-
-        <div className="min-w-0" data-tour="settings-content">{children}</div>
+        <div className="min-w-0" data-tour="settings-content">
+          {children}
+        </div>
       </div>
     </div>
   );

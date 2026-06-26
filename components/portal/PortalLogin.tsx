@@ -1,21 +1,24 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getIdTokenResult, signInWithEmailAndPassword } from 'firebase/auth';
-import { ArrowLeft, Moon, Sun } from 'lucide-react';
+import { ArrowLeft, Film, Moon, Sun } from 'lucide-react';
 import { UserRole } from '../../types';
 import { useAuth } from '../../lib/auth';
 import { useAdminTheme } from '../../lib/adminTheme';
-import { appInputClass, appPanelClass } from '../../lib/appThemeClasses';
 import { authUserFromFirebase } from '../../lib/firebaseAuthUser';
 import { messageForFirebaseSignInError } from '../../lib/firebaseAuthError';
 import { getFirebaseAuthInstance, isFirebaseConfigured } from '../../lib/firebase';
 import { portalDestinationForUser } from '../../lib/authRedirect';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 /** Portal sign-in always uses Firebase Auth. */
 const PortalLogin: React.FC = () => {
   const { user, logout, isFirebase, loading } = useAuth();
   const { theme, toggleTheme } = useAdminTheme();
-  const isDark = theme === 'dark';
   const navigate = useNavigate();
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
@@ -56,126 +59,107 @@ const PortalLogin: React.FC = () => {
 
   if (loading) {
     return (
-      <div
-        className={`min-h-screen flex items-center justify-center p-6 text-sm ${
-          isDark ? 'bg-zinc-950 text-zinc-400' : 'bg-zinc-50 text-zinc-600'
-        }`}
-      >
+      <div className="flex min-h-svh items-center justify-center bg-muted p-6 text-sm text-muted-foreground">
         Loading…
       </div>
     );
   }
 
   return (
-    <div
-      className={`min-h-screen flex flex-col items-center justify-center p-6 font-sans ${
-        isDark ? 'bg-zinc-950 text-zinc-100' : 'bg-zinc-50 text-zinc-900'
-      }`}
-    >
-      <button
+    <div className="relative flex min-h-svh flex-col items-center justify-center gap-6 bg-muted p-6 md:p-10">
+      <Button
         type="button"
+        variant="outline"
+        size="icon"
+        className="fixed right-4 top-4 z-10"
         onClick={toggleTheme}
-        className={`fixed right-4 top-4 z-10 inline-flex h-10 w-10 items-center justify-center rounded-lg border transition-colors ${
-          isDark
-            ? 'border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800'
-            : 'border-zinc-200 bg-white text-zinc-800 shadow-sm hover:bg-zinc-100'
-        }`}
-        aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+        aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
       >
-        {isDark ? <Sun size={18} /> : <Moon size={18} />}
-      </button>
-      <div className="w-full max-w-md min-w-0">
+        {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
+      </Button>
+
+      <div className="flex w-full max-w-sm flex-col gap-6 min-w-0">
         <Link
           to="/"
-          className={`inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest transition-colors mb-10 ${
-            isDark ? 'text-zinc-500 hover:text-zinc-300' : 'text-zinc-600 hover:text-zinc-900'
-          }`}
+          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
-          <ArrowLeft size={14} /> Back to site
+          <ArrowLeft className="size-4" /> Back to site
         </Link>
 
-        <div className={`rounded-2xl p-8 shadow-2xl min-w-0 ${appPanelClass(isDark)}`}>
-          <p className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-2">TORP</p>
-          <h1 className={`text-2xl font-black tracking-tight mb-2 ${isDark ? 'text-white' : 'text-zinc-900'}`}>
-            Client portal
-          </h1>
-          <p className={`text-sm mb-6 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
-            Use your client email and password to review approvals, invoices, and contracts.
-          </p>
-          {!firebaseReady && (
-            <p className={isDark ? 'text-xs text-red-300 mb-4' : 'text-xs text-red-600 mb-4'}>
-              Firebase Auth is not configured for this environment. Configure auth to continue.
-            </p>
-          )}
+        <a href="/" className="flex items-center gap-2 self-center font-medium">
+          <div className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
+            <Film className="size-4" />
+          </div>
+          TORP Client
+        </a>
 
-          {user?.role === UserRole.CLIENT && (
-            <p
-              className={`text-xs rounded-lg px-3 py-2 mb-4 ${
-                isDark
-                  ? 'text-amber-200/90 bg-amber-950/40 border border-amber-900/50'
-                  : 'text-amber-900 bg-amber-50 border border-amber-200'
-              }`}
-            >
-              Signed in as client.{' '}
-              <button type="button" onClick={() => logout()} className="underline font-semibold">
-                Sign out
-              </button>
-            </p>
-          )}
+        <Card>
+          <CardHeader className="text-center">
+            <CardTitle className="text-xl">Client portal</CardTitle>
+            <CardDescription>
+              Use your client email and password to review approvals, invoices, and contracts.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {!firebaseReady && (
+              <Alert variant="destructive">
+                <AlertDescription>Firebase Auth is not configured for this environment.</AlertDescription>
+              </Alert>
+            )}
 
-          <form onSubmit={submit} className="space-y-3 min-w-0">
-            <label className="block text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
-              Email
-              <input
-                type="email"
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={!firebaseReady}
-                className={`mt-1 rounded-xl ${appInputClass(isDark)}`}
-                placeholder="you@client.com"
-              />
-            </label>
-            <label className="block text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
-              Password
-              <input
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={!firebaseReady}
-                className={`mt-1 rounded-xl ${appInputClass(isDark)}`}
-                placeholder="••••••••"
-              />
-            </label>
-            {error && <p className={isDark ? 'text-xs text-red-300' : 'text-xs text-red-600'}>{error}</p>}
-            <button
-              type="submit"
-              disabled={busy || !firebaseReady}
-              className={`w-full font-bold py-4 rounded-xl transition-all hover:scale-[1.02] disabled:opacity-60 ${
-                isDark
-                  ? 'bg-white hover:bg-zinc-200 text-black'
-                  : 'bg-zinc-900 hover:bg-zinc-800 text-white'
-              }`}
-            >
-              {busy ? 'Signing in…' : 'Sign in'}
-            </button>
-          </form>
+            {user?.role === UserRole.CLIENT && (
+              <Alert>
+                <AlertDescription>
+                  Signed in as client.{' '}
+                  <button type="button" onClick={() => logout()} className="underline font-medium">
+                    Sign out
+                  </button>
+                </AlertDescription>
+              </Alert>
+            )}
 
-          <p className={`mt-8 text-center text-[11px] ${isDark ? 'text-zinc-600' : 'text-zinc-500'}`}>
-            TORP crew?{' '}
-            <Link
-              to="/hq/login"
-              className={
-                isDark
-                  ? 'text-zinc-400 hover:text-white underline underline-offset-2'
-                  : 'text-zinc-600 hover:text-zinc-900 underline underline-offset-2'
-              }
-            >
-              HQ sign-in
-            </Link>
-          </p>
-        </div>
+            <form onSubmit={submit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="portal-email">Email</Label>
+                <Input
+                  id="portal-email"
+                  type="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={!firebaseReady}
+                  placeholder="you@client.com"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="portal-password">Password</Label>
+                <Input
+                  id="portal-password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={!firebaseReady}
+                />
+              </div>
+              {error && (
+                <Alert variant="destructive">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+              <Button type="submit" className="w-full" disabled={busy || !firebaseReady}>
+                {busy ? 'Signing in…' : 'Sign in'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <p className="text-center text-sm text-muted-foreground">
+          TORP crew?{' '}
+          <Link to="/hq/login" className="underline underline-offset-4 hover:text-foreground">
+            HQ sign-in
+          </Link>
+        </p>
       </div>
     </div>
   );

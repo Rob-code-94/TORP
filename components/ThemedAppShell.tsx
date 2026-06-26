@@ -3,19 +3,23 @@ import { Outlet } from 'react-router-dom';
 import DemoDataBanner from './DemoDataBanner';
 import FirebaseMisconfiguredBanner from './FirebaseMisconfiguredBanner';
 import { AdminThemeProvider } from '../lib/adminTheme';
+import { Toaster } from '@/components/ui/sonner';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 /**
  * Wraps all non-landing routes so light/dark theme context is available
  * (admin, staff, portal, logins, print). `/` (Landing) stays outside.
- * Banners render here so they sit above the route content but below the
- * landing page; FirebaseMisconfiguredBanner takes precedence over the demo
- * banner because a missing config blocks every authed feature.
  */
 const ThemedAppShell: React.FC = () => (
   <AdminThemeProvider>
-    <FirebaseMisconfiguredBanner />
-    <DemoDataBanner />
-    <Outlet />
+    <TooltipProvider>
+      <div data-surface="operations" className="hq-operations min-h-svh min-w-0 bg-background text-foreground">
+        <FirebaseMisconfiguredBanner />
+        <DemoDataBanner />
+        <Outlet />
+        <Toaster richColors closeButton position="top-right" />
+      </div>
+    </TooltipProvider>
   </AdminThemeProvider>
 );
 

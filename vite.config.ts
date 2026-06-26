@@ -1,3 +1,5 @@
+import path from 'path';
+import tailwindcss from '@tailwindcss/vite';
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -38,7 +40,12 @@ export default defineConfig(({ mode }) => {
   const apiProxyTarget = (env.VITE_TORP_API_PROXY || DEFAULT_TORP_API_PROXY).replace(/\/$/, '');
 
   return {
-    plugins: [react(), requireFirebaseEnvOnBuild(mode)],
+    plugins: [react(), tailwindcss(), requireFirebaseEnvOnBuild(mode)],
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, '.'),
+      },
+    },
     server: {
       host: '0.0.0.0',
       port: 8080,
