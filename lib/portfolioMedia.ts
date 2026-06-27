@@ -63,6 +63,50 @@ export function projectPosterUrl(project: VideoProject): string {
   return project.heroImage?.trim() || project.thumbnail?.trim() || '';
 }
 
+/** Mobile rail: prefer grid-sized thumbnail over large hero poster. */
+export function gridPosterUrl(project: VideoProject): string {
+  return project.thumbnail?.trim() || project.heroImage?.trim() || '';
+}
+
+export function portfolioOrientationBadgeLabel(aspect: VideoProject['aspectRatio']): string {
+  switch (aspect) {
+    case 'video':
+      return 'Horizontal';
+    case 'portrait':
+      return 'Vertical';
+    case 'square':
+      return 'Square';
+    default: {
+      const _exhaustive: never = aspect;
+      return _exhaustive;
+    }
+  }
+}
+
+export type RailOrientation = 'horizontal' | 'portrait';
+
+export function railOrientation(aspect: VideoProject['aspectRatio']): RailOrientation {
+  return aspect === 'portrait' ? 'portrait' : 'horizontal';
+}
+
+/** Pair consecutive same-orientation projects into one mobile rail snap column. */
+export function groupRailProjects(projects: VideoProject[]): VideoProject[][] {
+  const groups: VideoProject[][] = [];
+  let i = 0;
+  while (i < projects.length) {
+    const current = projects[i];
+    const next = projects[i + 1];
+    if (next && railOrientation(current.aspectRatio) === railOrientation(next.aspectRatio)) {
+      groups.push([current, next]);
+      i += 2;
+    } else {
+      groups.push([current]);
+      i += 1;
+    }
+  }
+  return groups;
+}
+
 export function normalizeFeaturedVideoSegment(
   start?: number,
   end?: number,

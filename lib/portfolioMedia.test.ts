@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeFeaturedVideoSegment } from './portfolioMedia';
+import {
+  gridPosterUrl,
+  groupRailProjects,
+  normalizeFeaturedVideoSegment,
+  railOrientation,
+} from './portfolioMedia';
+import type { VideoProject } from '../types';
 
 describe('normalizeFeaturedVideoSegment', () => {
   it('defaults to zero start with no end', () => {
@@ -21,5 +27,42 @@ describe('normalizeFeaturedVideoSegment', () => {
   it('clamps invalid values', () => {
     expect(normalizeFeaturedVideoSegment(-1, 20)).toEqual({ startSeconds: 0, endSeconds: 20 });
     expect(normalizeFeaturedVideoSegment(NaN, 20)).toEqual({ startSeconds: 0, endSeconds: 20 });
+  });
+});
+
+describe('gridPosterUrl', () => {
+  it('prefers thumbnail over heroImage', () => {
+    const project = {
+      thumbnail: ' /thumb.jpg ',
+      heroImage: '/hero.jpg',
+    } as VideoProject;
+    expect(gridPosterUrl(project)).toBe('/thumb.jpg');
+  });
+});
+
+describe('railOrientation', () => {
+  it('maps square and video to horizontal', () => {
+    expect(railOrientation('video')).toBe('horizontal');
+    expect(railOrientation('square')).toBe('horizontal');
+    expect(railOrientation('portrait')).toBe('portrait');
+  });
+});
+
+describe('groupRailProjects', () => {
+  const p = (id: string, aspect: VideoProject['aspectRatio']): VideoProject =>
+    ({ id, aspectRatio: aspect } as VideoProject);
+
+  it('pairs consecutive same-orientation projects', () => {
+    expect(groupRailProjects([p('a', 'video'), p('b', 'video'), p('c', 'portrait')])).toEqual([
+      [p('a', 'video'), p('b', 'video')],
+      [p('c', 'portrait')],
+    ]);
+  });
+
+  it('leaves odd items as single columns', () => {
+    expect(groupRailProjects([p('a', 'portrait'), p('b', 'video')])).toEqual([
+      [p('a', 'portrait')],
+      [p('b', 'video')],
+    ]);
   });
 });

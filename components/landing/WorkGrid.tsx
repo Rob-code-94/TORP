@@ -1,8 +1,13 @@
-import React, { useMemo, useRef, useState } from 'react';
-import { WORK_CATEGORY_FILTERS } from '../../constants';
+import React, { useRef, useState } from 'react';
 import { ArrowUpRight, Film, ImagePlus, Loader2, Pencil, Play } from 'lucide-react';
-import { cardAspectClass, projectPosterUrl, railMediaAspectClass } from '../../lib/portfolioMedia';
-import type { ProjectCategory, VideoProject } from '../../types';
+import {
+  cardAspectClass,
+  gridPosterUrl,
+  groupRailProjects,
+  projectPosterUrl,
+  railMediaAspectClass,
+} from '../../lib/portfolioMedia';
+import type { VideoProject } from '../../types';
 import HorizontalMediaRail from './HorizontalMediaRail';
 import PortfolioMedia from './PortfolioMedia';
 
@@ -20,6 +25,11 @@ type WorkGridProps = {
   gridEditWarning?: string | null;
 };
 
+type RenderCardOptions = {
+  stacked?: boolean;
+  priority?: boolean;
+};
+
 const WorkGrid: React.FC<WorkGridProps> = ({
   projects,
   onSelect,
@@ -33,16 +43,9 @@ const WorkGrid: React.FC<WorkGridProps> = ({
   gridEditError = null,
   gridEditWarning = null,
 }) => {
-  const [filter, setFilter] = useState<'All' | ProjectCategory>('All');
   const [brokenThumbs, setBrokenThumbs] = useState<Record<string, boolean>>({});
   const [hoverPreviewId, setHoverPreviewId] = useState<string | null>(null);
 
-  const filtered = useMemo(() => {
-    if (filter === 'All') return projects;
-    return projects.filter((p) => p.category === filter);
-  }, [filter, projects]);
-
-  const count = projects.length;
   const posterInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const videoInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
@@ -72,20 +75,27 @@ const WorkGrid: React.FC<WorkGridProps> = ({
       await onReplacePreviewVideo(project, file);
     };
 
-  const renderProjectCard = (project: VideoProject, layout: 'rail' | 'masonry') => {
+  const renderProjectCard = (
+    project: VideoProject,
+    layout: 'rail' | 'masonry',
+    options: RenderCardOptions = {},
+  ) => {
+    const { stacked = false, priority = false } = options;
     const isRail = layout === 'rail';
     const isPortraitRail = isRail && project.aspectRatio === 'portrait';
     const isHovering = hoverPreviewId === project.id;
-    const poster = projectPosterUrl(project) || undefined;
+    const poster = isRail
+      ? gridPosterUrl(project) || undefined
+      : projectPosterUrl(project) || undefined;
     const mediaAspect = isRail
       ? railMediaAspectClass(project.aspectRatio)
       : cardAspectClass(project.aspectRatio);
-    const cardShellClass = isRail
-      ? 'flex flex-col snap-start shrink-0 w-[82vw] max-w-[340px]'
-      : 'break-inside-avoid';
+    const cardShellClass = isRail ? 'flex flex-col' : 'break-inside-avoid';
+    const stackedPortraitClamp =
+      stacked && isPortraitRail ? 'max-h-[240px] overflow-hidden' : '';
 
     const mediaBlock = (
-      <div className={`relative w-full shrink-0 ${mediaAspect}`}>
+      <div className={`relative w-full shrink-0 ${mediaAspect} ${stackedPortraitClamp}`}>
         {canEditMarketing && marketingEditMode && (onReplaceThumbnail || onReplacePreviewVideo) ? (
           <>
             {onReplaceThumbnail ? (
@@ -173,7 +183,15 @@ const WorkGrid: React.FC<WorkGridProps> = ({
             endSeconds={project.featuredVideoEndSeconds}
             alt=""
             aspectClassName="h-full w-full"
+            className={
+              stacked && isPortraitRail
+                ? 'h-full w-full object-cover object-top'
+                : 'h-full w-full object-cover'
+            }
             isHovering={isHovering}
+            priority={priority}
+            posterOnlyOnTouch={isRail}
+            titleFallback={project.title}
             onPosterError={() => {
               if (!project.featuredVideoUrl?.trim()) {
                 setBrokenThumbs((prev) => ({ ...prev, [project.id]: true }));
@@ -247,7 +265,6 @@ const WorkGrid: React.FC<WorkGridProps> = ({
     return (
       <article
         key={project.id}
-        data-rail-card={isRail ? true : undefined}
         role="link"
         tabIndex={0}
         aria-label={`Open case study: ${project.title}`}
@@ -280,6 +297,8 @@ const WorkGrid: React.FC<WorkGridProps> = ({
     );
   };
 
+  const railGroups = groupRailProjects(projects);
+
   return (
     <section id="landing-selected-works" className="min-h-0 min-w-0 scroll-mt-20 bg-zinc-950 px-4 py-24 md:min-h-screen">
       {gridEditWarning ? (
@@ -293,7 +312,7 @@ const WorkGrid: React.FC<WorkGridProps> = ({
         </div>
       ) : null}
 
-      <div className="mx-auto mb-8 flex min-w-0 max-w-7xl flex-col items-start justify-between gap-4 border-b border-zinc-900 pb-8 md:mb-16 md:flex-row md:items-end">
+      <div className="mx-auto mb-8 flex min-w-0 max-w-7xl flex-col items-start justify-between gap-4 border-b border-zinc-900 pb-6 md:mb-12 md:flex-row md:items-end md:pb-8">
         <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -323,41 +342,29 @@ const WorkGrid: React.FC<WorkGridProps> = ({
             </p>
           </div>
         </div>
-        <div className="hidden shrink-0 md:block">
-          <span className="font-mono text-sm text-zinc-600">{count} PROJECTS AVAILABLE</span>
-        </div>
-      </div>
-
-      <div className="sticky top-0 z-20 -mx-4 mb-6 border-b border-zinc-900 bg-zinc-950/95 px-4 py-3 backdrop-blur md:static md:mx-0 md:mb-10 md:border-b-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
-        <div className="mx-auto flex min-w-0 max-w-7xl flex-wrap gap-2">
-          {WORK_CATEGORY_FILTERS.map((cat) => {
-            const active = filter === cat;
-            return (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setFilter(cat)}
-                className={`min-h-[44px] rounded-full border px-4 py-2 font-mono text-xs uppercase tracking-wider transition-colors duration-300 ${
-                  active
-                    ? 'border-white bg-white text-black'
-                    : 'border-zinc-800 bg-zinc-900 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
-                }`}
-              >
-                {cat}
-              </button>
-            );
-          })}
-        </div>
       </div>
 
       <div className="md:hidden">
         <HorizontalMediaRail ariaLabel="Selected works" className="-mx-4">
-          {filtered.map((project) => renderProjectCard(project, 'rail'))}
+          {railGroups.map((group, groupIndex) => (
+            <div
+              key={group.map((p) => p.id).join('-')}
+              data-rail-card
+              className="flex w-[82vw] max-w-[340px] shrink-0 snap-start flex-col gap-3"
+            >
+              {group.map((project) =>
+                renderProjectCard(project, 'rail', {
+                  stacked: group.length > 1,
+                  priority: groupIndex < 2,
+                }),
+              )}
+            </div>
+          ))}
         </HorizontalMediaRail>
       </div>
 
       <div className="mx-auto hidden max-w-7xl columns-1 gap-8 space-y-8 md:block md:columns-2 lg:columns-3">
-        {filtered.map((project) => renderProjectCard(project, 'masonry'))}
+        {projects.map((project) => renderProjectCard(project, 'masonry'))}
       </div>
     </section>
   );

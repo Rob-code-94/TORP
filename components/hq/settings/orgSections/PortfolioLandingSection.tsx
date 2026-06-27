@@ -15,7 +15,7 @@ import { useAdminTheme } from '../../../../lib/adminTheme';
 import { appPanelClass } from '../../../../lib/appThemeClasses';
 import { formatFirestoreListError } from '../../../../lib/formatFirestoreListError';
 import { getPortfolioMarketingTenantId } from '../../../../lib/marketingTenant';
-import { CARD_ASPECT_OPTIONS } from '../../../../lib/portfolioMedia';
+import { CARD_ASPECT_OPTIONS, portfolioOrientationBadgeLabel } from '../../../../lib/portfolioMedia';
 import { useAuth } from '../../../../lib/auth';
 import {
   uploadPortfolioLandingImage,
@@ -511,6 +511,7 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
             const slugDup = project.slug.trim() && (slugCounts.get(project.slug.trim().toLowerCase()) ?? 0) > 1;
             const isEditing = editingProjectId === project.id;
             const videoReady = hasFeaturedVideo(project);
+            const posterReady = Boolean(project.thumbnail?.trim());
             return (
               <li
                 key={project.id}
@@ -542,6 +543,18 @@ const PortfolioLandingSection: React.FC<PortfolioLandingSectionProps> = ({ canEd
                         }`}
                       >
                         {videoReady ? 'Video ready' : 'Needs video'}
+                      </span>
+                      <span className="shrink-0 rounded-full border border-zinc-700/60 bg-zinc-900/60 px-2 py-0.5 text-[10px] font-mono uppercase tracking-wide text-zinc-400">
+                        {portfolioOrientationBadgeLabel(project.aspectRatio)}
+                      </span>
+                      <span
+                        className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-mono uppercase tracking-wide ${
+                          posterReady
+                            ? 'border-emerald-800/60 bg-emerald-950/40 text-emerald-300'
+                            : 'border-amber-800/60 bg-amber-950/40 text-amber-300'
+                        }`}
+                      >
+                        {posterReady ? 'Poster ready' : 'Needs poster'}
                       </span>
                       {isEditing ? (
                         <span className="shrink-0 text-[10px] font-mono uppercase tracking-wide text-zinc-400">

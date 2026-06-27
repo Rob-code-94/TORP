@@ -16,6 +16,10 @@ type PortfolioMediaProps = {
   isHovering?: boolean;
   /** Eager load for hero. */
   priority?: boolean;
+  /** Touch devices: poster only — no video mount or reel spinner (mobile rail). */
+  posterOnlyOnTouch?: boolean;
+  /** Shown on touch when posterOnlyOnTouch and no poster URL. */
+  titleFallback?: string;
   onPosterError?: () => void;
   onVideoError?: () => void;
 };
@@ -50,6 +54,8 @@ const PortfolioMedia: React.FC<PortfolioMediaProps> = ({
   aspectClassName,
   isHovering = false,
   priority = false,
+  posterOnlyOnTouch = false,
+  titleFallback,
   onPosterError,
   onVideoError,
 }) => {
@@ -66,6 +72,7 @@ const PortfolioMedia: React.FC<PortfolioMediaProps> = ({
 
   const hasPoster = Boolean(poster?.trim());
   const hasVideo = Boolean(videoSrc?.trim());
+  const touchPosterOnly = !finePointer && posterOnlyOnTouch && mode === 'preview';
   const videoFrameFallback =
     finePointer && mode === 'preview' && hasVideo && !hasPoster && !posterFailed;
   const useNativeLoop = segmentStart === 0 && segmentEnd == null;
@@ -103,7 +110,11 @@ const PortfolioMedia: React.FC<PortfolioMediaProps> = ({
     !finePointer &&
     mode === 'preview' &&
     hasVideo &&
-    (!hasPoster || posterFailed);
+    (!hasPoster || posterFailed) &&
+    !posterOnlyOnTouch;
+
+  const showTouchTitleFallback =
+    touchPosterOnly && (!hasPoster || posterFailed) && Boolean(titleFallback?.trim());
 
   const videoPreload = useMemo(() => {
     if (mode === 'player') return 'metadata';
@@ -215,7 +226,14 @@ const PortfolioMedia: React.FC<PortfolioMediaProps> = ({
 
   return (
     <div className={wrapperClass}>
-      {showMobileDeferredPlaceholder ? (
+      {showTouchTitleFallback ? (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-zinc-900 px-3">
+          <span className="px-2 text-center text-sm font-bold text-white">{titleFallback}</span>
+          <span className="px-2 text-center font-mono text-[10px] uppercase tracking-widest text-zinc-600">
+            Upload poster in HQ
+          </span>
+        </div>
+      ) : showMobileDeferredPlaceholder ? (
         <MediaLoadingPlaceholder label="Loading reel…" />
       ) : hasPoster ? (
         <>
@@ -227,6 +245,7 @@ const PortfolioMedia: React.FC<PortfolioMediaProps> = ({
             alt={alt}
             loading={priority ? 'eager' : 'lazy'}
             decoding="async"
+            {...(priority ? { fetchPriority: 'high' as const } : {})}
             className={`${className} ${playPreview ? 'opacity-0' : posterLoaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-300`}
             onLoad={() => setPosterLoaded(true)}
             onError={() => {
@@ -242,7 +261,7 @@ const PortfolioMedia: React.FC<PortfolioMediaProps> = ({
       ) : videoFrameFallback ? null : (
         <MediaLoadingPlaceholder label="Loading reel…" />
       )}
-      {hasVideo && !showMobileDeferredPlaceholder ? (
+      {hasVideo && !showMobileDeferredPlaceholder && !touchPosterOnly ? (
         <video
           ref={videoRef}
           src={videoSrc}
