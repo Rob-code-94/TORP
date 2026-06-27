@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { ArrowUpRight, Film, ImagePlus, Loader2, Pencil, Play } from 'lucide-react';
+import { ArrowUpRight, Film, ImagePlus, Loader2, Pencil } from 'lucide-react';
 import {
   cardAspectClass,
   gridPosterUrl,
@@ -10,9 +10,12 @@ import {
 import type { VideoProject } from '../../types';
 import HorizontalMediaRail from './HorizontalMediaRail';
 import PortfolioMedia from './PortfolioMedia';
+import PortfolioPlayOverlay from './PortfolioPlayOverlay';
 
 type WorkGridProps = {
   projects: VideoProject[];
+  loading?: boolean;
+  loadError?: string | null;
   onSelect: (slug: string) => void;
   canEditMarketing?: boolean;
   marketingEditMode?: boolean;
@@ -32,6 +35,8 @@ type RenderCardOptions = {
 
 const WorkGrid: React.FC<WorkGridProps> = ({
   projects,
+  loading = false,
+  loadError = null,
   onSelect,
   canEditMarketing = false,
   marketingEditMode = false,
@@ -206,20 +211,10 @@ const WorkGrid: React.FC<WorkGridProps> = ({
           </span>
         ) : null}
 
-        <div
-          className={`absolute inset-0 flex items-center justify-center gap-4 bg-black/20 backdrop-blur-[2px] transition-opacity duration-300 ${
-            marketingEditMode
-              ? 'pointer-events-none opacity-0'
-              : 'opacity-0 md:group-hover:opacity-100'
-          }`}
-        >
-          <div className="flex h-16 w-16 scale-90 transform items-center justify-center rounded-full bg-white shadow-lg transition-transform md:group-hover:scale-100">
-            <Play className="ml-1 h-6 w-6 fill-current text-black" />
-          </div>
-          <span className="hidden font-mono text-xs uppercase tracking-widest text-white drop-shadow-md sm:inline">
-            View case →
-          </span>
-        </div>
+        <PortfolioPlayOverlay
+          variant={isRail ? 'rail' : 'masonry'}
+          marketingEditMode={marketingEditMode}
+        />
       </div>
     );
 
@@ -299,8 +294,47 @@ const WorkGrid: React.FC<WorkGridProps> = ({
 
   const railGroups = groupRailProjects(projects);
 
+  const renderSkeletonRail = () => (
+    <HorizontalMediaRail ariaLabel="Selected works loading" className="-mx-4">
+      {Array.from({ length: 6 }, (_, i) => (
+        <div
+          key={`skeleton-${i}`}
+          data-rail-card
+          className="flex w-[82vw] max-w-[340px] shrink-0 snap-start flex-col gap-3"
+        >
+          <div className="flex flex-col gap-3">
+            <div className="aspect-video w-full animate-pulse bg-zinc-800" />
+            <div className="aspect-video w-full animate-pulse bg-zinc-800" />
+          </div>
+        </div>
+      ))}
+    </HorizontalMediaRail>
+  );
+
+  const renderSkeletonMasonry = () => (
+    <div className="mx-auto hidden max-w-7xl columns-1 gap-8 space-y-8 md:block md:columns-2 lg:columns-3">
+      {Array.from({ length: 6 }, (_, i) => (
+        <div
+          key={`skeleton-masonry-${i}`}
+          className="mb-8 break-inside-avoid overflow-hidden border border-zinc-800 bg-zinc-900"
+        >
+          <div className="aspect-video w-full animate-pulse bg-zinc-800" />
+          <div className="space-y-2 px-3 py-3">
+            <div className="h-5 w-2/3 animate-pulse rounded bg-zinc-800" />
+            <div className="h-4 w-1/2 animate-pulse rounded bg-zinc-800" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
   return (
     <section id="landing-selected-works" className="min-h-0 min-w-0 scroll-mt-20 bg-zinc-950 px-4 py-24 md:min-h-screen">
+      {loadError ? (
+        <div className="mx-auto mb-4 min-w-0 max-w-7xl rounded-lg border border-rose-900/60 bg-rose-950/30 px-3 py-2">
+          <p className="break-words text-xs text-rose-300">{loadError}</p>
+        </div>
+      ) : null}
       {gridEditWarning ? (
         <div className="mx-auto mb-4 min-w-0 max-w-7xl rounded-lg border border-amber-900/60 bg-amber-950/30 px-3 py-2">
           <p className="break-words text-xs text-amber-200/90">{gridEditWarning}</p>
@@ -345,27 +379,43 @@ const WorkGrid: React.FC<WorkGridProps> = ({
       </div>
 
       <div className="md:hidden">
-        <HorizontalMediaRail ariaLabel="Selected works" className="-mx-4">
-          {railGroups.map((group, groupIndex) => (
-            <div
-              key={group.map((p) => p.id).join('-')}
-              data-rail-card
-              className="flex w-[82vw] max-w-[340px] shrink-0 snap-start flex-col gap-3"
-            >
-              {group.map((project) =>
-                renderProjectCard(project, 'rail', {
-                  stacked: group.length > 1,
-                  priority: groupIndex < 2,
-                }),
-              )}
-            </div>
-          ))}
-        </HorizontalMediaRail>
+        {loading ? (
+          renderSkeletonRail()
+        ) : projects.length === 0 ? (
+          <p className="px-4 font-mono text-xs uppercase tracking-widest text-zinc-600">
+            Portfolio loading…
+          </p>
+        ) : (
+          <HorizontalMediaRail ariaLabel="Selected works" className="-mx-4">
+            {railGroups.map((group, groupIndex) => (
+              <div
+                key={group.map((p) => p.id).join('-')}
+                data-rail-card
+                className="flex w-[82vw] max-w-[340px] shrink-0 snap-start flex-col gap-3"
+              >
+                {group.map((project) =>
+                  renderProjectCard(project, 'rail', {
+                    stacked: group.length > 1,
+                    priority: groupIndex < 2,
+                  }),
+                )}
+              </div>
+            ))}
+          </HorizontalMediaRail>
+        )}
       </div>
 
-      <div className="mx-auto hidden max-w-7xl columns-1 gap-8 space-y-8 md:block md:columns-2 lg:columns-3">
-        {projects.map((project) => renderProjectCard(project, 'masonry'))}
-      </div>
+      {loading ? (
+        renderSkeletonMasonry()
+      ) : projects.length === 0 ? (
+        <p className="mx-auto hidden max-w-7xl font-mono text-xs uppercase tracking-widest text-zinc-600 md:block">
+          Portfolio loading…
+        </p>
+      ) : (
+        <div className="mx-auto hidden max-w-7xl columns-1 gap-8 space-y-8 md:block md:columns-2 lg:columns-3">
+          {projects.map((project) => renderProjectCard(project, 'masonry'))}
+        </div>
+      )}
     </section>
   );
 };

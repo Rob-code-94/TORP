@@ -77,32 +77,44 @@ Legacy path (also valid for local exports):
 
 ## ffmpeg batch export
 
-Use the repo script for one file:
+Each slug produces four files in `torp-web-exports/`:
+
+| File | Use | Target size |
+|------|-----|-------------|
+| `{slug}-poster.jpg` | Hero poster (`heroImage`) | Full-res frame @ 2s |
+| `{slug}-thumb.jpg` | Grid thumbnail (`thumbnail`) | Max 1280px wide JPEG |
+| `{slug}-hero.mp4` | Featured reel (`featuredVideoUrl`) | **15s**, 720p H.264, no audio, faststart (~3–8 MB) |
+| `{slug}-film.mp4` | Films gallery slot | 75s H.264 with audio |
+
+Run all 12 from ArmorATD masters:
+
+```bash
+chmod +x scripts/batch-export-portfolio-armoratd.sh
+./scripts/batch-export-portfolio-armoratd.sh
+```
+
+Single file:
 
 ```bash
 chmod +x scripts/export-portfolio-hero.sh
 ./scripts/export-portfolio-hero.sh "/Volumes/ArmorATD/T.O.R.P/Media Assets Original/Fihp.Co.Run.Kollin.01.mov" fihp-co-run-kollin
 ```
 
-Or batch manually:
+## Batch upload to Firebase
+
+After exports finish, upload Storage files and patch Firestore (requires service account):
 
 ```bash
-SRC="/Volumes/ArmorATD/T.O.R.P/Media Assets Original"
-OUT="$HOME/Desktop/torp-portfolio-exports"
-mkdir -p "$OUT"
-
-export_one() {
-  local IN="$1" BASE="$2"
-  ffmpeg -y -i "$IN" -ss 00:00:02 -frames:v 1 -q:v 2 "$OUT/${BASE}-poster.jpg"
-  ffmpeg -y -i "$IN" -t 25 -vf "scale=-2:1080" -c:v libx264 -preset slow -crf 23 -an -movflags +faststart "$OUT/${BASE}-hero.mp4"
-  ffmpeg -y -i "$IN" -t 75 -vf "scale=-2:1080" -c:v libx264 -preset slow -crf 22 -c:a aac -b:a 128k -movflags +faststart "$OUT/${BASE}-film.mp4"
-}
-
-export_one "$SRC/The Crew.01.mov" "crew-after-dark"
-# Repeat for each row in the table above with matching BASE slug.
+TORP_ALLOW_PORTFOLIO_UPLOAD=true \
+GOOGLE_APPLICATION_CREDENTIALS=/path/to/serviceAccount.json \
+node scripts/upload-portfolio-exports.mjs
 ```
 
-Upload `${BASE}-poster.jpg` to Thumbnail + Hero poster, `${BASE}-hero.mp4` to Featured video, `${BASE}-film.mp4` to Films.
+Optional: `EXPORTS_DIR=...` `TORP_MARKETING_TENANT_ID=torp-default`
+
+Maps `{slug}-thumb.jpg` → `thumbnail`, `{slug}-poster.jpg` → `heroImage`, `{slug}-hero.mp4` → `featuredVideoUrl`, `{slug}-film.mp4` → first gallery video when empty.
+
+Legacy manual upload: `{slug}-poster.jpg` to Thumbnail + Hero poster, `{slug}-hero.mp4` to Featured video, `{slug}-film.mp4` to Films.
 
 For masters over 500 MB (e.g. Gracelynn.mov, Don Life): export short web cuts only; upload full piece to Vimeo and paste URL in **Watch full film**.
 

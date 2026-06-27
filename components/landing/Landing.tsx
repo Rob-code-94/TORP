@@ -31,7 +31,11 @@ const Landing: React.FC = () => {
   const [showContact, setShowContact] = useState(false);
   const [, setHashTick] = useState(0);
   const [showcaseItems, setShowcaseItems] = useState<ShowcaseAsset[]>([]);
-  const [portfolioProjects, setPortfolioProjects] = useState<VideoProject[]>(() => PROJECTS);
+  const [portfolioProjects, setPortfolioProjects] = useState<VideoProject[]>(() =>
+    isFirebaseConfigured() ? [] : PROJECTS,
+  );
+  const [portfolioLoading, setPortfolioLoading] = useState(() => isFirebaseConfigured());
+  const [portfolioLoadError, setPortfolioLoadError] = useState<string | null>(null);
   const [marketingSiteEditMode, setMarketingSiteEditMode] = useState(false);
   const [gridEditError, setGridEditError] = useState<string | null>(null);
   const [gridEditWarning, setGridEditWarning] = useState<string | null>(null);
@@ -69,13 +73,17 @@ const Landing: React.FC = () => {
   }, []);
 
   const workSlug = getWorkSlugFromHash();
-  const activeWork = workSlug ? portfolioProjects.find((p) => p.slug === workSlug) : undefined;
+  const activeWork =
+    !portfolioLoading && workSlug
+      ? portfolioProjects.find((p) => p.slug === workSlug)
+      : undefined;
 
   useEffect(() => {
+    if (portfolioLoading) return;
     if (workSlug && !activeWork) {
       window.location.hash = '';
     }
-  }, [workSlug, activeWork]);
+  }, [workSlug, activeWork, portfolioLoading]);
 
   const openWork = (slug: string) => {
     window.location.hash = `#/work/${encodeURIComponent(slug)}`;
@@ -103,15 +111,32 @@ const Landing: React.FC = () => {
 
   useEffect(() => {
     let mounted = true;
+    if (isFirebaseConfigured()) {
+      setPortfolioLoading(true);
+      setPortfolioLoadError(null);
+    }
     void listPortfolioLandingProjects(getPortfolioMarketingTenantId())
       .then((rows) => {
         if (!mounted) return;
         setPortfolioPersistable(rows.length > 0);
-        if (rows.length > 0) setPortfolioProjects(rows);
+        if (rows.length > 0) {
+          setPortfolioProjects(rows);
+        } else if (!isFirebaseConfigured()) {
+          setPortfolioProjects(PROJECTS);
+        } else {
+          setPortfolioProjects([]);
+        }
       })
-      .catch(() => {
+      .catch((err) => {
         if (!mounted) return;
         setPortfolioPersistable(false);
+        if (isFirebaseConfigured()) {
+          setPortfolioProjects([]);
+          setPortfolioLoadError(formatFirestoreListError(err, 'portfolio'));
+        }
+      })
+      .finally(() => {
+        if (mounted && isFirebaseConfigured()) setPortfolioLoading(false);
       });
     return () => {
       mounted = false;
@@ -236,6 +261,8 @@ const Landing: React.FC = () => {
         <ShowcaseStrip items={showcaseItems} />
         <WorkGrid
           projects={portfolioProjects}
+          loading={portfolioLoading}
+          loadError={portfolioLoadError}
           onSelect={openWork}
           canEditMarketing={canEditMarketing}
           marketingEditMode={marketingSiteEditMode}

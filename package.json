@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "deploy:rules": "npx -y firebase-tools@latest deploy --only firestore:rules,storage",
     "seed:firebase-users": "node scripts/seedFirebaseAuthUsers.mjs",
-    "seed:hq-firestore": "node scripts/seedHqFirestore.mjs"
+    "seed:hq-firestore": "node scripts/seedHqFirestore.mjs",
+    "upload:portfolio-exports": "node scripts/upload-portfolio-exports.mjs"
   },
   "dependencies": {
     "driver.js": "^1.3.1",

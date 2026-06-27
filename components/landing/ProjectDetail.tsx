@@ -5,7 +5,7 @@ import { savePortfolioLandingProject } from '../../data/portfolioLandingReposito
 import { ArrowLeft, ArrowRight, ArrowUpRight, ExternalLink, ImagePlus, Loader2, Pencil, Trash2 } from 'lucide-react';
 import { formatFirestoreListError } from '../../lib/formatFirestoreListError';
 import { isFirebaseConfigured } from '../../lib/firebase';
-import { CARD_ASPECT_OPTIONS, galleryAspectClass, projectPosterUrl } from '../../lib/portfolioMedia';
+import { CARD_ASPECT_OPTIONS, galleryAspectClass, gridPosterUrl, projectPosterUrl } from '../../lib/portfolioMedia';
 import { uploadPortfolioLandingImage, uploadPortfolioLandingVideo } from '../../lib/portfolioLandingStorage';
 import PortfolioMedia from './PortfolioMedia';
 
@@ -70,6 +70,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
   const galleryTargetIndexRef = useRef<number | null>(null);
 
   const [heroBroken, setHeroBroken] = useState(false);
+  const [heroPlaying, setHeroPlaying] = useState(false);
   const [brokenGallery, setBrokenGallery] = useState<Record<number, boolean>>({});
 
   const [draft, setDraft] = useState(() => cloneProject(project));
@@ -91,6 +92,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
     setDetailWarning(null);
     setBrokenGallery({});
     setHeroBroken(false);
+    setHeroPlaying(false);
   }, [project]);
 
   const baseline = useMemo(() => stableJson(cloneProject(project)), [project]);
@@ -115,6 +117,16 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
   }, [draft, deliverablesText, tagsText]);
 
   const displayProject = editing ? draft : project;
+  const heroFeaturedVideo = editing ? draft.featuredVideoUrl : project.featuredVideoUrl;
+  const heroMediaProject = editing ? draft : project;
+  const heroPosterPrimary =
+    projectPosterUrl(heroMediaProject) || gridPosterUrl(heroMediaProject) || undefined;
+  const heroPosterFallback = (() => {
+    const hero = projectPosterUrl(heroMediaProject);
+    const grid = gridPosterUrl(heroMediaProject);
+    if (hero && grid && hero !== grid) return grid;
+    return undefined;
+  })();
 
   const visibleGallery = useMemo(
     () => displayProject.gallery.filter((g) => g.src.trim()),
@@ -436,24 +448,28 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({
           <>
             <div className="absolute inset-0 overflow-hidden">
               <PortfolioMedia
-                mode={(editing ? draft.featuredVideoUrl : project.featuredVideoUrl) ? 'preview' : 'poster'}
-                videoSrc={editing ? draft.featuredVideoUrl : project.featuredVideoUrl}
+                mode={heroFeaturedVideo ? 'preview' : 'poster'}
+                videoSrc={heroFeaturedVideo}
                 startSeconds={(editing ? draft : project).featuredVideoStartSeconds}
                 endSeconds={(editing ? draft : project).featuredVideoEndSeconds}
-                poster={projectPosterUrl(editing ? draft : project) || undefined}
+                poster={heroPosterPrimary}
+                posterFallback={heroPosterFallback}
                 aspectClassName="h-full w-full"
                 className="h-full w-full object-cover"
-                isHovering={Boolean(editing ? draft.featuredVideoUrl : project.featuredVideoUrl)}
+                isHovering={Boolean(heroFeaturedVideo) && heroPlaying}
+                tapToPlay={!editing && Boolean(heroFeaturedVideo?.trim())}
+                isPlaying={heroPlaying}
+                onPlayRequest={() => setHeroPlaying(true)}
                 priority
                 onPosterError={() => {
-                  if (!(editing ? draft.featuredVideoUrl : project.featuredVideoUrl)?.trim()) {
+                  if (!heroFeaturedVideo?.trim()) {
                     setHeroBroken(true);
                   }
                 }}
               />
             </div>
-            <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/40 to-transparent" />
-            <div className="absolute bottom-0 left-0 right-0 px-4 pb-6 pt-16 md:px-12 md:pb-8 md:pt-20">
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/40 to-transparent" />
+            <div className="pointer-events-none absolute bottom-0 left-0 right-0 px-4 pb-6 pt-16 md:px-12 md:pb-8 md:pt-20">
               {editing ? (
                 <input
                   value={draft.title}

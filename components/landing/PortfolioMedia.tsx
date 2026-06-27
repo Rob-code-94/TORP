@@ -1,11 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { normalizeFeaturedVideoSegment } from '../../lib/portfolioMedia';
+import PortfolioPlayOverlay from './PortfolioPlayOverlay';
 
 export type PortfolioMediaMode = 'poster' | 'preview' | 'player';
 
 type PortfolioMediaProps = {
   mode: PortfolioMediaMode;
   poster?: string;
+  /** Alternate poster URL if primary fails to load (e.g. heroImage → thumbnail). */
+  posterFallback?: string;
   videoSrc?: string;
   startSeconds?: number;
   endSeconds?: number;
@@ -20,6 +23,10 @@ type PortfolioMediaProps = {
   posterOnlyOnTouch?: boolean;
   /** Shown on touch when posterOnlyOnTouch and no poster URL. */
   titleFallback?: string;
+  /** Case-study hero: poster first; load/play video only after user taps play. */
+  tapToPlay?: boolean;
+  isPlaying?: boolean;
+  onPlayRequest?: () => void;
   onPosterError?: () => void;
   onVideoError?: () => void;
 };
@@ -46,6 +53,7 @@ function MediaLoadingPlaceholder({ label = 'One moment' }: { label?: string }) {
 const PortfolioMedia: React.FC<PortfolioMediaProps> = ({
   mode,
   poster,
+  posterFallback,
   videoSrc,
   startSeconds: startSecondsProp,
   endSeconds: endSecondsProp,
@@ -56,31 +64,43 @@ const PortfolioMedia: React.FC<PortfolioMediaProps> = ({
   priority = false,
   posterOnlyOnTouch = false,
   titleFallback,
+  tapToPlay = false,
+  isPlaying = false,
+  onPlayRequest,
   onPosterError,
   onVideoError,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [reducedMotion, setReducedMotion] = useState(false);
   const [finePointer, setFinePointer] = useState(true);
+  const [activePosterSrc, setActivePosterSrc] = useState(() => poster?.trim() ?? '');
   const [posterLoaded, setPosterLoaded] = useState(false);
   const [posterFailed, setPosterFailed] = useState(false);
+  const [posterUsedFallback, setPosterUsedFallback] = useState(false);
 
   const { startSeconds: segmentStart, endSeconds: segmentEnd } = useMemo(
     () => normalizeFeaturedVideoSegment(startSecondsProp, endSecondsProp),
     [startSecondsProp, endSecondsProp],
   );
 
-  const hasPoster = Boolean(poster?.trim());
+  const primaryPoster = poster?.trim() ?? '';
+  const fallbackPoster = posterFallback?.trim() ?? '';
+  const hasAnyPosterUrl = Boolean(primaryPoster || fallbackPoster);
+  const hasPoster = Boolean(activePosterSrc);
   const hasVideo = Boolean(videoSrc?.trim());
   const touchPosterOnly = !finePointer && posterOnlyOnTouch && mode === 'preview';
+  const tapToPlayWaiting = tapToPlay && !isPlaying && mode === 'preview';
+  const skipVideoMount = touchPosterOnly || tapToPlayWaiting;
   const videoFrameFallback =
-    finePointer && mode === 'preview' && hasVideo && !hasPoster && !posterFailed;
+    finePointer && mode === 'preview' && hasVideo && !hasAnyPosterUrl && !posterFailed;
   const useNativeLoop = segmentStart === 0 && segmentEnd == null;
 
   useEffect(() => {
+    setActivePosterSrc(primaryPoster || fallbackPoster);
     setPosterLoaded(false);
     setPosterFailed(false);
-  }, [poster]);
+    setPosterUsedFallback(false);
+  }, [primaryPoster, fallbackPoster]);
 
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -100,9 +120,10 @@ const PortfolioMedia: React.FC<PortfolioMediaProps> = ({
 
   const playPreview =
     hasVideo &&
-    finePointer &&
     !reducedMotion &&
-    (mode === 'player' || (mode === 'preview' && isHovering));
+    (mode === 'player' ||
+      (mode === 'preview' && tapToPlay && isPlaying) ||
+      (mode === 'preview' && finePointer && isHovering));
 
   const showPausedFrame = videoFrameFallback && !playPreview && !reducedMotion;
 
@@ -110,19 +131,38 @@ const PortfolioMedia: React.FC<PortfolioMediaProps> = ({
     !finePointer &&
     mode === 'preview' &&
     hasVideo &&
-    (!hasPoster || posterFailed) &&
-    !posterOnlyOnTouch;
+    (!hasAnyPosterUrl || posterFailed) &&
+    !posterOnlyOnTouch &&
+    !tapToPlay;
 
   const showTouchTitleFallback =
-    touchPosterOnly && (!hasPoster || posterFailed) && Boolean(titleFallback?.trim());
+    touchPosterOnly && (!hasAnyPosterUrl || posterFailed) && Boolean(titleFallback?.trim());
+
+  const handlePosterError = () => {
+    if (
+      !posterUsedFallback &&
+      fallbackPoster &&
+      activePosterSrc !== fallbackPoster
+    ) {
+      setPosterUsedFallback(true);
+      setActivePosterSrc(fallbackPoster);
+      setPosterLoaded(false);
+      setPosterFailed(false);
+      return;
+    }
+    setPosterFailed(true);
+    onPosterError?.();
+  };
 
   const videoPreload = useMemo(() => {
     if (mode === 'player') return 'metadata';
+    if (tapToPlayWaiting) return 'none';
+    if (isPlaying && tapToPlay) return 'auto';
     if (priority) return 'metadata';
     if (!finePointer) return 'none';
     if (videoFrameFallback) return 'auto';
     return 'metadata';
-  }, [finePointer, mode, priority, videoFrameFallback]);
+  }, [finePointer, isPlaying, mode, priority, tapToPlay, tapToPlayWaiting, videoFrameFallback]);
 
   useEffect(() => {
     const el = videoRef.current;
@@ -235,37 +275,41 @@ const PortfolioMedia: React.FC<PortfolioMediaProps> = ({
         </div>
       ) : showMobileDeferredPlaceholder ? (
         <MediaLoadingPlaceholder label="Loading reel…" />
-      ) : hasPoster ? (
+      ) : hasPoster || hasAnyPosterUrl ? (
         <>
           {!posterLoaded && !posterFailed ? (
             <MediaLoadingPlaceholder />
           ) : null}
-          <img
-            src={poster}
-            alt={alt}
-            loading={priority ? 'eager' : 'lazy'}
-            decoding="async"
-            {...(priority ? { fetchPriority: 'high' as const } : {})}
-            className={`${className} ${playPreview ? 'opacity-0' : posterLoaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-300`}
-            onLoad={() => setPosterLoaded(true)}
-            onError={() => {
-              setPosterFailed(true);
-              onPosterError?.();
-            }}
-          />
+          {hasPoster ? (
+            <img
+              src={activePosterSrc}
+              alt={alt}
+              loading={priority ? 'eager' : 'lazy'}
+              decoding="async"
+              {...(priority ? { fetchPriority: 'high' as const } : {})}
+              className={`${className} ${playPreview ? 'opacity-0' : posterLoaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-300`}
+              onLoad={() => setPosterLoaded(true)}
+              onError={handlePosterError}
+            />
+          ) : null}
         </>
       ) : !hasVideo ? (
         <div className="absolute inset-0 flex items-center justify-center bg-zinc-900">
           <span className="px-3 text-center font-mono text-xs text-zinc-600">No media</span>
         </div>
+      ) : tapToPlayWaiting && !hasAnyPosterUrl ? (
+        <div className="absolute inset-0 bg-zinc-900" />
       ) : videoFrameFallback ? null : (
         <MediaLoadingPlaceholder label="Loading reel…" />
       )}
-      {hasVideo && !showMobileDeferredPlaceholder && !touchPosterOnly ? (
+      {tapToPlayWaiting && hasVideo ? (
+        <PortfolioPlayOverlay variant="hero" onPlayClick={() => onPlayRequest?.()} />
+      ) : null}
+      {hasVideo && !showMobileDeferredPlaceholder && !skipVideoMount ? (
         <video
           ref={videoRef}
           src={videoSrc}
-          poster={hasPoster ? poster : undefined}
+          poster={hasPoster ? activePosterSrc : undefined}
           muted
           loop={useNativeLoop}
           playsInline
